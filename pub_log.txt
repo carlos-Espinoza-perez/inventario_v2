@@ -1,0 +1,37 @@
+Resolving dependencies...
+Note: matcher is pinned to version 0.12.17 by flutter_test from the flutter SDK.
+See https://dart.dev/go/sdk-version-pinning for details.
+
+Note: test_api is pinned to version 0.7.7 by flutter_test from the flutter SDK.
+See https://dart.dev/go/sdk-version-pinning for details.
+
+The current Dart SDK version is 3.10.4.
+
+    Because test >=1.16.0-nullsafety.8 <1.16.5 depends on io ^0.3.0 and build_runner >=2.0.0 depends on io ^1.0.0, test >=1.16.0-nullsafety.8 <1.16.5 is incompatible with build_runner >=2.0.0.
+(1) So, because test 1.26.3 depends on analyzer >=6.0.0 <9.0.0 and test >=1.25.9 <1.26.3 depends on analyzer >=6.0.0 <8.0.0, if build_runner >=2.0.0 and test >=1.16.0-nullsafety.8 <1.16.5-∞ or >=1.25.9 <=1.26.3 then analyzer >=6.0.0 <9.0.0.
+
+    Because test >=1.21.2 <1.21.3 depends on test_api 0.4.10 and test >=1.21.3 <1.21.4 depends on test_api 0.4.11, test >=1.21.2 <1.21.4 requires test_api 0.4.10 or 0.4.11.
+    And because test >=1.21.4 <1.21.5 depends on test_api 0.4.12 and test >=1.22.1 <1.22.2 depends on test_api 0.4.17, test >=1.21.2 <1.21.5-∞ or >=1.22.1 <1.22.2-∞ requires test_api 0.4.10 or 0.4.11 or 0.4.12 or 0.4.17.
+    And because test >=1.22.0 <1.22.1 depends on test_api 0.4.16 and test >=1.21.7 <1.22.0 depends on test_api 0.4.15, test >=1.21.2 <1.21.5-∞ or >=1.21.7 <1.22.2-∞ requires test_api 0.4.10 or 0.4.11 or 0.4.12 or 0.4.15 or 0.4.16 or 0.4.17.
+    And because test >=1.21.6 <1.21.7 depends on test_api 0.4.14 and test >=1.21.5 <1.21.6 depends on test_api 0.4.13, test >=1.21.2 <1.22.2 requires test_api 0.4.10 or 0.4.11 or 0.4.12 or 0.4.13 or 0.4.14 or 0.4.15 or 0.4.16 or 0.4.17.
+    And because test >=1.20.0 <1.21.2 depends on test_api 0.4.9 and test >=1.17.10 <1.20.0 depends on analyzer >=1.0.0 <3.0.0, test >=1.17.10 <1.22.2 requires test_api 0.4.9 or 0.4.10 or 0.4.11 or 0.4.12 or 0.4.13 or 0.4.14 or 0.4.15 or 0.4.16 or 0.4.17 or analyzer >=1.0.0 <3.0.0.
+    And because test >=1.16.6 <1.17.10 depends on analyzer ^1.0.0 and test >=1.22.2 <1.24.0 depends on test_api 0.4.18, test >=1.16.6 <1.24.0 requires test_api 0.4.9 or 0.4.10 or 0.4.11 or 0.4.12 or 0.4.13 or 0.4.14 or 0.4.15 or 0.4.16 or 0.4.17 or 0.4.18 or analyzer >=1.0.0 <3.0.0.
+    Because test >=1.24.3 <1.25.13 depends on matcher >=0.12.16 <0.12.17 and test >=1.24.0 <1.24.3 depends on matcher >=0.12.15 <0.12.16, test >=1.24.0 <1.25.13 requires matcher >=0.12.15 <0.12.16 or >=0.12.16 <0.12.17.
+    Thus, test >=1.16.6 <1.25.13 requires matcher >=0.12.15 <0.12.16 or >=0.12.16 <0.12.17 or test_api 0.4.9 or 0.4.10 or 0.4.11 or 0.4.12 or 0.4.13 or 0.4.14 or 0.4.15 or 0.4.16 or 0.4.17 or 0.4.18 or analyzer >=1.0.0 <3.0.0.
+    And because every version of flutter_test from sdk depends on matcher 0.12.17, if test >=1.16.6 <1.25.13 and flutter_test from sdk then test_api 0.4.9 or 0.4.10 or 0.4.11 or 0.4.12 or 0.4.13 or 0.4.14 or 0.4.15 or 0.4.16 or 0.4.17 or 0.4.18 or analyzer >=1.0.0 <3.0.0.
+    And because if build_runner >=2.0.0 and test >=1.16.0-nullsafety.8 <1.16.5-∞ or >=1.25.9 <=1.26.3 then analyzer >=6.0.0 <9.0.0 (1), if build_runner >=2.0.0 and flutter_test from sdk and test >=1.16.0-nullsafety.8 <1.16.5-∞ or >=1.16.6 <=1.26.3 then analyzer >=1.0.0 <3.0.0 or >=6.0.0 <9.0.0 or test_api 0.4.9 or 0.4.10 or 0.4.11 or 0.4.12 or 0.4.13 or 0.4.14 or 0.4.15 or 0.4.16 or 0.4.17 or 0.4.18.
+    And because isar_generator >=3.0.1 depends on analyzer >=4.6.0 <6.0.0, if isar_generator >=3.0.1 and build_runner >=2.0.0 and flutter_test from sdk and test >=1.16.0-nullsafety.8 <1.16.5-∞ or >=1.16.6 <=1.26.3 then test_api 0.4.9 or 0.4.10 or 0.4.11 or 0.4.12 or 0.4.13 or 0.4.14 or 0.4.15 or 0.4.16 or 0.4.17 or 0.4.18.
+    And because test >=1.27.0 depends on test_api 0.7.8 and test >=1.16.0-nullsafety.19 <1.16.6 depends on test_api 0.2.19, if isar_generator >=3.0.1 and build_runner >=2.0.0 and flutter_test from sdk and test >=1.16.0-nullsafety.8 <=1.26.3 or >=1.27.0 then test_api 0.2.19 or 0.4.9 or 0.4.10 or 0.4.11 or 0.4.12 or 0.4.13 or 0.4.14 or 0.4.15 or 0.4.16 or 0.4.17 or 0.4.18 or 0.7.8.
+    And because every version of flutter_test from sdk depends on test_api 0.7.7 and test >=0.12.0-beta.3 <1.16.0-nullsafety.8 doesn't support null safety, one of isar_generator >=3.0.1 or build_runner >=2.0.0 or flutter_test from sdk or test >=0.12.0-beta.3 <=1.26.3 or >=1.27.0 must be false.
+    And because no versions of test match >1.26.3 <1.27.0 and riverpod 3.0.3 depends on test ^1.0.0, one of isar_generator >=3.0.1 or build_runner >=2.0.0 or flutter_test from sdk or riverpod 3.0.3 must be false.
+    And because flutter_riverpod 3.0.3 depends on riverpod 3.0.3 and no versions of flutter_riverpod match >3.0.3 <4.0.0, one of isar_generator >=3.0.1 or build_runner >=2.0.0 or flutter_test from sdk or flutter_riverpod ^3.0.3 must be false.
+    And because inventario_v2 depends on both flutter_riverpod ^3.0.3 and flutter_test from sdk, isar_generator >=3.0.1 is incompatible with build_runner >=2.0.0.
+    So, because inventario_v2 depends on both isar_generator ^3.1.0+1 and build_runner ^2.4.8, version solving failed.
+
+The lower bound of "sdk: '>=1.8.0 <3.0.0'" must be 2.12.0 or higher to enable null safety.
+For details, see https://dart.dev/null-safety
+
+
+You can try the following suggestion to make the pubspec resolve:
+* Consider downgrading your constraint on flutter_riverpod: flutter pub add flutter_riverpod:^2.6.1
+Failed to update packages.
