@@ -42,20 +42,35 @@ const BodegaCollectionSchema = CollectionSchema(
       name: r'fechaEliminacion',
       type: IsarType.dateTime,
     ),
-    r'nombre': PropertySchema(
+    r'fechaRegistro': PropertySchema(
       id: 5,
+      name: r'fechaRegistro',
+      type: IsarType.dateTime,
+    ),
+    r'nombre': PropertySchema(
+      id: 6,
       name: r'nombre',
       type: IsarType.string,
     ),
+    r'pendienteSincronizacion': PropertySchema(
+      id: 7,
+      name: r'pendienteSincronizacion',
+      type: IsarType.bool,
+    ),
     r'serverId': PropertySchema(
-      id: 6,
+      id: 8,
       name: r'serverId',
       type: IsarType.string,
     ),
     r'ultimaActualizacion': PropertySchema(
-      id: 7,
+      id: 9,
       name: r'ultimaActualizacion',
       type: IsarType.dateTime,
+    ),
+    r'usuarioRegistroId': PropertySchema(
+      id: 10,
+      name: r'usuarioRegistroId',
+      type: IsarType.string,
     )
   },
   estimateSize: _bodegaCollectionEstimateSize,
@@ -89,6 +104,19 @@ const BodegaCollectionSchema = CollectionSchema(
           caseSensitive: true,
         )
       ],
+    ),
+    r'pendienteSincronizacion': IndexSchema(
+      id: 3214759188604201326,
+      name: r'pendienteSincronizacion',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'pendienteSincronizacion',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
     )
   },
   links: {},
@@ -114,6 +142,7 @@ int _bodegaCollectionEstimateSize(
   bytesCount += 3 + object.empresaId.length * 3;
   bytesCount += 3 + object.nombre.length * 3;
   bytesCount += 3 + object.serverId.length * 3;
+  bytesCount += 3 + object.usuarioRegistroId.length * 3;
   return bytesCount;
 }
 
@@ -128,9 +157,12 @@ void _bodegaCollectionSerialize(
   writer.writeBool(offsets[2], object.esPuntoVenta);
   writer.writeBool(offsets[3], object.estado);
   writer.writeDateTime(offsets[4], object.fechaEliminacion);
-  writer.writeString(offsets[5], object.nombre);
-  writer.writeString(offsets[6], object.serverId);
-  writer.writeDateTime(offsets[7], object.ultimaActualizacion);
+  writer.writeDateTime(offsets[5], object.fechaRegistro);
+  writer.writeString(offsets[6], object.nombre);
+  writer.writeBool(offsets[7], object.pendienteSincronizacion);
+  writer.writeString(offsets[8], object.serverId);
+  writer.writeDateTime(offsets[9], object.ultimaActualizacion);
+  writer.writeString(offsets[10], object.usuarioRegistroId);
 }
 
 BodegaCollection _bodegaCollectionDeserialize(
@@ -145,10 +177,13 @@ BodegaCollection _bodegaCollectionDeserialize(
   object.esPuntoVenta = reader.readBool(offsets[2]);
   object.estado = reader.readBool(offsets[3]);
   object.fechaEliminacion = reader.readDateTimeOrNull(offsets[4]);
+  object.fechaRegistro = reader.readDateTime(offsets[5]);
   object.id = id;
-  object.nombre = reader.readString(offsets[5]);
-  object.serverId = reader.readString(offsets[6]);
-  object.ultimaActualizacion = reader.readDateTime(offsets[7]);
+  object.nombre = reader.readString(offsets[6]);
+  object.pendienteSincronizacion = reader.readBool(offsets[7]);
+  object.serverId = reader.readString(offsets[8]);
+  object.ultimaActualizacion = reader.readDateTime(offsets[9]);
+  object.usuarioRegistroId = reader.readString(offsets[10]);
   return object;
 }
 
@@ -170,11 +205,17 @@ P _bodegaCollectionDeserializeProp<P>(
     case 4:
       return (reader.readDateTimeOrNull(offset)) as P;
     case 5:
-      return (reader.readString(offset)) as P;
+      return (reader.readDateTime(offset)) as P;
     case 6:
       return (reader.readString(offset)) as P;
     case 7:
+      return (reader.readBool(offset)) as P;
+    case 8:
+      return (reader.readString(offset)) as P;
+    case 9:
       return (reader.readDateTime(offset)) as P;
+    case 10:
+      return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -254,6 +295,15 @@ extension BodegaCollectionQueryWhereSort
   QueryBuilder<BodegaCollection, BodegaCollection, QAfterWhere> anyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterWhere>
+      anyPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'pendienteSincronizacion'),
+      );
     });
   }
 }
@@ -411,6 +461,51 @@ extension BodegaCollectionQueryWhere
               indexName: r'empresaId',
               lower: [],
               upper: [empresaId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterWhereClause>
+      pendienteSincronizacionEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'pendienteSincronizacion',
+        value: [pendienteSincronizacion],
+      ));
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterWhereClause>
+      pendienteSincronizacionNotEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
               includeUpper: false,
             ));
       }
@@ -805,6 +900,62 @@ extension BodegaCollectionQueryFilter
   }
 
   QueryBuilder<BodegaCollection, BodegaCollection, QAfterFilterCondition>
+      fechaRegistroEqualTo(DateTime value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'fechaRegistro',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterFilterCondition>
+      fechaRegistroGreaterThan(
+    DateTime value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'fechaRegistro',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterFilterCondition>
+      fechaRegistroLessThan(
+    DateTime value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'fechaRegistro',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterFilterCondition>
+      fechaRegistroBetween(
+    DateTime lower,
+    DateTime upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'fechaRegistro',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterFilterCondition>
       idEqualTo(Id value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -992,6 +1143,16 @@ extension BodegaCollectionQueryFilter
       return query.addFilterCondition(FilterCondition.greaterThan(
         property: r'nombre',
         value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterFilterCondition>
+      pendienteSincronizacionEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'pendienteSincronizacion',
+        value: value,
       ));
     });
   }
@@ -1187,6 +1348,142 @@ extension BodegaCollectionQueryFilter
       ));
     });
   }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterFilterCondition>
+      usuarioRegistroIdEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterFilterCondition>
+      usuarioRegistroIdGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterFilterCondition>
+      usuarioRegistroIdLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterFilterCondition>
+      usuarioRegistroIdBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'usuarioRegistroId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterFilterCondition>
+      usuarioRegistroIdStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterFilterCondition>
+      usuarioRegistroIdEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterFilterCondition>
+      usuarioRegistroIdContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterFilterCondition>
+      usuarioRegistroIdMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'usuarioRegistroId',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterFilterCondition>
+      usuarioRegistroIdIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'usuarioRegistroId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterFilterCondition>
+      usuarioRegistroIdIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'usuarioRegistroId',
+        value: '',
+      ));
+    });
+  }
 }
 
 extension BodegaCollectionQueryObject
@@ -1268,6 +1565,20 @@ extension BodegaCollectionQuerySortBy
   }
 
   QueryBuilder<BodegaCollection, BodegaCollection, QAfterSortBy>
+      sortByFechaRegistro() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fechaRegistro', Sort.asc);
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterSortBy>
+      sortByFechaRegistroDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fechaRegistro', Sort.desc);
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterSortBy>
       sortByNombre() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'nombre', Sort.asc);
@@ -1278,6 +1589,20 @@ extension BodegaCollectionQuerySortBy
       sortByNombreDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'nombre', Sort.desc);
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterSortBy>
+      sortByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterSortBy>
+      sortByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
     });
   }
 
@@ -1306,6 +1631,20 @@ extension BodegaCollectionQuerySortBy
       sortByUltimaActualizacionDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'ultimaActualizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterSortBy>
+      sortByUsuarioRegistroId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'usuarioRegistroId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterSortBy>
+      sortByUsuarioRegistroIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'usuarioRegistroId', Sort.desc);
     });
   }
 }
@@ -1382,6 +1721,20 @@ extension BodegaCollectionQuerySortThenBy
     });
   }
 
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterSortBy>
+      thenByFechaRegistro() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fechaRegistro', Sort.asc);
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterSortBy>
+      thenByFechaRegistroDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fechaRegistro', Sort.desc);
+    });
+  }
+
   QueryBuilder<BodegaCollection, BodegaCollection, QAfterSortBy> thenById() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'id', Sort.asc);
@@ -1410,6 +1763,20 @@ extension BodegaCollectionQuerySortThenBy
   }
 
   QueryBuilder<BodegaCollection, BodegaCollection, QAfterSortBy>
+      thenByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterSortBy>
+      thenByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterSortBy>
       thenByServerId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'serverId', Sort.asc);
@@ -1434,6 +1801,20 @@ extension BodegaCollectionQuerySortThenBy
       thenByUltimaActualizacionDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'ultimaActualizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterSortBy>
+      thenByUsuarioRegistroId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'usuarioRegistroId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QAfterSortBy>
+      thenByUsuarioRegistroIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'usuarioRegistroId', Sort.desc);
     });
   }
 }
@@ -1475,10 +1856,24 @@ extension BodegaCollectionQueryWhereDistinct
     });
   }
 
+  QueryBuilder<BodegaCollection, BodegaCollection, QDistinct>
+      distinctByFechaRegistro() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'fechaRegistro');
+    });
+  }
+
   QueryBuilder<BodegaCollection, BodegaCollection, QDistinct> distinctByNombre(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'nombre', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QDistinct>
+      distinctByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'pendienteSincronizacion');
     });
   }
 
@@ -1493,6 +1888,14 @@ extension BodegaCollectionQueryWhereDistinct
       distinctByUltimaActualizacion() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'ultimaActualizacion');
+    });
+  }
+
+  QueryBuilder<BodegaCollection, BodegaCollection, QDistinct>
+      distinctByUsuarioRegistroId({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'usuarioRegistroId',
+          caseSensitive: caseSensitive);
     });
   }
 }
@@ -1538,9 +1941,23 @@ extension BodegaCollectionQueryProperty
     });
   }
 
+  QueryBuilder<BodegaCollection, DateTime, QQueryOperations>
+      fechaRegistroProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'fechaRegistro');
+    });
+  }
+
   QueryBuilder<BodegaCollection, String, QQueryOperations> nombreProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'nombre');
+    });
+  }
+
+  QueryBuilder<BodegaCollection, bool, QQueryOperations>
+      pendienteSincronizacionProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'pendienteSincronizacion');
     });
   }
 
@@ -1554,6 +1971,13 @@ extension BodegaCollectionQueryProperty
       ultimaActualizacionProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'ultimaActualizacion');
+    });
+  }
+
+  QueryBuilder<BodegaCollection, String, QQueryOperations>
+      usuarioRegistroIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'usuarioRegistroId');
     });
   }
 }

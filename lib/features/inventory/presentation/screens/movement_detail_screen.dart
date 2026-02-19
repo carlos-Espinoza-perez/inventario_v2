@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:inventario_v2/core/database/app_bar_provider.dart';
+import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 
 class MovementDetailScreen extends ConsumerStatefulWidget {
   final String movementId;

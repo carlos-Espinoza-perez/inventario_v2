@@ -22,30 +22,50 @@ const RolCollectionSchema = CollectionSchema(
       name: r'empresaId',
       type: IsarType.string,
     ),
-    r'fechaEliminacion': PropertySchema(
+    r'estado': PropertySchema(
       id: 1,
+      name: r'estado',
+      type: IsarType.bool,
+    ),
+    r'fechaEliminacion': PropertySchema(
+      id: 2,
       name: r'fechaEliminacion',
       type: IsarType.dateTime,
     ),
+    r'fechaRegistro': PropertySchema(
+      id: 3,
+      name: r'fechaRegistro',
+      type: IsarType.dateTime,
+    ),
     r'nombre': PropertySchema(
-      id: 2,
+      id: 4,
       name: r'nombre',
       type: IsarType.string,
     ),
+    r'pendienteSincronizacion': PropertySchema(
+      id: 5,
+      name: r'pendienteSincronizacion',
+      type: IsarType.bool,
+    ),
     r'serverId': PropertySchema(
-      id: 3,
+      id: 6,
       name: r'serverId',
       type: IsarType.string,
     ),
     r'ultimaActualizacion': PropertySchema(
-      id: 4,
+      id: 7,
       name: r'ultimaActualizacion',
       type: IsarType.dateTime,
     ),
     r'userAdmin': PropertySchema(
-      id: 5,
+      id: 8,
       name: r'userAdmin',
       type: IsarType.bool,
+    ),
+    r'usuarioRegistroId': PropertySchema(
+      id: 9,
+      name: r'usuarioRegistroId',
+      type: IsarType.string,
     )
   },
   estimateSize: _rolCollectionEstimateSize,
@@ -79,6 +99,19 @@ const RolCollectionSchema = CollectionSchema(
           caseSensitive: true,
         )
       ],
+    ),
+    r'pendienteSincronizacion': IndexSchema(
+      id: 3214759188604201326,
+      name: r'pendienteSincronizacion',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'pendienteSincronizacion',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
     )
   },
   links: {},
@@ -98,6 +131,12 @@ int _rolCollectionEstimateSize(
   bytesCount += 3 + object.empresaId.length * 3;
   bytesCount += 3 + object.nombre.length * 3;
   bytesCount += 3 + object.serverId.length * 3;
+  {
+    final value = object.usuarioRegistroId;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   return bytesCount;
 }
 
@@ -108,11 +147,15 @@ void _rolCollectionSerialize(
   Map<Type, List<int>> allOffsets,
 ) {
   writer.writeString(offsets[0], object.empresaId);
-  writer.writeDateTime(offsets[1], object.fechaEliminacion);
-  writer.writeString(offsets[2], object.nombre);
-  writer.writeString(offsets[3], object.serverId);
-  writer.writeDateTime(offsets[4], object.ultimaActualizacion);
-  writer.writeBool(offsets[5], object.userAdmin);
+  writer.writeBool(offsets[1], object.estado);
+  writer.writeDateTime(offsets[2], object.fechaEliminacion);
+  writer.writeDateTime(offsets[3], object.fechaRegistro);
+  writer.writeString(offsets[4], object.nombre);
+  writer.writeBool(offsets[5], object.pendienteSincronizacion);
+  writer.writeString(offsets[6], object.serverId);
+  writer.writeDateTime(offsets[7], object.ultimaActualizacion);
+  writer.writeBool(offsets[8], object.userAdmin);
+  writer.writeString(offsets[9], object.usuarioRegistroId);
 }
 
 RolCollection _rolCollectionDeserialize(
@@ -123,12 +166,16 @@ RolCollection _rolCollectionDeserialize(
 ) {
   final object = RolCollection();
   object.empresaId = reader.readString(offsets[0]);
-  object.fechaEliminacion = reader.readDateTimeOrNull(offsets[1]);
+  object.estado = reader.readBool(offsets[1]);
+  object.fechaEliminacion = reader.readDateTimeOrNull(offsets[2]);
+  object.fechaRegistro = reader.readDateTimeOrNull(offsets[3]);
   object.id = id;
-  object.nombre = reader.readString(offsets[2]);
-  object.serverId = reader.readString(offsets[3]);
-  object.ultimaActualizacion = reader.readDateTime(offsets[4]);
-  object.userAdmin = reader.readBool(offsets[5]);
+  object.nombre = reader.readString(offsets[4]);
+  object.pendienteSincronizacion = reader.readBool(offsets[5]);
+  object.serverId = reader.readString(offsets[6]);
+  object.ultimaActualizacion = reader.readDateTime(offsets[7]);
+  object.userAdmin = reader.readBool(offsets[8]);
+  object.usuarioRegistroId = reader.readStringOrNull(offsets[9]);
   return object;
 }
 
@@ -142,15 +189,23 @@ P _rolCollectionDeserializeProp<P>(
     case 0:
       return (reader.readString(offset)) as P;
     case 1:
-      return (reader.readDateTimeOrNull(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 2:
-      return (reader.readString(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 3:
-      return (reader.readString(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 4:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 5:
       return (reader.readBool(offset)) as P;
+    case 6:
+      return (reader.readString(offset)) as P;
+    case 7:
+      return (reader.readDateTime(offset)) as P;
+    case 8:
+      return (reader.readBool(offset)) as P;
+    case 9:
+      return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -229,6 +284,15 @@ extension RolCollectionQueryWhereSort
   QueryBuilder<RolCollection, RolCollection, QAfterWhere> anyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterWhere>
+      anyPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'pendienteSincronizacion'),
+      );
     });
   }
 }
@@ -393,6 +457,51 @@ extension RolCollectionQueryWhere
       }
     });
   }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterWhereClause>
+      pendienteSincronizacionEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'pendienteSincronizacion',
+        value: [pendienteSincronizacion],
+      ));
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterWhereClause>
+      pendienteSincronizacionNotEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
 }
 
 extension RolCollectionQueryFilter
@@ -534,6 +643,16 @@ extension RolCollectionQueryFilter
   }
 
   QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
+      estadoEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'estado',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
       fechaEliminacionIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -599,6 +718,80 @@ extension RolCollectionQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
         property: r'fechaEliminacion',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
+      fechaRegistroIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'fechaRegistro',
+      ));
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
+      fechaRegistroIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'fechaRegistro',
+      ));
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
+      fechaRegistroEqualTo(DateTime? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'fechaRegistro',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
+      fechaRegistroGreaterThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'fechaRegistro',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
+      fechaRegistroLessThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'fechaRegistro',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
+      fechaRegistroBetween(
+    DateTime? lower,
+    DateTime? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'fechaRegistro',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -793,6 +986,16 @@ extension RolCollectionQueryFilter
       return query.addFilterCondition(FilterCondition.greaterThan(
         property: r'nombre',
         value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
+      pendienteSincronizacionEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'pendienteSincronizacion',
+        value: value,
       ));
     });
   }
@@ -998,6 +1201,160 @@ extension RolCollectionQueryFilter
       ));
     });
   }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
+      usuarioRegistroIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'usuarioRegistroId',
+      ));
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
+      usuarioRegistroIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'usuarioRegistroId',
+      ));
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
+      usuarioRegistroIdEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
+      usuarioRegistroIdGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
+      usuarioRegistroIdLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
+      usuarioRegistroIdBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'usuarioRegistroId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
+      usuarioRegistroIdStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
+      usuarioRegistroIdEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
+      usuarioRegistroIdContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
+      usuarioRegistroIdMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'usuarioRegistroId',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
+      usuarioRegistroIdIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'usuarioRegistroId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterFilterCondition>
+      usuarioRegistroIdIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'usuarioRegistroId',
+        value: '',
+      ));
+    });
+  }
 }
 
 extension RolCollectionQueryObject
@@ -1021,6 +1378,18 @@ extension RolCollectionQuerySortBy
     });
   }
 
+  QueryBuilder<RolCollection, RolCollection, QAfterSortBy> sortByEstado() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estado', Sort.asc);
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterSortBy> sortByEstadoDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estado', Sort.desc);
+    });
+  }
+
   QueryBuilder<RolCollection, RolCollection, QAfterSortBy>
       sortByFechaEliminacion() {
     return QueryBuilder.apply(this, (query) {
@@ -1035,6 +1404,20 @@ extension RolCollectionQuerySortBy
     });
   }
 
+  QueryBuilder<RolCollection, RolCollection, QAfterSortBy>
+      sortByFechaRegistro() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fechaRegistro', Sort.asc);
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterSortBy>
+      sortByFechaRegistroDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fechaRegistro', Sort.desc);
+    });
+  }
+
   QueryBuilder<RolCollection, RolCollection, QAfterSortBy> sortByNombre() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'nombre', Sort.asc);
@@ -1044,6 +1427,20 @@ extension RolCollectionQuerySortBy
   QueryBuilder<RolCollection, RolCollection, QAfterSortBy> sortByNombreDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'nombre', Sort.desc);
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterSortBy>
+      sortByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterSortBy>
+      sortByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
     });
   }
 
@@ -1086,6 +1483,20 @@ extension RolCollectionQuerySortBy
       return query.addSortBy(r'userAdmin', Sort.desc);
     });
   }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterSortBy>
+      sortByUsuarioRegistroId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'usuarioRegistroId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterSortBy>
+      sortByUsuarioRegistroIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'usuarioRegistroId', Sort.desc);
+    });
+  }
 }
 
 extension RolCollectionQuerySortThenBy
@@ -1103,6 +1514,18 @@ extension RolCollectionQuerySortThenBy
     });
   }
 
+  QueryBuilder<RolCollection, RolCollection, QAfterSortBy> thenByEstado() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estado', Sort.asc);
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterSortBy> thenByEstadoDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estado', Sort.desc);
+    });
+  }
+
   QueryBuilder<RolCollection, RolCollection, QAfterSortBy>
       thenByFechaEliminacion() {
     return QueryBuilder.apply(this, (query) {
@@ -1114,6 +1537,20 @@ extension RolCollectionQuerySortThenBy
       thenByFechaEliminacionDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'fechaEliminacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterSortBy>
+      thenByFechaRegistro() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fechaRegistro', Sort.asc);
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterSortBy>
+      thenByFechaRegistroDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fechaRegistro', Sort.desc);
     });
   }
 
@@ -1138,6 +1575,20 @@ extension RolCollectionQuerySortThenBy
   QueryBuilder<RolCollection, RolCollection, QAfterSortBy> thenByNombreDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'nombre', Sort.desc);
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterSortBy>
+      thenByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterSortBy>
+      thenByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
     });
   }
 
@@ -1180,6 +1631,20 @@ extension RolCollectionQuerySortThenBy
       return query.addSortBy(r'userAdmin', Sort.desc);
     });
   }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterSortBy>
+      thenByUsuarioRegistroId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'usuarioRegistroId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QAfterSortBy>
+      thenByUsuarioRegistroIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'usuarioRegistroId', Sort.desc);
+    });
+  }
 }
 
 extension RolCollectionQueryWhereDistinct
@@ -1191,6 +1656,12 @@ extension RolCollectionQueryWhereDistinct
     });
   }
 
+  QueryBuilder<RolCollection, RolCollection, QDistinct> distinctByEstado() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'estado');
+    });
+  }
+
   QueryBuilder<RolCollection, RolCollection, QDistinct>
       distinctByFechaEliminacion() {
     return QueryBuilder.apply(this, (query) {
@@ -1198,10 +1669,24 @@ extension RolCollectionQueryWhereDistinct
     });
   }
 
+  QueryBuilder<RolCollection, RolCollection, QDistinct>
+      distinctByFechaRegistro() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'fechaRegistro');
+    });
+  }
+
   QueryBuilder<RolCollection, RolCollection, QDistinct> distinctByNombre(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'nombre', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<RolCollection, RolCollection, QDistinct>
+      distinctByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'pendienteSincronizacion');
     });
   }
 
@@ -1224,6 +1709,14 @@ extension RolCollectionQueryWhereDistinct
       return query.addDistinctBy(r'userAdmin');
     });
   }
+
+  QueryBuilder<RolCollection, RolCollection, QDistinct>
+      distinctByUsuarioRegistroId({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'usuarioRegistroId',
+          caseSensitive: caseSensitive);
+    });
+  }
 }
 
 extension RolCollectionQueryProperty
@@ -1240,6 +1733,12 @@ extension RolCollectionQueryProperty
     });
   }
 
+  QueryBuilder<RolCollection, bool, QQueryOperations> estadoProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'estado');
+    });
+  }
+
   QueryBuilder<RolCollection, DateTime?, QQueryOperations>
       fechaEliminacionProperty() {
     return QueryBuilder.apply(this, (query) {
@@ -1247,9 +1746,23 @@ extension RolCollectionQueryProperty
     });
   }
 
+  QueryBuilder<RolCollection, DateTime?, QQueryOperations>
+      fechaRegistroProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'fechaRegistro');
+    });
+  }
+
   QueryBuilder<RolCollection, String, QQueryOperations> nombreProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'nombre');
+    });
+  }
+
+  QueryBuilder<RolCollection, bool, QQueryOperations>
+      pendienteSincronizacionProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'pendienteSincronizacion');
     });
   }
 
@@ -1269,6 +1782,13 @@ extension RolCollectionQueryProperty
   QueryBuilder<RolCollection, bool, QQueryOperations> userAdminProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'userAdmin');
+    });
+  }
+
+  QueryBuilder<RolCollection, String?, QQueryOperations>
+      usuarioRegistroIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'usuarioRegistroId');
     });
   }
 }

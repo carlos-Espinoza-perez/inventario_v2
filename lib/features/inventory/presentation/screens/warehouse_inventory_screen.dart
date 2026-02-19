@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:inventario_v2/core/database/app_bar_provider.dart';
+import 'package:inventario_v2/core/providers/app_bar_provider.dart';
+import 'package:inventario_v2/features/inventory/data/providers/categoria_provider.dart';
+import 'package:inventario_v2/features/inventory/presentation/widgets/categoria_filter_list.dart';
 
 class WarehouseInventoryScreen extends ConsumerStatefulWidget {
   final String warehouseId;
@@ -101,11 +103,7 @@ class _WarehouseInventoryScreenState
 
   @override
   Widget build(BuildContext context) {
-    // Usamos un Scaffold interno para manejar el FloatingActionButton propio de esta pantalla
-    // y el color de fondo, pero SIN AppBar (porque ya lo tiene el MainLayout)
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-
       // El cuerpo principal
       body: Column(
         children: [
@@ -155,22 +153,7 @@ class _WarehouseInventoryScreenState
                 const SizedBox(height: 12),
 
                 // Chips de Filtros (Scroll Horizontal)
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _FilterChip(label: "Todos", isSelected: true),
-                      _FilterChip(
-                        label: "Bajo Stock",
-                        isSelected: false,
-                        isAlert: true,
-                      ),
-                      _FilterChip(label: "Ropa", isSelected: false),
-                      _FilterChip(label: "Calzado", isSelected: false),
-                      _FilterChip(label: "Hogar", isSelected: false),
-                    ],
-                  ),
-                ),
+                CategoriaFilterList(),
               ],
             ),
           ),
@@ -197,8 +180,6 @@ class _WarehouseInventoryScreenState
         ],
       ),
 
-      // 3. BOTÓN DE ACCIONES FLOTANTE (FAB)
-      // Este botón permite realizar acciones rápidas sobre el inventario
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showActionModal(context),
         backgroundColor: Colors.blue[600], // Ajusta a tu color de marca
@@ -212,7 +193,6 @@ class _WarehouseInventoryScreenState
     );
   }
 
-  // --- MODAL DE ACCIONES RÁPIDAS (BottomSheet) ---
   void _showActionModal(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -239,7 +219,7 @@ class _WarehouseInventoryScreenState
                   label: "Entrada",
                   onTap: () {
                     context.pop();
-                    // Navegar a pantalla de compra/entrada
+                    context.push('/batch-entry/${widget.warehouseId}');
                   },
                 ),
                 _ActionButton(
@@ -248,16 +228,16 @@ class _WarehouseInventoryScreenState
                   label: "Salida",
                   onTap: () {
                     context.pop();
-                    // Navegar a pantalla de salida/venta rápida
+                    context.go('/warehouse-transfer');
                   },
                 ),
                 _ActionButton(
-                  icon: Icons.add_box_outlined,
+                  icon: Icons.list_alt_outlined,
                   color: Colors.blue,
-                  label: "Crear Nuevo",
+                  label: "Lista de Productos",
                   onTap: () {
                     context.pop();
-                    context.push('/product-create');
+                    context.push('/product-list');
                     // context.push('/warehouse/${widget.warehouseId}/add-product');
                   },
                 ),
@@ -499,47 +479,6 @@ class _ProductImage extends StatelessWidget {
       return Icons.backpack_outlined;
     }
     return Icons.inventory_2_outlined;
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final bool isAlert;
-
-  const _FilterChip({
-    required this.label,
-    required this.isSelected,
-    this.isAlert = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8.0),
-      child: FilterChip(
-        label: Text(label),
-        selected: isSelected,
-        onSelected: (bool value) {},
-        backgroundColor: Colors.white,
-        selectedColor: isAlert ? Colors.red[100] : Colors.blue[100],
-        checkmarkColor: isAlert ? Colors.red[800] : Colors.blue[800],
-        labelStyle: TextStyle(
-          color: isSelected
-              ? (isAlert ? Colors.red[800] : Colors.blue[800])
-              : Colors.grey[700],
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-          fontSize: 13,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(
-            color: isSelected ? Colors.transparent : Colors.grey.shade300,
-          ),
-        ),
-        showCheckmark: false,
-      ),
-    );
   }
 }
 

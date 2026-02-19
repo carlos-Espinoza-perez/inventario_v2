@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-// Asegúrate de importar tu CustomButton que arreglamos antes
+import 'package:go_router/go_router.dart';
+
 import 'package:inventario_v2/core/presentation/widgets/custom_button.dart';
+import 'package:inventario_v2/features/auth/presentation/providers/auth_provider.dart';
+import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
 
 class WarehouseCreateScreen extends ConsumerStatefulWidget {
   const WarehouseCreateScreen({super.key});
@@ -15,14 +17,13 @@ class WarehouseCreateScreen extends ConsumerStatefulWidget {
 class _WarehouseCreateScreenState extends ConsumerState<WarehouseCreateScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  // Controladores para capturar el texto
+  // Controladores
   final _nameController = TextEditingController();
   final _locationController = TextEditingController();
   final _descriptionController = TextEditingController();
 
-  // Variable de estado para el Switch
+  // Estado
   bool _esPuntoVenta = true;
-
   bool _isLoading = false;
 
   @override
@@ -34,135 +35,183 @@ class _WarehouseCreateScreenState extends ConsumerState<WarehouseCreateScreen> {
   }
 
   Future<void> _guardarBodega() async {
+    // 1. Validar formulario visualmente
     if (!_formKey.currentState!.validate()) return;
 
+    // 2. Ocultar teclado y mostrar carga
+    FocusScope.of(context).unfocus();
     setState(() => _isLoading = true);
 
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      // 3. Obtener el servicio de Bodega (esperando a la DB)
+      final bodegaService = await ref.read(bodegaServiceProvider.future);
 
-    // Aquí iría tu lógica real:
-    // final nuevaBodega = Bodega(
-    //    nombre: _nameController.text,
-    //    esPuntoVenta: _esPuntoVenta,
-    //    ...
-    // );
-    // await ref.read(inventoryRepositoryProvider).crearBodega(nuevaBodega);
+      // 4. Obtener el AuthController para sacar los datos del usuario
+      final authController = ref.read(authControllerProvider.notifier);
 
-    if (mounted) {
-      setState(() => _isLoading = false);
-      context.pop(); // Regresamos a la lista
+      // Intentamos obtener el usuario de la memoria, si no está, lo pedimos a la DB
+      final usuario =
+          authController.usuarioActual ?? await authController.getUser();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bodega creada exitosamente')),
+      // Validación de seguridad
+      if (usuario == null) {
+        throw Exception(
+          "No se encontró la sesión del usuario. Por favor, inicia sesión nuevamente.",
+        );
+      }
+
+      // 5. Llamar al servicio para crear la bodega y la relación
+      await bodegaService.crearBodega(
+        nombre: _nameController.text.trim(),
+        direccion: _locationController.text.trim(),
+        descripcion: _descriptionController.text.trim(),
+        esPuntoVenta: _esPuntoVenta,
+        usuarioIdActual: usuario.serverId.toString(),
+        empresaId: usuario.empresaId,
       );
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+        context.pop();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: const [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 10),
+                Text('Bodega creada exitosamente'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      // 7. Manejo de errores
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al guardar: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Usamos el mismo gris de fondo que tu Dashboard
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Tarjeta contenedora del formulario (Estilo limpio)
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  _CustomTextField(
-                    label: "Nombre de la bodega",
-                    hint: "Ej: Bodega Central",
-                    controller: _nameController,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'El nombre es obligatorio';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  _CustomTextField(
-                    label: "Ubicación (Opcional)",
-                    hint: "Ej: Calle Principal, Local 2",
-                    controller: _locationController,
-                    icon: Icons.location_on_outlined,
-                  ),
-                  const SizedBox(height: 20),
-                  _CustomTextField(
-                    label: "Descripción / Notas (Opcional)",
-                    hint: "Información adicional relevante...",
-                    controller: _descriptionController,
-                    maxLines: 3,
-                  ),
-
-                  const SizedBox(height: 20),
-                  // Separador sutil
-                  const Divider(height: 1, color: Color(0xFFEEEEEE)),
-
-                  // Switch para Punto de Venta
-                  Padding(
-                    padding: const EdgeInsets.only(top: 15.0, bottom: 5.0),
-                    child: SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text(
-                        "¿Es Punto de Venta?",
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      subtitle: Text(
-                        "Habilita funciones de caja y facturación",
-                        style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                      ),
-                      value: _esPuntoVenta,
-                      onChanged: (bool value) {
-                        setState(() {
-                          _esPuntoVenta = value;
-                        });
+    return Scaffold(
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // TARJETA DE FORMULARIO
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.03),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    _CustomTextField(
+                      label: "Nombre de la bodega",
+                      hint: "Ej: Bodega Central",
+                      controller: _nameController,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'El nombre es obligatorio';
+                        }
+                        if (value.length < 3) {
+                          return 'El nombre debe tener al menos 3 caracteres';
+                        }
+                        return null;
                       },
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 20),
+                    _CustomTextField(
+                      label: "Ubicación (Opcional)",
+                      hint: "Ej: Calle Principal, Local 2",
+                      controller: _locationController,
+                      icon: Icons.location_on_outlined,
+                    ),
+                    const SizedBox(height: 20),
+                    _CustomTextField(
+                      label: "Descripción / Notas (Opcional)",
+                      hint: "Información adicional relevante...",
+                      controller: _descriptionController,
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 20),
+                    const Divider(height: 1, color: Color(0xFFEEEEEE)),
+
+                    // SWITCH PUNTO DE VENTA
+                    Padding(
+                      padding: const EdgeInsets.only(top: 15.0, bottom: 5.0),
+                      child: SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text(
+                          "¿Es Punto de Venta?",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "Habilita funciones de caja y facturación para esta ubicación",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                        value: _esPuntoVenta,
+                        activeColor: Colors.blue,
+                        onChanged: (bool value) {
+                          setState(() => _esPuntoVenta = value);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
 
-            const SizedBox(height: 22),
+              const SizedBox(height: 25),
 
-            // Botón reutilizando tu componente CustomButton
-            CustomButton(
-              text: "Guardar bodega",
-              icon: Icons.add_home_work_rounded,
-              isLoading: _isLoading,
-              isFullWidth: true,
-              height: 50,
-              color: Colors.blue,
-              onPressed: _guardarBodega,
-            ),
-          ],
+              // BOTÓN GUARDAR
+              CustomButton(
+                text: "Guardar bodega",
+                icon: Icons.save_outlined,
+                isLoading: _isLoading,
+                isFullWidth: true,
+                height: 55,
+                color: Colors.blue,
+                onPressed: _guardarBodega,
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-// El _CustomTextField se mantiene igual
+// --- WIDGET LOCAL DE TEXTFIELD (Reutilizable en este archivo) ---
 class _CustomTextField extends StatelessWidget {
   final String label;
   final String hint;
@@ -210,7 +259,7 @@ class _CustomTextField extends StatelessWidget {
               vertical: 14,
             ),
             filled: true,
-            fillColor: Colors.grey[50],
+            fillColor: Colors.grey[50], // Fondo ligeramente gris
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: Colors.grey.shade300),

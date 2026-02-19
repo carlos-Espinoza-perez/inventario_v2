@@ -6,10 +6,10 @@ import 'package:inventario_v2/features/inventory/data/collections/inventario_col
 import 'package:inventario_v2/features/inventory/data/collections/movimiento_producto_collection.dart';
 import 'package:inventario_v2/features/inventory/data/collections/producto_collection.dart';
 import 'package:inventario_v2/features/inventory/data/collections/regla_costo_collection.dart';
-import 'package:inventario_v2/features/pos/data/collections/caja_collection.dart';
-import 'package:inventario_v2/features/pos/data/collections/caja_movimiento_extra_collection.dart'
+import 'package:inventario_v2/features/sales/data/collections/caja_collection.dart';
+import 'package:inventario_v2/features/sales/data/collections/caja_movimiento_extra_collection.dart'
     show CajaMovimientoExtraCollectionSchema;
-import 'package:inventario_v2/features/pos/data/collections/caja_sesion_collection.dart';
+import 'package:inventario_v2/features/sales/data/collections/caja_sesion_collection.dart';
 import 'package:inventario_v2/features/sales/data/collections/cliente_collection.dart';
 import 'package:inventario_v2/features/sales/data/collections/detalle_venta_collection.dart';
 import 'package:inventario_v2/features/sales/data/collections/historial_pago_collection.dart';

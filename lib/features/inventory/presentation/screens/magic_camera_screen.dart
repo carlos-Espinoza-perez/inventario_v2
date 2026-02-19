@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
@@ -160,8 +159,9 @@ class _MagicCameraScreenState extends State<MagicCameraScreen> {
   Future<void> _takePhotoAndAnalyze() async {
     if (_controller == null ||
         !_controller!.value.isInitialized ||
-        _isAnalyzing)
+        _isAnalyzing) {
       return;
+    }
 
     setState(() => _isAnalyzing = true); // Mostrar Spinner
 
@@ -206,16 +206,18 @@ class _MagicCameraScreenState extends State<MagicCameraScreen> {
             break;
           }
         }
-        if (detectedCategory.isNotEmpty)
+        if (detectedCategory.isNotEmpty) {
           break; // Ya encontramos la categoría principal
+        }
       }
 
       // B. Rasgos Visuales (Detalles)
       for (var label in labels) {
         String tag = label.label.toLowerCase();
         for (var key in _ProductDatabase.visualTraitsMap.keys) {
-          if (tag.contains(key))
+          if (tag.contains(key)) {
             detectedTraits.add(_ProductDatabase.visualTraitsMap[key]!);
+          }
         }
       }
 

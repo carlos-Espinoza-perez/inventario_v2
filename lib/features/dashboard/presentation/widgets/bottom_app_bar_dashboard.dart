@@ -80,20 +80,24 @@ class BottomAppBarDashboard extends StatelessWidget {
             _MenuButton(
               icon: Icons.point_of_sale_outlined,
               text: 'Ventas',
-              onTap: () {},
+              onTap: () {
+                context.push('/sales');
+              },
             ),
             const Spacer(),
             const Spacer(),
-            const Spacer(),
-            _MenuButton(
-              icon: Icons.people_outline,
-              text: 'Clientes',
-              onTap: () {},
-            ),
             const Spacer(),
             _MenuButton(
               icon: Icons.bar_chart_rounded,
               text: 'Reportes',
+              onTap: () {
+                context.push('/reports');
+              },
+            ),
+            const Spacer(),
+            _MenuButton(
+              icon: Icons.chat_bubble_outline,
+              text: 'IA',
               onTap: () {},
             ),
             const Spacer(),

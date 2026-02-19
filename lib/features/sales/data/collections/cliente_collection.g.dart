@@ -32,40 +32,60 @@ const ClienteCollectionSchema = CollectionSchema(
       name: r'empresaId',
       type: IsarType.string,
     ),
-    r'fechaEliminacion': PropertySchema(
+    r'estado': PropertySchema(
       id: 3,
+      name: r'estado',
+      type: IsarType.bool,
+    ),
+    r'fechaEliminacion': PropertySchema(
+      id: 4,
       name: r'fechaEliminacion',
       type: IsarType.dateTime,
     ),
+    r'fechaRegistro': PropertySchema(
+      id: 5,
+      name: r'fechaRegistro',
+      type: IsarType.dateTime,
+    ),
     r'identificacion': PropertySchema(
-      id: 4,
+      id: 6,
       name: r'identificacion',
       type: IsarType.string,
     ),
     r'montoCreditoMaximo': PropertySchema(
-      id: 5,
+      id: 7,
       name: r'montoCreditoMaximo',
       type: IsarType.double,
     ),
     r'nombre': PropertySchema(
-      id: 6,
+      id: 8,
       name: r'nombre',
       type: IsarType.string,
     ),
+    r'pendienteSincronizacion': PropertySchema(
+      id: 9,
+      name: r'pendienteSincronizacion',
+      type: IsarType.bool,
+    ),
     r'saldoDeudorActual': PropertySchema(
-      id: 7,
+      id: 10,
       name: r'saldoDeudorActual',
       type: IsarType.double,
     ),
     r'serverId': PropertySchema(
-      id: 8,
+      id: 11,
       name: r'serverId',
       type: IsarType.string,
     ),
     r'ultimaActualizacion': PropertySchema(
-      id: 9,
+      id: 12,
       name: r'ultimaActualizacion',
       type: IsarType.dateTime,
+    ),
+    r'usuarioRegistroId': PropertySchema(
+      id: 13,
+      name: r'usuarioRegistroId',
+      type: IsarType.string,
     )
   },
   estimateSize: _clienteCollectionEstimateSize,
@@ -97,6 +117,19 @@ const ClienteCollectionSchema = CollectionSchema(
           name: r'empresaId',
           type: IndexType.hash,
           caseSensitive: true,
+        )
+      ],
+    ),
+    r'pendienteSincronizacion': IndexSchema(
+      id: 3214759188604201326,
+      name: r'pendienteSincronizacion',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'pendienteSincronizacion',
+          type: IndexType.value,
+          caseSensitive: false,
         )
       ],
     )
@@ -136,6 +169,12 @@ int _clienteCollectionEstimateSize(
   }
   bytesCount += 3 + object.nombre.length * 3;
   bytesCount += 3 + object.serverId.length * 3;
+  {
+    final value = object.usuarioRegistroId;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   return bytesCount;
 }
 
@@ -148,13 +187,17 @@ void _clienteCollectionSerialize(
   writer.writeString(offsets[0], object.celular);
   writer.writeString(offsets[1], object.direccion);
   writer.writeString(offsets[2], object.empresaId);
-  writer.writeDateTime(offsets[3], object.fechaEliminacion);
-  writer.writeString(offsets[4], object.identificacion);
-  writer.writeDouble(offsets[5], object.montoCreditoMaximo);
-  writer.writeString(offsets[6], object.nombre);
-  writer.writeDouble(offsets[7], object.saldoDeudorActual);
-  writer.writeString(offsets[8], object.serverId);
-  writer.writeDateTime(offsets[9], object.ultimaActualizacion);
+  writer.writeBool(offsets[3], object.estado);
+  writer.writeDateTime(offsets[4], object.fechaEliminacion);
+  writer.writeDateTime(offsets[5], object.fechaRegistro);
+  writer.writeString(offsets[6], object.identificacion);
+  writer.writeDouble(offsets[7], object.montoCreditoMaximo);
+  writer.writeString(offsets[8], object.nombre);
+  writer.writeBool(offsets[9], object.pendienteSincronizacion);
+  writer.writeDouble(offsets[10], object.saldoDeudorActual);
+  writer.writeString(offsets[11], object.serverId);
+  writer.writeDateTime(offsets[12], object.ultimaActualizacion);
+  writer.writeString(offsets[13], object.usuarioRegistroId);
 }
 
 ClienteCollection _clienteCollectionDeserialize(
@@ -167,14 +210,18 @@ ClienteCollection _clienteCollectionDeserialize(
   object.celular = reader.readStringOrNull(offsets[0]);
   object.direccion = reader.readStringOrNull(offsets[1]);
   object.empresaId = reader.readString(offsets[2]);
-  object.fechaEliminacion = reader.readDateTimeOrNull(offsets[3]);
+  object.estado = reader.readBool(offsets[3]);
+  object.fechaEliminacion = reader.readDateTimeOrNull(offsets[4]);
+  object.fechaRegistro = reader.readDateTime(offsets[5]);
   object.id = id;
-  object.identificacion = reader.readStringOrNull(offsets[4]);
-  object.montoCreditoMaximo = reader.readDouble(offsets[5]);
-  object.nombre = reader.readString(offsets[6]);
-  object.saldoDeudorActual = reader.readDouble(offsets[7]);
-  object.serverId = reader.readString(offsets[8]);
-  object.ultimaActualizacion = reader.readDateTime(offsets[9]);
+  object.identificacion = reader.readStringOrNull(offsets[6]);
+  object.montoCreditoMaximo = reader.readDouble(offsets[7]);
+  object.nombre = reader.readString(offsets[8]);
+  object.pendienteSincronizacion = reader.readBool(offsets[9]);
+  object.saldoDeudorActual = reader.readDouble(offsets[10]);
+  object.serverId = reader.readString(offsets[11]);
+  object.ultimaActualizacion = reader.readDateTime(offsets[12]);
+  object.usuarioRegistroId = reader.readStringOrNull(offsets[13]);
   return object;
 }
 
@@ -192,19 +239,27 @@ P _clienteCollectionDeserializeProp<P>(
     case 2:
       return (reader.readString(offset)) as P;
     case 3:
-      return (reader.readDateTimeOrNull(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 4:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 5:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readDateTime(offset)) as P;
     case 6:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 7:
       return (reader.readDouble(offset)) as P;
     case 8:
       return (reader.readString(offset)) as P;
     case 9:
+      return (reader.readBool(offset)) as P;
+    case 10:
+      return (reader.readDouble(offset)) as P;
+    case 11:
+      return (reader.readString(offset)) as P;
+    case 12:
       return (reader.readDateTime(offset)) as P;
+    case 13:
+      return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -285,6 +340,15 @@ extension ClienteCollectionQueryWhereSort
   QueryBuilder<ClienteCollection, ClienteCollection, QAfterWhere> anyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterWhere>
+      anyPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'pendienteSincronizacion'),
+      );
     });
   }
 }
@@ -443,6 +507,51 @@ extension ClienteCollectionQueryWhere
               indexName: r'empresaId',
               lower: [],
               upper: [empresaId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterWhereClause>
+      pendienteSincronizacionEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'pendienteSincronizacion',
+        value: [pendienteSincronizacion],
+      ));
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterWhereClause>
+      pendienteSincronizacionNotEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
               includeUpper: false,
             ));
       }
@@ -897,6 +1006,16 @@ extension ClienteCollectionQueryFilter
   }
 
   QueryBuilder<ClienteCollection, ClienteCollection, QAfterFilterCondition>
+      estadoEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'estado',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterFilterCondition>
       fechaEliminacionIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -962,6 +1081,62 @@ extension ClienteCollectionQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
         property: r'fechaEliminacion',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterFilterCondition>
+      fechaRegistroEqualTo(DateTime value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'fechaRegistro',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterFilterCondition>
+      fechaRegistroGreaterThan(
+    DateTime value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'fechaRegistro',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterFilterCondition>
+      fechaRegistroLessThan(
+    DateTime value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'fechaRegistro',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterFilterCondition>
+      fechaRegistroBetween(
+    DateTime lower,
+    DateTime upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'fechaRegistro',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -1383,6 +1558,16 @@ extension ClienteCollectionQueryFilter
   }
 
   QueryBuilder<ClienteCollection, ClienteCollection, QAfterFilterCondition>
+      pendienteSincronizacionEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'pendienteSincronizacion',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterFilterCondition>
       saldoDeudorActualEqualTo(
     double value, {
     double epsilon = Query.epsilon,
@@ -1639,6 +1824,160 @@ extension ClienteCollectionQueryFilter
       ));
     });
   }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterFilterCondition>
+      usuarioRegistroIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'usuarioRegistroId',
+      ));
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterFilterCondition>
+      usuarioRegistroIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'usuarioRegistroId',
+      ));
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterFilterCondition>
+      usuarioRegistroIdEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterFilterCondition>
+      usuarioRegistroIdGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterFilterCondition>
+      usuarioRegistroIdLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterFilterCondition>
+      usuarioRegistroIdBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'usuarioRegistroId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterFilterCondition>
+      usuarioRegistroIdStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterFilterCondition>
+      usuarioRegistroIdEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterFilterCondition>
+      usuarioRegistroIdContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterFilterCondition>
+      usuarioRegistroIdMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'usuarioRegistroId',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterFilterCondition>
+      usuarioRegistroIdIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'usuarioRegistroId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterFilterCondition>
+      usuarioRegistroIdIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'usuarioRegistroId',
+        value: '',
+      ));
+    });
+  }
 }
 
 extension ClienteCollectionQueryObject
@@ -1692,6 +2031,20 @@ extension ClienteCollectionQuerySortBy
   }
 
   QueryBuilder<ClienteCollection, ClienteCollection, QAfterSortBy>
+      sortByEstado() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estado', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterSortBy>
+      sortByEstadoDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estado', Sort.desc);
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterSortBy>
       sortByFechaEliminacion() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'fechaEliminacion', Sort.asc);
@@ -1702,6 +2055,20 @@ extension ClienteCollectionQuerySortBy
       sortByFechaEliminacionDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'fechaEliminacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterSortBy>
+      sortByFechaRegistro() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fechaRegistro', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterSortBy>
+      sortByFechaRegistroDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fechaRegistro', Sort.desc);
     });
   }
 
@@ -1748,6 +2115,20 @@ extension ClienteCollectionQuerySortBy
   }
 
   QueryBuilder<ClienteCollection, ClienteCollection, QAfterSortBy>
+      sortByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterSortBy>
+      sortByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterSortBy>
       sortBySaldoDeudorActual() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'saldoDeudorActual', Sort.asc);
@@ -1786,6 +2167,20 @@ extension ClienteCollectionQuerySortBy
       sortByUltimaActualizacionDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'ultimaActualizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterSortBy>
+      sortByUsuarioRegistroId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'usuarioRegistroId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterSortBy>
+      sortByUsuarioRegistroIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'usuarioRegistroId', Sort.desc);
     });
   }
 }
@@ -1835,6 +2230,20 @@ extension ClienteCollectionQuerySortThenBy
   }
 
   QueryBuilder<ClienteCollection, ClienteCollection, QAfterSortBy>
+      thenByEstado() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estado', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterSortBy>
+      thenByEstadoDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estado', Sort.desc);
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterSortBy>
       thenByFechaEliminacion() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'fechaEliminacion', Sort.asc);
@@ -1845,6 +2254,20 @@ extension ClienteCollectionQuerySortThenBy
       thenByFechaEliminacionDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'fechaEliminacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterSortBy>
+      thenByFechaRegistro() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fechaRegistro', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterSortBy>
+      thenByFechaRegistroDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fechaRegistro', Sort.desc);
     });
   }
 
@@ -1904,6 +2327,20 @@ extension ClienteCollectionQuerySortThenBy
   }
 
   QueryBuilder<ClienteCollection, ClienteCollection, QAfterSortBy>
+      thenByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterSortBy>
+      thenByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterSortBy>
       thenBySaldoDeudorActual() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'saldoDeudorActual', Sort.asc);
@@ -1944,6 +2381,20 @@ extension ClienteCollectionQuerySortThenBy
       return query.addSortBy(r'ultimaActualizacion', Sort.desc);
     });
   }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterSortBy>
+      thenByUsuarioRegistroId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'usuarioRegistroId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QAfterSortBy>
+      thenByUsuarioRegistroIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'usuarioRegistroId', Sort.desc);
+    });
+  }
 }
 
 extension ClienteCollectionQueryWhereDistinct
@@ -1970,9 +2421,23 @@ extension ClienteCollectionQueryWhereDistinct
   }
 
   QueryBuilder<ClienteCollection, ClienteCollection, QDistinct>
+      distinctByEstado() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'estado');
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QDistinct>
       distinctByFechaEliminacion() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'fechaEliminacion');
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QDistinct>
+      distinctByFechaRegistro() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'fechaRegistro');
     });
   }
 
@@ -1999,6 +2464,13 @@ extension ClienteCollectionQueryWhereDistinct
   }
 
   QueryBuilder<ClienteCollection, ClienteCollection, QDistinct>
+      distinctByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'pendienteSincronizacion');
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QDistinct>
       distinctBySaldoDeudorActual() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'saldoDeudorActual');
@@ -2016,6 +2488,14 @@ extension ClienteCollectionQueryWhereDistinct
       distinctByUltimaActualizacion() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'ultimaActualizacion');
+    });
+  }
+
+  QueryBuilder<ClienteCollection, ClienteCollection, QDistinct>
+      distinctByUsuarioRegistroId({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'usuarioRegistroId',
+          caseSensitive: caseSensitive);
     });
   }
 }
@@ -2048,10 +2528,23 @@ extension ClienteCollectionQueryProperty
     });
   }
 
+  QueryBuilder<ClienteCollection, bool, QQueryOperations> estadoProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'estado');
+    });
+  }
+
   QueryBuilder<ClienteCollection, DateTime?, QQueryOperations>
       fechaEliminacionProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'fechaEliminacion');
+    });
+  }
+
+  QueryBuilder<ClienteCollection, DateTime, QQueryOperations>
+      fechaRegistroProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'fechaRegistro');
     });
   }
 
@@ -2075,6 +2568,13 @@ extension ClienteCollectionQueryProperty
     });
   }
 
+  QueryBuilder<ClienteCollection, bool, QQueryOperations>
+      pendienteSincronizacionProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'pendienteSincronizacion');
+    });
+  }
+
   QueryBuilder<ClienteCollection, double, QQueryOperations>
       saldoDeudorActualProperty() {
     return QueryBuilder.apply(this, (query) {
@@ -2092,6 +2592,13 @@ extension ClienteCollectionQueryProperty
       ultimaActualizacionProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'ultimaActualizacion');
+    });
+  }
+
+  QueryBuilder<ClienteCollection, String?, QQueryOperations>
+      usuarioRegistroIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'usuarioRegistroId');
     });
   }
 }

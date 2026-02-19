@@ -47,18 +47,23 @@ const CajaCollectionSchema = CollectionSchema(
       name: r'nombre',
       type: IsarType.string,
     ),
-    r'serverId': PropertySchema(
+    r'pendienteSincronizacion': PropertySchema(
       id: 6,
+      name: r'pendienteSincronizacion',
+      type: IsarType.bool,
+    ),
+    r'serverId': PropertySchema(
+      id: 7,
       name: r'serverId',
       type: IsarType.string,
     ),
     r'ultimaActualizacion': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'ultimaActualizacion',
       type: IsarType.dateTime,
     ),
     r'usuarioRegistroId': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'usuarioRegistroId',
       type: IsarType.string,
     )
@@ -107,6 +112,19 @@ const CajaCollectionSchema = CollectionSchema(
           caseSensitive: true,
         )
       ],
+    ),
+    r'pendienteSincronizacion': IndexSchema(
+      id: 3214759188604201326,
+      name: r'pendienteSincronizacion',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'pendienteSincronizacion',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
     )
   },
   links: {},
@@ -148,9 +166,10 @@ void _cajaCollectionSerialize(
   writer.writeDateTime(offsets[3], object.fechaEliminacion);
   writer.writeDateTime(offsets[4], object.fechaRegistro);
   writer.writeString(offsets[5], object.nombre);
-  writer.writeString(offsets[6], object.serverId);
-  writer.writeDateTime(offsets[7], object.ultimaActualizacion);
-  writer.writeString(offsets[8], object.usuarioRegistroId);
+  writer.writeBool(offsets[6], object.pendienteSincronizacion);
+  writer.writeString(offsets[7], object.serverId);
+  writer.writeDateTime(offsets[8], object.ultimaActualizacion);
+  writer.writeString(offsets[9], object.usuarioRegistroId);
 }
 
 CajaCollection _cajaCollectionDeserialize(
@@ -167,9 +186,10 @@ CajaCollection _cajaCollectionDeserialize(
   object.fechaRegistro = reader.readDateTime(offsets[4]);
   object.id = id;
   object.nombre = reader.readString(offsets[5]);
-  object.serverId = reader.readString(offsets[6]);
-  object.ultimaActualizacion = reader.readDateTime(offsets[7]);
-  object.usuarioRegistroId = reader.readStringOrNull(offsets[8]);
+  object.pendienteSincronizacion = reader.readBool(offsets[6]);
+  object.serverId = reader.readString(offsets[7]);
+  object.ultimaActualizacion = reader.readDateTime(offsets[8]);
+  object.usuarioRegistroId = reader.readStringOrNull(offsets[9]);
   return object;
 }
 
@@ -193,10 +213,12 @@ P _cajaCollectionDeserializeProp<P>(
     case 5:
       return (reader.readString(offset)) as P;
     case 6:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 7:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 8:
+      return (reader.readDateTime(offset)) as P;
+    case 9:
       return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -276,6 +298,15 @@ extension CajaCollectionQueryWhereSort
   QueryBuilder<CajaCollection, CajaCollection, QAfterWhere> anyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+
+  QueryBuilder<CajaCollection, CajaCollection, QAfterWhere>
+      anyPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'pendienteSincronizacion'),
+      );
     });
   }
 }
@@ -480,6 +511,51 @@ extension CajaCollectionQueryWhere
               indexName: r'bodegaId',
               lower: [],
               upper: [bodegaId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<CajaCollection, CajaCollection, QAfterWhereClause>
+      pendienteSincronizacionEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'pendienteSincronizacion',
+        value: [pendienteSincronizacion],
+      ));
+    });
+  }
+
+  QueryBuilder<CajaCollection, CajaCollection, QAfterWhereClause>
+      pendienteSincronizacionNotEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
               includeUpper: false,
             ));
       }
@@ -1093,6 +1169,16 @@ extension CajaCollectionQueryFilter
   }
 
   QueryBuilder<CajaCollection, CajaCollection, QAfterFilterCondition>
+      pendienteSincronizacionEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'pendienteSincronizacion',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<CajaCollection, CajaCollection, QAfterFilterCondition>
       serverIdEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -1527,6 +1613,20 @@ extension CajaCollectionQuerySortBy
     });
   }
 
+  QueryBuilder<CajaCollection, CajaCollection, QAfterSortBy>
+      sortByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<CajaCollection, CajaCollection, QAfterSortBy>
+      sortByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
   QueryBuilder<CajaCollection, CajaCollection, QAfterSortBy> sortByServerId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'serverId', Sort.asc);
@@ -1663,6 +1763,20 @@ extension CajaCollectionQuerySortThenBy
     });
   }
 
+  QueryBuilder<CajaCollection, CajaCollection, QAfterSortBy>
+      thenByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<CajaCollection, CajaCollection, QAfterSortBy>
+      thenByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
   QueryBuilder<CajaCollection, CajaCollection, QAfterSortBy> thenByServerId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'serverId', Sort.asc);
@@ -1748,6 +1862,13 @@ extension CajaCollectionQueryWhereDistinct
     });
   }
 
+  QueryBuilder<CajaCollection, CajaCollection, QDistinct>
+      distinctByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'pendienteSincronizacion');
+    });
+  }
+
   QueryBuilder<CajaCollection, CajaCollection, QDistinct> distinctByServerId(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -1814,6 +1935,13 @@ extension CajaCollectionQueryProperty
   QueryBuilder<CajaCollection, String, QQueryOperations> nombreProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'nombre');
+    });
+  }
+
+  QueryBuilder<CajaCollection, bool, QQueryOperations>
+      pendienteSincronizacionProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'pendienteSincronizacion');
     });
   }
 

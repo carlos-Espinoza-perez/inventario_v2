@@ -32,57 +32,72 @@ const VentaCollectionSchema = CollectionSchema(
       name: r'empresaId',
       type: IsarType.string,
     ),
-    r'estadoPago': PropertySchema(
+    r'estado': PropertySchema(
       id: 3,
+      name: r'estado',
+      type: IsarType.bool,
+    ),
+    r'estadoPago': PropertySchema(
+      id: 4,
       name: r'estadoPago',
       type: IsarType.byte,
       enumMap: _VentaCollectionestadoPagoEnumValueMap,
     ),
     r'fechaEliminacion': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'fechaEliminacion',
       type: IsarType.dateTime,
     ),
     r'fechaVencimiento': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'fechaVencimiento',
       type: IsarType.dateTime,
     ),
     r'fechaVenta': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'fechaVenta',
       type: IsarType.dateTime,
     ),
+    r'pendienteSincronizacion': PropertySchema(
+      id: 8,
+      name: r'pendienteSincronizacion',
+      type: IsarType.bool,
+    ),
     r'saldoPendiente': PropertySchema(
-      id: 7,
+      id: 9,
       name: r'saldoPendiente',
       type: IsarType.double,
     ),
     r'serverId': PropertySchema(
-      id: 8,
+      id: 10,
       name: r'serverId',
       type: IsarType.string,
     ),
     r'tipoVenta': PropertySchema(
-      id: 9,
+      id: 11,
       name: r'tipoVenta',
       type: IsarType.byte,
       enumMap: _VentaCollectiontipoVentaEnumValueMap,
     ),
     r'totalPagado': PropertySchema(
-      id: 10,
+      id: 12,
       name: r'totalPagado',
       type: IsarType.double,
     ),
     r'totalVenta': PropertySchema(
-      id: 11,
+      id: 13,
       name: r'totalVenta',
       type: IsarType.double,
     ),
     r'ultimaActualizacion': PropertySchema(
-      id: 12,
+      id: 14,
       name: r'ultimaActualizacion',
       type: IsarType.dateTime,
+    ),
+    r'usuarioRegistroId': PropertySchema(
+      id: 15,
+      name: r'usuarioRegistroId',
+      type: IsarType.string,
     )
   },
   estimateSize: _ventaCollectionEstimateSize,
@@ -129,6 +144,32 @@ const VentaCollectionSchema = CollectionSchema(
           caseSensitive: true,
         )
       ],
+    ),
+    r'estado': IndexSchema(
+      id: -4800696143246816208,
+      name: r'estado',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'estado',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
+    ),
+    r'pendienteSincronizacion': IndexSchema(
+      id: 3214759188604201326,
+      name: r'pendienteSincronizacion',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'pendienteSincronizacion',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
     )
   },
   links: {},
@@ -149,6 +190,12 @@ int _ventaCollectionEstimateSize(
   bytesCount += 3 + object.clienteId.length * 3;
   bytesCount += 3 + object.empresaId.length * 3;
   bytesCount += 3 + object.serverId.length * 3;
+  {
+    final value = object.usuarioRegistroId;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   return bytesCount;
 }
 
@@ -161,16 +208,19 @@ void _ventaCollectionSerialize(
   writer.writeString(offsets[0], object.cajaSesionId);
   writer.writeString(offsets[1], object.clienteId);
   writer.writeString(offsets[2], object.empresaId);
-  writer.writeByte(offsets[3], object.estadoPago.index);
-  writer.writeDateTime(offsets[4], object.fechaEliminacion);
-  writer.writeDateTime(offsets[5], object.fechaVencimiento);
-  writer.writeDateTime(offsets[6], object.fechaVenta);
-  writer.writeDouble(offsets[7], object.saldoPendiente);
-  writer.writeString(offsets[8], object.serverId);
-  writer.writeByte(offsets[9], object.tipoVenta.index);
-  writer.writeDouble(offsets[10], object.totalPagado);
-  writer.writeDouble(offsets[11], object.totalVenta);
-  writer.writeDateTime(offsets[12], object.ultimaActualizacion);
+  writer.writeBool(offsets[3], object.estado);
+  writer.writeByte(offsets[4], object.estadoPago.index);
+  writer.writeDateTime(offsets[5], object.fechaEliminacion);
+  writer.writeDateTime(offsets[6], object.fechaVencimiento);
+  writer.writeDateTime(offsets[7], object.fechaVenta);
+  writer.writeBool(offsets[8], object.pendienteSincronizacion);
+  writer.writeDouble(offsets[9], object.saldoPendiente);
+  writer.writeString(offsets[10], object.serverId);
+  writer.writeByte(offsets[11], object.tipoVenta.index);
+  writer.writeDouble(offsets[12], object.totalPagado);
+  writer.writeDouble(offsets[13], object.totalVenta);
+  writer.writeDateTime(offsets[14], object.ultimaActualizacion);
+  writer.writeString(offsets[15], object.usuarioRegistroId);
 }
 
 VentaCollection _ventaCollectionDeserialize(
@@ -183,21 +233,24 @@ VentaCollection _ventaCollectionDeserialize(
   object.cajaSesionId = reader.readString(offsets[0]);
   object.clienteId = reader.readString(offsets[1]);
   object.empresaId = reader.readString(offsets[2]);
+  object.estado = reader.readBool(offsets[3]);
   object.estadoPago = _VentaCollectionestadoPagoValueEnumMap[
-          reader.readByteOrNull(offsets[3])] ??
+          reader.readByteOrNull(offsets[4])] ??
       EstadoPago.pagado;
-  object.fechaEliminacion = reader.readDateTimeOrNull(offsets[4]);
-  object.fechaVencimiento = reader.readDateTimeOrNull(offsets[5]);
-  object.fechaVenta = reader.readDateTime(offsets[6]);
+  object.fechaEliminacion = reader.readDateTimeOrNull(offsets[5]);
+  object.fechaVencimiento = reader.readDateTimeOrNull(offsets[6]);
+  object.fechaVenta = reader.readDateTime(offsets[7]);
   object.id = id;
-  object.saldoPendiente = reader.readDouble(offsets[7]);
-  object.serverId = reader.readString(offsets[8]);
+  object.pendienteSincronizacion = reader.readBool(offsets[8]);
+  object.saldoPendiente = reader.readDouble(offsets[9]);
+  object.serverId = reader.readString(offsets[10]);
   object.tipoVenta = _VentaCollectiontipoVentaValueEnumMap[
-          reader.readByteOrNull(offsets[9])] ??
+          reader.readByteOrNull(offsets[11])] ??
       TipoVenta.contado;
-  object.totalPagado = reader.readDouble(offsets[10]);
-  object.totalVenta = reader.readDouble(offsets[11]);
-  object.ultimaActualizacion = reader.readDateTime(offsets[12]);
+  object.totalPagado = reader.readDouble(offsets[12]);
+  object.totalVenta = reader.readDouble(offsets[13]);
+  object.ultimaActualizacion = reader.readDateTime(offsets[14]);
+  object.usuarioRegistroId = reader.readStringOrNull(offsets[15]);
   return object;
 }
 
@@ -215,29 +268,35 @@ P _ventaCollectionDeserializeProp<P>(
     case 2:
       return (reader.readString(offset)) as P;
     case 3:
+      return (reader.readBool(offset)) as P;
+    case 4:
       return (_VentaCollectionestadoPagoValueEnumMap[
               reader.readByteOrNull(offset)] ??
           EstadoPago.pagado) as P;
-    case 4:
-      return (reader.readDateTimeOrNull(offset)) as P;
     case 5:
       return (reader.readDateTimeOrNull(offset)) as P;
     case 6:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 7:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readDateTime(offset)) as P;
     case 8:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 9:
+      return (reader.readDouble(offset)) as P;
+    case 10:
+      return (reader.readString(offset)) as P;
+    case 11:
       return (_VentaCollectiontipoVentaValueEnumMap[
               reader.readByteOrNull(offset)] ??
           TipoVenta.contado) as P;
-    case 10:
-      return (reader.readDouble(offset)) as P;
-    case 11:
-      return (reader.readDouble(offset)) as P;
     case 12:
+      return (reader.readDouble(offset)) as P;
+    case 13:
+      return (reader.readDouble(offset)) as P;
+    case 14:
       return (reader.readDateTime(offset)) as P;
+    case 15:
+      return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -337,6 +396,23 @@ extension VentaCollectionQueryWhereSort
   QueryBuilder<VentaCollection, VentaCollection, QAfterWhere> anyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterWhere> anyEstado() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'estado'),
+      );
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterWhere>
+      anyPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'pendienteSincronizacion'),
+      );
     });
   }
 }
@@ -540,6 +616,96 @@ extension VentaCollectionQueryWhere
               indexName: r'clienteId',
               lower: [],
               upper: [clienteId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterWhereClause>
+      estadoEqualTo(bool estado) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'estado',
+        value: [estado],
+      ));
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterWhereClause>
+      estadoNotEqualTo(bool estado) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'estado',
+              lower: [],
+              upper: [estado],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'estado',
+              lower: [estado],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'estado',
+              lower: [estado],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'estado',
+              lower: [],
+              upper: [estado],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterWhereClause>
+      pendienteSincronizacionEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'pendienteSincronizacion',
+        value: [pendienteSincronizacion],
+      ));
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterWhereClause>
+      pendienteSincronizacionNotEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
               includeUpper: false,
             ));
       }
@@ -958,6 +1124,16 @@ extension VentaCollectionQueryFilter
   }
 
   QueryBuilder<VentaCollection, VentaCollection, QAfterFilterCondition>
+      estadoEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'estado',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterFilterCondition>
       estadoPagoEqualTo(EstadoPago value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -1269,6 +1445,16 @@ extension VentaCollectionQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterFilterCondition>
+      pendienteSincronizacionEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'pendienteSincronizacion',
+        value: value,
       ));
     });
   }
@@ -1718,6 +1904,160 @@ extension VentaCollectionQueryFilter
       ));
     });
   }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterFilterCondition>
+      usuarioRegistroIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'usuarioRegistroId',
+      ));
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterFilterCondition>
+      usuarioRegistroIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'usuarioRegistroId',
+      ));
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterFilterCondition>
+      usuarioRegistroIdEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterFilterCondition>
+      usuarioRegistroIdGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterFilterCondition>
+      usuarioRegistroIdLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterFilterCondition>
+      usuarioRegistroIdBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'usuarioRegistroId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterFilterCondition>
+      usuarioRegistroIdStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterFilterCondition>
+      usuarioRegistroIdEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterFilterCondition>
+      usuarioRegistroIdContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterFilterCondition>
+      usuarioRegistroIdMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'usuarioRegistroId',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterFilterCondition>
+      usuarioRegistroIdIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'usuarioRegistroId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterFilterCondition>
+      usuarioRegistroIdIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'usuarioRegistroId',
+        value: '',
+      ));
+    });
+  }
 }
 
 extension VentaCollectionQueryObject
@@ -1767,6 +2107,19 @@ extension VentaCollectionQuerySortBy
       sortByEmpresaIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'empresaId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterSortBy> sortByEstado() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estado', Sort.asc);
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterSortBy>
+      sortByEstadoDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estado', Sort.desc);
     });
   }
 
@@ -1823,6 +2176,20 @@ extension VentaCollectionQuerySortBy
       sortByFechaVentaDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'fechaVenta', Sort.desc);
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterSortBy>
+      sortByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterSortBy>
+      sortByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
     });
   }
 
@@ -1909,6 +2276,20 @@ extension VentaCollectionQuerySortBy
       return query.addSortBy(r'ultimaActualizacion', Sort.desc);
     });
   }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterSortBy>
+      sortByUsuarioRegistroId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'usuarioRegistroId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterSortBy>
+      sortByUsuarioRegistroIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'usuarioRegistroId', Sort.desc);
+    });
+  }
 }
 
 extension VentaCollectionQuerySortThenBy
@@ -1952,6 +2333,19 @@ extension VentaCollectionQuerySortThenBy
       thenByEmpresaIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'empresaId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterSortBy> thenByEstado() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estado', Sort.asc);
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterSortBy>
+      thenByEstadoDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estado', Sort.desc);
     });
   }
 
@@ -2020,6 +2414,20 @@ extension VentaCollectionQuerySortThenBy
   QueryBuilder<VentaCollection, VentaCollection, QAfterSortBy> thenByIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'id', Sort.desc);
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterSortBy>
+      thenByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterSortBy>
+      thenByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
     });
   }
 
@@ -2106,6 +2514,20 @@ extension VentaCollectionQuerySortThenBy
       return query.addSortBy(r'ultimaActualizacion', Sort.desc);
     });
   }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterSortBy>
+      thenByUsuarioRegistroId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'usuarioRegistroId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QAfterSortBy>
+      thenByUsuarioRegistroIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'usuarioRegistroId', Sort.desc);
+    });
+  }
 }
 
 extension VentaCollectionQueryWhereDistinct
@@ -2128,6 +2550,12 @@ extension VentaCollectionQueryWhereDistinct
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'empresaId', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QDistinct> distinctByEstado() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'estado');
     });
   }
 
@@ -2156,6 +2584,13 @@ extension VentaCollectionQueryWhereDistinct
       distinctByFechaVenta() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'fechaVenta');
+    });
+  }
+
+  QueryBuilder<VentaCollection, VentaCollection, QDistinct>
+      distinctByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'pendienteSincronizacion');
     });
   }
 
@@ -2200,6 +2635,14 @@ extension VentaCollectionQueryWhereDistinct
       return query.addDistinctBy(r'ultimaActualizacion');
     });
   }
+
+  QueryBuilder<VentaCollection, VentaCollection, QDistinct>
+      distinctByUsuarioRegistroId({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'usuarioRegistroId',
+          caseSensitive: caseSensitive);
+    });
+  }
 }
 
 extension VentaCollectionQueryProperty
@@ -2229,6 +2672,12 @@ extension VentaCollectionQueryProperty
     });
   }
 
+  QueryBuilder<VentaCollection, bool, QQueryOperations> estadoProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'estado');
+    });
+  }
+
   QueryBuilder<VentaCollection, EstadoPago, QQueryOperations>
       estadoPagoProperty() {
     return QueryBuilder.apply(this, (query) {
@@ -2254,6 +2703,13 @@ extension VentaCollectionQueryProperty
       fechaVentaProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'fechaVenta');
+    });
+  }
+
+  QueryBuilder<VentaCollection, bool, QQueryOperations>
+      pendienteSincronizacionProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'pendienteSincronizacion');
     });
   }
 
@@ -2294,6 +2750,13 @@ extension VentaCollectionQueryProperty
       ultimaActualizacionProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'ultimaActualizacion');
+    });
+  }
+
+  QueryBuilder<VentaCollection, String?, QQueryOperations>
+      usuarioRegistroIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'usuarioRegistroId');
     });
   }
 }

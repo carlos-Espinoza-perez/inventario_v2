@@ -38,33 +38,38 @@ const DetalleVentaCollectionSchema = CollectionSchema(
       name: r'fechaEliminacion',
       type: IsarType.dateTime,
     ),
-    r'precioUnitario': PropertySchema(
+    r'pendienteSincronizacion': PropertySchema(
       id: 4,
+      name: r'pendienteSincronizacion',
+      type: IsarType.bool,
+    ),
+    r'precioUnitario': PropertySchema(
+      id: 5,
       name: r'precioUnitario',
       type: IsarType.double,
     ),
     r'productoId': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'productoId',
       type: IsarType.string,
     ),
     r'serverId': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'serverId',
       type: IsarType.string,
     ),
     r'subTotal': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'subTotal',
       type: IsarType.double,
     ),
     r'ultimaActualizacion': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'ultimaActualizacion',
       type: IsarType.dateTime,
     ),
     r'ventaId': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'ventaId',
       type: IsarType.string,
     )
@@ -113,6 +118,19 @@ const DetalleVentaCollectionSchema = CollectionSchema(
           caseSensitive: true,
         )
       ],
+    ),
+    r'pendienteSincronizacion': IndexSchema(
+      id: 3214759188604201326,
+      name: r'pendienteSincronizacion',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'pendienteSincronizacion',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
     )
   },
   links: {},
@@ -145,12 +163,13 @@ void _detalleVentaCollectionSerialize(
   writer.writeDouble(offsets[1], object.costoHistoricoCompra);
   writer.writeDouble(offsets[2], object.descuento);
   writer.writeDateTime(offsets[3], object.fechaEliminacion);
-  writer.writeDouble(offsets[4], object.precioUnitario);
-  writer.writeString(offsets[5], object.productoId);
-  writer.writeString(offsets[6], object.serverId);
-  writer.writeDouble(offsets[7], object.subTotal);
-  writer.writeDateTime(offsets[8], object.ultimaActualizacion);
-  writer.writeString(offsets[9], object.ventaId);
+  writer.writeBool(offsets[4], object.pendienteSincronizacion);
+  writer.writeDouble(offsets[5], object.precioUnitario);
+  writer.writeString(offsets[6], object.productoId);
+  writer.writeString(offsets[7], object.serverId);
+  writer.writeDouble(offsets[8], object.subTotal);
+  writer.writeDateTime(offsets[9], object.ultimaActualizacion);
+  writer.writeString(offsets[10], object.ventaId);
 }
 
 DetalleVentaCollection _detalleVentaCollectionDeserialize(
@@ -165,12 +184,13 @@ DetalleVentaCollection _detalleVentaCollectionDeserialize(
   object.descuento = reader.readDouble(offsets[2]);
   object.fechaEliminacion = reader.readDateTimeOrNull(offsets[3]);
   object.id = id;
-  object.precioUnitario = reader.readDouble(offsets[4]);
-  object.productoId = reader.readString(offsets[5]);
-  object.serverId = reader.readString(offsets[6]);
-  object.subTotal = reader.readDouble(offsets[7]);
-  object.ultimaActualizacion = reader.readDateTime(offsets[8]);
-  object.ventaId = reader.readString(offsets[9]);
+  object.pendienteSincronizacion = reader.readBool(offsets[4]);
+  object.precioUnitario = reader.readDouble(offsets[5]);
+  object.productoId = reader.readString(offsets[6]);
+  object.serverId = reader.readString(offsets[7]);
+  object.subTotal = reader.readDouble(offsets[8]);
+  object.ultimaActualizacion = reader.readDateTime(offsets[9]);
+  object.ventaId = reader.readString(offsets[10]);
   return object;
 }
 
@@ -190,16 +210,18 @@ P _detalleVentaCollectionDeserializeProp<P>(
     case 3:
       return (reader.readDateTimeOrNull(offset)) as P;
     case 4:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 5:
-      return (reader.readString(offset)) as P;
+      return (reader.readDouble(offset)) as P;
     case 6:
       return (reader.readString(offset)) as P;
     case 7:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 8:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readDouble(offset)) as P;
     case 9:
+      return (reader.readDateTime(offset)) as P;
+    case 10:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -284,6 +306,15 @@ extension DetalleVentaCollectionQueryWhereSort
       anyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+
+  QueryBuilder<DetalleVentaCollection, DetalleVentaCollection, QAfterWhere>
+      anyPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'pendienteSincronizacion'),
+      );
     });
   }
 }
@@ -487,6 +518,53 @@ extension DetalleVentaCollectionQueryWhere on QueryBuilder<
               indexName: r'productoId',
               lower: [],
               upper: [productoId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<DetalleVentaCollection, DetalleVentaCollection,
+          QAfterWhereClause>
+      pendienteSincronizacionEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'pendienteSincronizacion',
+        value: [pendienteSincronizacion],
+      ));
+    });
+  }
+
+  QueryBuilder<DetalleVentaCollection, DetalleVentaCollection,
+          QAfterWhereClause>
+      pendienteSincronizacionNotEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
               includeUpper: false,
             ));
       }
@@ -820,6 +898,16 @@ extension DetalleVentaCollectionQueryFilter on QueryBuilder<
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<DetalleVentaCollection, DetalleVentaCollection,
+      QAfterFilterCondition> pendienteSincronizacionEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'pendienteSincronizacion',
+        value: value,
       ));
     });
   }
@@ -1492,6 +1580,20 @@ extension DetalleVentaCollectionQuerySortBy
   }
 
   QueryBuilder<DetalleVentaCollection, DetalleVentaCollection, QAfterSortBy>
+      sortByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<DetalleVentaCollection, DetalleVentaCollection, QAfterSortBy>
+      sortByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<DetalleVentaCollection, DetalleVentaCollection, QAfterSortBy>
       sortByPrecioUnitario() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'precioUnitario', Sort.asc);
@@ -1649,6 +1751,20 @@ extension DetalleVentaCollectionQuerySortThenBy on QueryBuilder<
   }
 
   QueryBuilder<DetalleVentaCollection, DetalleVentaCollection, QAfterSortBy>
+      thenByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<DetalleVentaCollection, DetalleVentaCollection, QAfterSortBy>
+      thenByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<DetalleVentaCollection, DetalleVentaCollection, QAfterSortBy>
       thenByPrecioUnitario() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'precioUnitario', Sort.asc);
@@ -1764,6 +1880,13 @@ extension DetalleVentaCollectionQueryWhereDistinct
   }
 
   QueryBuilder<DetalleVentaCollection, DetalleVentaCollection, QDistinct>
+      distinctByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'pendienteSincronizacion');
+    });
+  }
+
+  QueryBuilder<DetalleVentaCollection, DetalleVentaCollection, QDistinct>
       distinctByPrecioUnitario() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'precioUnitario');
@@ -1839,6 +1962,13 @@ extension DetalleVentaCollectionQueryProperty on QueryBuilder<
       fechaEliminacionProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'fechaEliminacion');
+    });
+  }
+
+  QueryBuilder<DetalleVentaCollection, bool, QQueryOperations>
+      pendienteSincronizacionProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'pendienteSincronizacion');
     });
   }
 

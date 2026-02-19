@@ -104,8 +104,8 @@ class CustomButton extends StatelessWidget {
               shape: shape,
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
             ).copyWith(
-              overlayColor: MaterialStateProperty.resolveWith((states) {
-                if (states.contains(MaterialState.pressed)) {
+              overlayColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.pressed)) {
                   return color.withValues(alpha: 0.1);
                 }
                 return null;
@@ -123,24 +123,24 @@ class CustomButton extends StatelessWidget {
           // -----------------------
 
           // Fondo forzado
-          backgroundColor: MaterialStateProperty.resolveWith((states) {
-            if (states.contains(MaterialState.disabled)) {
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.disabled)) {
               return Colors.grey.shade300;
             }
             return color;
           }),
 
-          foregroundColor: MaterialStateProperty.all(textColor),
-          elevation: MaterialStateProperty.all(2),
-          shape: MaterialStateProperty.all(shape),
-          shadowColor: MaterialStateProperty.all(color.withValues(alpha: 0.4)),
-          padding: MaterialStateProperty.all(
+          foregroundColor: WidgetStateProperty.all(textColor),
+          elevation: WidgetStateProperty.all(2),
+          shape: WidgetStateProperty.all(shape),
+          shadowColor: WidgetStateProperty.all(color.withValues(alpha: 0.4)),
+          padding: WidgetStateProperty.all(
             const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
           ),
 
           // Configuración de la ola
-          overlayColor: MaterialStateProperty.resolveWith((states) {
-            if (states.contains(MaterialState.pressed)) {
+          overlayColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.pressed)) {
               return textColor.withValues(alpha: 0.2);
             }
             return null;

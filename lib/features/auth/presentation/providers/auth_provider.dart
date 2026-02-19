@@ -3,10 +3,9 @@ import 'package:inventario_v2/features/auth/data/collections/usuario_collection.
 import 'package:inventario_v2/features/auth/data/repositories/auth_repository.dart';
 import 'package:isar/isar.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'package:inventario_v2/core/database/database_provider.dart';
-import 'package:inventario_v2/core/database/supabase_provider.dart';
+import 'package:inventario_v2/core/providers/database_provider.dart';
+import 'package:inventario_v2/core/providers/supabase_provider.dart';
 
 part 'auth_provider.g.dart';
 
@@ -89,6 +88,13 @@ class AuthController extends _$AuthController {
     }
   }
 
+  Future<UsuarioCollection?> getUser() async {
+    final isar = await ref.read(isarDbProvider.future);
+    final user = await isar.usuarioCollections.where().findFirst();
+    _usuarioLocal = user;
+    return user;
+  }
+
   Future<void> checkAuthStatus() async {
     final isar = await ref.read(isarDbProvider.future);
 
@@ -98,12 +104,8 @@ class AuthController extends _$AuthController {
 
     if (user != null) {
       _usuarioLocal = user;
-      print("✅ Usuario encontrado offline: ${user.nombreCompleto}");
-      // Aquí podrías validar tokens si tuvieras internet, pero
-      // para offline-first, confiamos en Isar.
       state = const AsyncData(null);
     } else {
-      print("🤷‍♂️ No hay usuario local. Ir al Login.");
       _usuarioLocal = null;
       state = const AsyncData(null);
     }
@@ -126,7 +128,6 @@ class AuthController extends _$AuthController {
             e.toString().contains("ClientException");
 
         if (esErrorDeRed) {
-          print("⚠️ Sin internet. Intentando Login Offline...");
           await repo.signInOffline(email, password);
         } else {
           // Si es contraseña incorrecta o usuario no encontrado, relanzamos el error

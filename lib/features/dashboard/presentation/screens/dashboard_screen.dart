@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:inventario_v2/core/database/app_bar_provider.dart';
+import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/features/dashboard/presentation/widgets/content_view_dashboard.dart';
 
 // --- 1. PROVIDER SIMULADO (Para ver el Skeleton) ---

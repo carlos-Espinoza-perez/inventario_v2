@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:inventario_v2/core/database/app_bar_provider.dart';
+import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 
 class WarehouseHistoryScreen extends ConsumerStatefulWidget {
   final String warehouseId;

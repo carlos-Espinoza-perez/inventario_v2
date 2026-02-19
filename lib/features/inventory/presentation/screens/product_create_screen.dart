@@ -1,12 +1,34 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-// ✅ Import correcto
-import 'package:inventario_v2/core/database/app_bar_provider.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
+import 'package:path/path.dart' as p;
+
+// Core Providers
+import 'package:inventario_v2/core/providers/app_bar_provider.dart';
+import 'package:inventario_v2/core/providers/supabase_provider.dart';
+import 'package:inventario_v2/core/services/image_storage_service.dart';
+
+// Auth
+import 'package:inventario_v2/features/auth/presentation/providers/auth_provider.dart';
+
+// Inventory Data & Collections
+import 'package:inventario_v2/features/inventory/data/collections/categoria_collection.dart';
+import 'package:inventario_v2/features/inventory/data/collections/producto_collection.dart';
+import 'package:inventario_v2/features/inventory/data/providers/categoria_provider.dart';
+import 'package:inventario_v2/features/inventory/data/providers/producto_provider.dart';
+
+// Widgets
+import 'package:inventario_v2/features/inventory/presentation/widgets/autocomplete_field_product_create.dart';
+import 'package:inventario_v2/features/inventory/presentation/widgets/autocomplete_grouped_field_product_create.dart';
 
 class ProductCreateScreen extends ConsumerStatefulWidget {
-  const ProductCreateScreen({super.key});
+  final ProductoCollection? productToEdit;
+
+  const ProductCreateScreen({super.key, this.productToEdit});
 
   @override
   ConsumerState<ProductCreateScreen> createState() =>
@@ -14,96 +36,46 @@ class ProductCreateScreen extends ConsumerStatefulWidget {
 }
 
 class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen> {
-  // Color Primario definido por ti
   final Color _primaryColor = Colors.cyan.shade800;
 
   // Controladores
   final TextEditingController _nameController = TextEditingController();
-
   final TextEditingController _categoryCtrl = TextEditingController();
   final TextEditingController _brandCtrl = TextEditingController();
   final TextEditingController _detailCtrl = TextEditingController();
 
+  // Estado Local
   String? _selectedImagePath;
-
-  // Listas Sincronizadas
-  final List<String> _categories = [
-    "Camiseta",
-    "Camiseta Polo",
-    "Camisa",
-    "Camisa Formal",
-    "Blusa",
-    "Jersey",
-    "Suéter",
-    "Sudadera",
-    "Chaqueta",
-    "Abrigo",
-    "Saco",
-    "Chaleco",
-    "Jeans",
-    "Pantalón",
-    "Jogger",
-    "Short",
-    "Falda",
-    "Vestido",
-    "Traje",
-    "Tenis",
-    "Zapato",
-    "Bota",
-    "Sandalia",
-    "Tacones",
-    "Lentes",
-    "Gorra",
-    "Sombrero",
-    "Cinturón",
-    "Corbata",
-    "Bolso",
-    "Mochila",
-    "Billetera",
-    "Reloj",
-    "Almohada",
-    "Ropa de Cama",
-    "Toalla",
-    "Botella",
-    "Taza",
-    "Copa",
-    "Vaso",
-    "Sartén",
-    "Olla",
-    "Juguete",
-    "Muñeca",
-  ];
+  bool _isSaving = false;
 
   final List<String> _brands = [
+    "Levi's",
     "Nike",
-    "Adidas",
-    "Puma",
-    "Reebok",
-    "Under Armour",
-    "Fila",
-    "Asics",
-    "Zara",
-    "H&M",
-    "Levis",
-    "Calvin Klein",
+    "Original",
     "Tommy Hilfiger",
-    "Gucci",
-    "Lacoste",
-    "Shein",
-    "Carter's",
-    "Samsung",
-    "Apple",
-    "Sony",
-    "LG",
-    "Huawei",
-    "Dell",
-    "HP",
-    "Lenovo",
+    "Lovable",
+    "Anabell",
+    "Apolo",
+    "Azucena",
+    "Azura",
+    "Differ",
+    "Elena",
+    "Emeli Engreida",
+    "GQ",
+    "Happy",
+    "Isabella",
     "Jingo",
-    "Generico",
-    "Totto",
-    "Disney",
-    "Marvel",
+    "Kallua",
+    "Liverpool",
+    "Lucatonica",
+    "Mobex",
+    "Piecitos",
+    "Rasi",
+    "Roca",
+    "Triyons",
+    "Vicio",
+    "Wearwold",
+    "Yumbo",
   ];
 
   @override
@@ -112,12 +84,71 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen> {
     Future.microtask(() {
       ref
           .read(appBarProvider.notifier)
-          .setOptions(title: "Nuevo Producto", showBackButton: true);
+          .setOptions(
+            title: widget.productToEdit != null
+                ? "Editar Producto"
+                : "Nuevo Producto",
+            showBackButton: true,
+            actions: [],
+          );
+
+      // LÓGICA DE POBLADO DE DATOS MEJORADA
+      _populateFieldsForEdit();
     });
 
+    // Listeners para generar nombre automático (Smart Name)
     _categoryCtrl.addListener(_updateSmartName);
     _brandCtrl.addListener(_updateSmartName);
     _detailCtrl.addListener(_updateSmartName);
+  }
+
+  /// Función dedicada a rellenar los campos si estamos en modo edición
+  void _populateFieldsForEdit() {
+    if (widget.productToEdit == null) return;
+
+    final product = widget.productToEdit!;
+
+    // 1. Campos Básicos
+    _nameController.text = product.nombre;
+    if (mounted) {
+      setState(() {
+        _selectedImagePath = product.imagenLocal;
+      });
+    }
+
+    // 2. Intentar sacar datos del JSON (Prioridad 1)
+    if (product.especificacionJson != null &&
+        product.especificacionJson!.isNotEmpty) {
+      try {
+        final specs = jsonDecode(product.especificacionJson!);
+        if (specs is Map<String, dynamic>) {
+          _brandCtrl.text = specs['brand'] ?? '';
+          _detailCtrl.text = specs['detail'] ?? '';
+
+          // Si el JSON tiene la categoría guardada como texto, úsala
+          if (specs['category'] != null &&
+              specs['category'].toString().isNotEmpty) {
+            _categoryCtrl.text = specs['category'];
+          }
+        }
+      } catch (e) {
+        debugPrint("Error al parsear JSON de especificaciones: $e");
+      }
+    }
+
+    if (_categoryCtrl.text.isEmpty && product.categoriaId.isNotEmpty) {
+      final categoriasAsync = ref.read(listCategoriasAllProvider);
+      final listaCategorias = categoriasAsync.valueOrNull ?? [];
+
+      final foundCat = listaCategorias.firstWhere(
+        (c) => c.serverId == product.categoriaId,
+        orElse: () => CategoriaCollection(),
+      );
+
+      if (foundCat.serverId.isNotEmpty) {
+        _categoryCtrl.text = foundCat.nombre;
+      }
+    }
   }
 
   @override
@@ -130,11 +161,14 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen> {
   }
 
   void _updateSmartName() {
+    if (widget.productToEdit != null) return;
+
     List<String> parts = [];
     if (_categoryCtrl.text.isNotEmpty) parts.add(_categoryCtrl.text);
     if (_brandCtrl.text.isNotEmpty &&
-        _brandCtrl.text.toLowerCase() != "generico")
+        _brandCtrl.text.toLowerCase() != "generico") {
       parts.add(_brandCtrl.text);
+    }
     if (_detailCtrl.text.isNotEmpty) parts.add(_detailCtrl.text);
 
     if (parts.isNotEmpty) {
@@ -149,8 +183,9 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen> {
 
     if (result != null) {
       setState(() {
-        if (result['imagePath'] != null)
+        if (result['imagePath'] != null) {
           _selectedImagePath = result['imagePath'];
+        }
 
         String cat = result['categoria'] ?? "";
         String brand = result['marca'] ?? "";
@@ -160,46 +195,99 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen> {
         if (brand.isNotEmpty) _brandCtrl.text = brand;
         if (detail.isNotEmpty) _detailCtrl.text = detail;
 
-        List<String> nameParts = [];
-        if (cat.isNotEmpty) nameParts.add(cat);
-        if (brand.isNotEmpty && brand.toLowerCase() != "generico")
-          nameParts.add(brand);
-        if (detail.isNotEmpty) {
-          String formattedDetail =
-              detail[0].toUpperCase() + detail.substring(1);
-          nameParts.add(formattedDetail);
+        // Si es nuevo, sugerimos nombre
+        if (widget.productToEdit == null) {
+          List<String> nameParts = [];
+          if (cat.isNotEmpty) nameParts.add(cat);
+          if (brand.isNotEmpty && brand.toLowerCase() != "generico") {
+            nameParts.add(brand);
+          }
+          if (detail.isNotEmpty) {
+            String formattedDetail =
+                detail[0].toUpperCase() + detail.substring(1);
+            nameParts.add(formattedDetail);
+          }
+          _nameController.text = nameParts.join(" ");
         }
-        _nameController.text = nameParts.join(" ");
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("Producto identificado: ${_nameController.text}"),
-            backgroundColor: _primaryColor, // Feedback con tu color
+            backgroundColor: _primaryColor,
           ),
         );
       }
     }
   }
 
+  Map<String, List<String>> mapCategoriasToGroupedOptions(
+    List<CategoriaCollection> todasLasCategorias,
+  ) {
+    final Map<String, List<String>> groupedOptions = {};
+
+    final Map<String, String> padresMap = {
+      for (var cat in todasLasCategorias.where(
+        (c) => c.categoriaPadreId == null,
+      ))
+        cat.serverId: cat.nombre,
+    };
+
+    for (var nombrePadre in padresMap.values) {
+      groupedOptions[nombrePadre] = [];
+    }
+
+    final hijos = todasLasCategorias.where((c) => c.categoriaPadreId != null);
+
+    for (var hijo in hijos) {
+      final nombrePadre = padresMap[hijo.categoriaPadreId];
+      if (nombrePadre != null) {
+        groupedOptions[nombrePadre]?.add(hijo.nombre);
+      }
+    }
+
+    return groupedOptions;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final listCategorias = ref.watch(listCategoriasAllProvider);
+    final groupedOptions = mapCategoriasToGroupedOptions(
+      listCategorias.value ?? [],
+    );
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
-
-      // ✅ BOTÓN CON COLOR CYAN
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _submitProductBase,
-        label: const Text(
-          "Guardar Producto",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        icon: const Icon(Icons.save, color: Colors.white),
-        backgroundColor: _primaryColor, // Cyan Shade 800
+        onPressed: _isSaving ? null : _submitProductBase,
+        backgroundColor: _isSaving ? Colors.grey : _primaryColor,
+        icon: _isSaving
+            ? const SizedBox(width: 0, height: 0)
+            : const Icon(Icons.save, color: Colors.white),
+        label: _isSaving
+            ? Row(
+                children: const [
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                  SizedBox(width: 10),
+                  Text("Guardando...", style: TextStyle(color: Colors.white)),
+                ],
+              )
+            : const Text(
+                "Guardar Producto",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
       ),
-
-      // ✅ CIERRE AL DAR CLIC FUERA
       body: GestureDetector(
         onTap: () {
           FocusScope.of(context).unfocus();
@@ -212,7 +300,7 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen> {
               // FOTO
               Center(
                 child: GestureDetector(
-                  onTap: _openMagicCamera,
+                  onTap: _isSaving ? null : _openMagicCamera,
                   child: Stack(
                     children: [
                       Container(
@@ -223,7 +311,7 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen> {
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black12,
+                              color: Colors.black.withOpacity(0.12),
                               blurRadius: 15,
                               offset: const Offset(0, 5),
                             ),
@@ -239,7 +327,6 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen> {
                             ? Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  // Icono Cyan
                                   Icon(
                                     Icons.camera_alt_rounded,
                                     size: 40,
@@ -258,7 +345,7 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen> {
                               )
                             : null,
                       ),
-                      if (_selectedImagePath != null)
+                      if (_selectedImagePath != null && !_isSaving)
                         Positioned(
                           bottom: 0,
                           right: 0,
@@ -295,14 +382,14 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen> {
                 ),
                 child: Column(
                   children: [
-                    _OpenAutocompleteField(
+                    OpenAutocompleteGroupedField(
                       controller: _categoryCtrl,
                       label: "Categoría",
-                      options: _categories,
+                      groupedOptions: groupedOptions,
                       icon: Icons.category_outlined,
                     ),
                     const SizedBox(height: 20),
-                    _OpenAutocompleteField(
+                    OpenAutocompleteField(
                       controller: _brandCtrl,
                       label: "Marca",
                       options: _brands,
@@ -336,14 +423,11 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen> {
 
               const SizedBox(height: 25),
 
-              // ✅ NOMBRE EDITABLE CON ESTILO CYAN
               Container(
                 padding: const EdgeInsets.all(5),
                 decoration: BoxDecoration(
-                  // Fondo Cyan muy suave
                   color: Colors.cyan.shade50.withOpacity(0.5),
                   borderRadius: BorderRadius.circular(12),
-                  // Borde Cyan suave
                   border: Border.all(color: Colors.cyan.shade100),
                 ),
                 child: TextField(
@@ -357,7 +441,6 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen> {
                   minLines: 1,
                   decoration: InputDecoration(
                     labelText: "Nombre del Producto (Editable)",
-                    // Label Cyan oscuro
                     labelStyle: TextStyle(
                       color: Colors.cyan.shade900,
                       fontSize: 12,
@@ -385,132 +468,125 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen> {
     );
   }
 
-  void _submitProductBase() {
+  Future<void> _submitProductBase() async {
+    // 1. Validaciones básicas
     if (_nameController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Falta el nombre del producto")),
       );
       return;
     }
-    // Lógica para guardar
-    print(
-      "Guardando Producto: ${_nameController.text} | Foto: $_selectedImagePath",
-    );
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Producto Guardado"),
-        backgroundColor: _primaryColor,
-      ),
-    );
-  }
-}
 
-// --- WIDGET AUTOCOMPLETE (Sin Cambios Internos) ---
-class _OpenAutocompleteField extends StatefulWidget {
-  final TextEditingController controller;
-  final String label;
-  final List<String> options;
-  final IconData icon;
+    if (mounted) setState(() => _isSaving = true);
 
-  const _OpenAutocompleteField({
-    required this.controller,
-    required this.label,
-    required this.options,
-    required this.icon,
-  });
+    try {
+      // 3. Buscar ID de Categoría por nombre
+      final listCategorias = ref.read(listCategoriasAllProvider).value ?? [];
+      final categoriaSeleccionada = listCategorias.firstWhere(
+        (c) => c.nombre.toLowerCase() == _categoryCtrl.text.toLowerCase(),
+        orElse: () => CategoriaCollection(),
+      );
 
-  @override
-  State<_OpenAutocompleteField> createState() => _OpenAutocompleteFieldState();
-}
-
-class _OpenAutocompleteFieldState extends State<_OpenAutocompleteField> {
-  final FocusNode _focusNode = FocusNode();
-
-  @override
-  void dispose() {
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return RawAutocomplete<String>(
-          textEditingController: widget.controller,
-          focusNode: _focusNode,
-          optionsBuilder: (TextEditingValue textEditingValue) {
-            if (textEditingValue.text == '') return widget.options;
-            return widget.options.where((String option) {
-              return option.toLowerCase().contains(
-                textEditingValue.text.toLowerCase(),
-              );
-            });
-          },
-          fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-            return TextField(
-              controller: controller,
-              focusNode: focusNode,
-              decoration: InputDecoration(
-                labelText: widget.label,
-                filled: true,
-                fillColor: Colors.grey[50],
-                prefixIcon: Icon(
-                  widget.icon,
-                  size: 20,
-                  color: Colors.grey[500],
-                ),
-                suffixIcon: const Icon(
-                  Icons.arrow_drop_down,
-                  color: Colors.grey,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                // Cuando se enfoca, el borde se pone Cyan
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.cyan.shade800, width: 2),
-                ),
-              ),
-            );
-          },
-          optionsViewBuilder: (context, onSelected, options) {
-            return Align(
-              alignment: Alignment.topLeft,
-              child: Material(
-                elevation: 4.0,
-                color: Colors.white,
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.vertical(
-                    bottom: Radius.circular(12),
-                  ),
-                ),
-                child: Container(
-                  width: constraints.maxWidth,
-                  constraints: const BoxConstraints(maxHeight: 200),
-                  child: ListView.builder(
-                    padding: EdgeInsets.zero,
-                    shrinkWrap: true,
-                    itemCount: options.length,
-                    itemBuilder: (context, index) {
-                      final option = options.elementAt(index);
-                      return InkWell(
-                        onTap: () => onSelected(option),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Text(option),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            );
-          },
+      if (categoriaSeleccionada.serverId.isEmpty) {
+        throw Exception(
+          "La categoría '${_categoryCtrl.text}' no es válida. Selecciónela de la lista.",
         );
-      },
-    );
+      }
+
+      // 4. Obtener Usuario
+      final authController = ref.read(authControllerProvider.notifier);
+      final usuario =
+          authController.usuarioActual ?? await authController.getUser();
+
+      if (usuario == null) {
+        throw Exception("Usuario no encontrado, inicie sesión nuevamente.");
+      }
+
+      // 5. Procesar Imagen
+      String? localPathFinal;
+      String? webUrlFinal;
+
+      if (_selectedImagePath != null) {
+        // Solo copiamos si la imagen cambió (es diferente a la que ya teníamos)
+        // O si es un producto nuevo.
+        final esNuevaImagen =
+            widget.productToEdit?.imagenLocal != _selectedImagePath;
+
+        if (esNuevaImagen) {
+          final File tempFile = File(_selectedImagePath!);
+          if (await tempFile.exists()) {
+            final appDir = await getApplicationDocumentsDirectory();
+            final fileName = p.basename(tempFile.path);
+            final permanentPath = '${appDir.path}/$fileName';
+            final savedImage = await tempFile.copy(permanentPath);
+            localPathFinal = savedImage.path;
+
+            try {
+              final storageService = ImageStorageService(
+                ref.read(supabaseClientProvider),
+              );
+              webUrlFinal = await storageService.uploadProductImage(savedImage);
+            } catch (e) {
+              debugPrint("Error subiendo imagen: $e");
+            }
+          }
+        } else {
+          // Mantenemos la que ya tenía
+          localPathFinal = widget.productToEdit?.imagenLocal;
+          webUrlFinal = widget.productToEdit?.imagenUrl;
+        }
+      }
+
+      // 6. Preparar Objeto
+      final productoAGuardar = widget.productToEdit ?? ProductoCollection();
+
+      productoAGuardar
+        ..serverId = widget.productToEdit != null
+            ? productoAGuardar.serverId
+            : const Uuid().v4()
+        ..nombre = _nameController.text
+        ..categoriaId = categoriaSeleccionada.serverId
+        ..empresaId = usuario.empresaId
+        ..usuarioRegistroId = usuario.serverId
+        ..especificacionJson = jsonEncode({
+          'brand': _brandCtrl.text,
+          'category': _categoryCtrl.text,
+          'detail': _detailCtrl.text,
+        })
+        ..imagenLocal = localPathFinal ?? productoAGuardar.imagenLocal
+        ..imagenUrl = webUrlFinal ?? productoAGuardar.imagenUrl
+        ..fechaRegistro = widget.productToEdit != null
+            ? productoAGuardar.fechaRegistro
+            : DateTime.now()
+        ..ultimaActualizacion = DateTime.now()
+        ..pendienteSincronizacion = true
+        ..estado = true;
+
+      // 7. Guardar
+      final repo = await ref.read(productoRepositoryProvider.future);
+      await repo.saveProducto(productoAGuardar);
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              webUrlFinal != null
+                  ? "Guardado y sincronizado ☁️"
+                  : "Guardado localmente 💾",
+            ),
+            backgroundColor: _primaryColor,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 }

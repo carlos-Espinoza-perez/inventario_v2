@@ -38,23 +38,28 @@ const BodegaUsuarioColletionSchema = CollectionSchema(
       name: r'fechaRegistro',
       type: IsarType.dateTime,
     ),
-    r'uid': PropertySchema(
+    r'pendienteSincronizacion': PropertySchema(
       id: 4,
+      name: r'pendienteSincronizacion',
+      type: IsarType.bool,
+    ),
+    r'uid': PropertySchema(
+      id: 5,
       name: r'uid',
       type: IsarType.string,
     ),
     r'ultimaActualizacion': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'ultimaActualizacion',
       type: IsarType.dateTime,
     ),
     r'usuarioId': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'usuarioId',
       type: IsarType.string,
     ),
     r'usuarioRegistroId': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'usuarioRegistroId',
       type: IsarType.string,
     )
@@ -69,7 +74,7 @@ const BodegaUsuarioColletionSchema = CollectionSchema(
       id: 8193695471701937315,
       name: r'uid',
       unique: true,
-      replace: false,
+      replace: true,
       properties: [
         IndexPropertySchema(
           name: r'uid',
@@ -116,6 +121,19 @@ const BodegaUsuarioColletionSchema = CollectionSchema(
           caseSensitive: false,
         )
       ],
+    ),
+    r'pendienteSincronizacion': IndexSchema(
+      id: 3214759188604201326,
+      name: r'pendienteSincronizacion',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'pendienteSincronizacion',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
     )
   },
   links: {},
@@ -149,10 +167,11 @@ void _bodegaUsuarioColletionSerialize(
   writer.writeBool(offsets[1], object.estado);
   writer.writeDateTime(offsets[2], object.fechaEliminacion);
   writer.writeDateTime(offsets[3], object.fechaRegistro);
-  writer.writeString(offsets[4], object.uid);
-  writer.writeDateTime(offsets[5], object.ultimaActualizacion);
-  writer.writeString(offsets[6], object.usuarioId);
-  writer.writeString(offsets[7], object.usuarioRegistroId);
+  writer.writeBool(offsets[4], object.pendienteSincronizacion);
+  writer.writeString(offsets[5], object.uid);
+  writer.writeDateTime(offsets[6], object.ultimaActualizacion);
+  writer.writeString(offsets[7], object.usuarioId);
+  writer.writeString(offsets[8], object.usuarioRegistroId);
 }
 
 BodegaUsuarioColletion _bodegaUsuarioColletionDeserialize(
@@ -167,10 +186,11 @@ BodegaUsuarioColletion _bodegaUsuarioColletionDeserialize(
   object.fechaEliminacion = reader.readDateTimeOrNull(offsets[2]);
   object.fechaRegistro = reader.readDateTime(offsets[3]);
   object.id = id;
-  object.uid = reader.readString(offsets[4]);
-  object.ultimaActualizacion = reader.readDateTimeOrNull(offsets[5]);
-  object.usuarioId = reader.readString(offsets[6]);
-  object.usuarioRegistroId = reader.readString(offsets[7]);
+  object.pendienteSincronizacion = reader.readBool(offsets[4]);
+  object.uid = reader.readString(offsets[5]);
+  object.ultimaActualizacion = reader.readDateTimeOrNull(offsets[6]);
+  object.usuarioId = reader.readString(offsets[7]);
+  object.usuarioRegistroId = reader.readString(offsets[8]);
   return object;
 }
 
@@ -190,12 +210,14 @@ P _bodegaUsuarioColletionDeserializeProp<P>(
     case 3:
       return (reader.readDateTime(offset)) as P;
     case 4:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 5:
-      return (reader.readDateTimeOrNull(offset)) as P;
-    case 6:
       return (reader.readString(offset)) as P;
+    case 6:
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 7:
+      return (reader.readString(offset)) as P;
+    case 8:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -286,6 +308,15 @@ extension BodegaUsuarioColletionQueryWhereSort
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         const IndexWhereClause.any(indexName: r'estado'),
+      );
+    });
+  }
+
+  QueryBuilder<BodegaUsuarioColletion, BodegaUsuarioColletion, QAfterWhere>
+      anyPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'pendienteSincronizacion'),
       );
     });
   }
@@ -535,6 +566,53 @@ extension BodegaUsuarioColletionQueryWhere on QueryBuilder<
               indexName: r'estado',
               lower: [],
               upper: [estado],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<BodegaUsuarioColletion, BodegaUsuarioColletion,
+          QAfterWhereClause>
+      pendienteSincronizacionEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'pendienteSincronizacion',
+        value: [pendienteSincronizacion],
+      ));
+    });
+  }
+
+  QueryBuilder<BodegaUsuarioColletion, BodegaUsuarioColletion,
+          QAfterWhereClause>
+      pendienteSincronizacionNotEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
               includeUpper: false,
             ));
       }
@@ -874,6 +952,16 @@ extension BodegaUsuarioColletionQueryFilter on QueryBuilder<
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<BodegaUsuarioColletion, BodegaUsuarioColletion,
+      QAfterFilterCondition> pendienteSincronizacionEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'pendienteSincronizacion',
+        value: value,
       ));
     });
   }
@@ -1432,6 +1520,20 @@ extension BodegaUsuarioColletionQuerySortBy
   }
 
   QueryBuilder<BodegaUsuarioColletion, BodegaUsuarioColletion, QAfterSortBy>
+      sortByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<BodegaUsuarioColletion, BodegaUsuarioColletion, QAfterSortBy>
+      sortByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<BodegaUsuarioColletion, BodegaUsuarioColletion, QAfterSortBy>
       sortByUid() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'uid', Sort.asc);
@@ -1561,6 +1663,20 @@ extension BodegaUsuarioColletionQuerySortThenBy on QueryBuilder<
   }
 
   QueryBuilder<BodegaUsuarioColletion, BodegaUsuarioColletion, QAfterSortBy>
+      thenByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<BodegaUsuarioColletion, BodegaUsuarioColletion, QAfterSortBy>
+      thenByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<BodegaUsuarioColletion, BodegaUsuarioColletion, QAfterSortBy>
       thenByUid() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'uid', Sort.asc);
@@ -1648,6 +1764,13 @@ extension BodegaUsuarioColletionQueryWhereDistinct
   }
 
   QueryBuilder<BodegaUsuarioColletion, BodegaUsuarioColletion, QDistinct>
+      distinctByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'pendienteSincronizacion');
+    });
+  }
+
+  QueryBuilder<BodegaUsuarioColletion, BodegaUsuarioColletion, QDistinct>
       distinctByUid({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'uid', caseSensitive: caseSensitive);
@@ -1710,6 +1833,13 @@ extension BodegaUsuarioColletionQueryProperty on QueryBuilder<
       fechaRegistroProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'fechaRegistro');
+    });
+  }
+
+  QueryBuilder<BodegaUsuarioColletion, bool, QQueryOperations>
+      pendienteSincronizacionProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'pendienteSincronizacion');
     });
   }
 

@@ -47,23 +47,28 @@ const EmpresaCollectionSchema = CollectionSchema(
       name: r'nombreComercial',
       type: IsarType.string,
     ),
-    r'ruc': PropertySchema(
+    r'pendienteSincronizacion': PropertySchema(
       id: 6,
+      name: r'pendienteSincronizacion',
+      type: IsarType.bool,
+    ),
+    r'ruc': PropertySchema(
+      id: 7,
       name: r'ruc',
       type: IsarType.string,
     ),
     r'serverId': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'serverId',
       type: IsarType.string,
     ),
     r'ultimaActualizacion': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'ultimaActualizacion',
       type: IsarType.dateTime,
     ),
     r'usuarioRegistroId': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'usuarioRegistroId',
       type: IsarType.string,
     )
@@ -84,6 +89,19 @@ const EmpresaCollectionSchema = CollectionSchema(
           name: r'serverId',
           type: IndexType.hash,
           caseSensitive: true,
+        )
+      ],
+    ),
+    r'pendienteSincronizacion': IndexSchema(
+      id: 3214759188604201326,
+      name: r'pendienteSincronizacion',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'pendienteSincronizacion',
+          type: IndexType.value,
+          caseSensitive: false,
         )
       ],
     )
@@ -143,10 +161,11 @@ void _empresaCollectionSerialize(
   writer.writeDateTime(offsets[3], object.fechaRegistro);
   writer.writeString(offsets[4], object.nombre);
   writer.writeString(offsets[5], object.nombreComercial);
-  writer.writeString(offsets[6], object.ruc);
-  writer.writeString(offsets[7], object.serverId);
-  writer.writeDateTime(offsets[8], object.ultimaActualizacion);
-  writer.writeString(offsets[9], object.usuarioRegistroId);
+  writer.writeBool(offsets[6], object.pendienteSincronizacion);
+  writer.writeString(offsets[7], object.ruc);
+  writer.writeString(offsets[8], object.serverId);
+  writer.writeDateTime(offsets[9], object.ultimaActualizacion);
+  writer.writeString(offsets[10], object.usuarioRegistroId);
 }
 
 EmpresaCollection _empresaCollectionDeserialize(
@@ -163,10 +182,11 @@ EmpresaCollection _empresaCollectionDeserialize(
   object.id = id;
   object.nombre = reader.readString(offsets[4]);
   object.nombreComercial = reader.readStringOrNull(offsets[5]);
-  object.ruc = reader.readStringOrNull(offsets[6]);
-  object.serverId = reader.readString(offsets[7]);
-  object.ultimaActualizacion = reader.readDateTime(offsets[8]);
-  object.usuarioRegistroId = reader.readStringOrNull(offsets[9]);
+  object.pendienteSincronizacion = reader.readBool(offsets[6]);
+  object.ruc = reader.readStringOrNull(offsets[7]);
+  object.serverId = reader.readString(offsets[8]);
+  object.ultimaActualizacion = reader.readDateTime(offsets[9]);
+  object.usuarioRegistroId = reader.readStringOrNull(offsets[10]);
   return object;
 }
 
@@ -190,12 +210,14 @@ P _empresaCollectionDeserializeProp<P>(
     case 5:
       return (reader.readStringOrNull(offset)) as P;
     case 6:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 7:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 8:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 9:
+      return (reader.readDateTime(offset)) as P;
+    case 10:
       return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -277,6 +299,15 @@ extension EmpresaCollectionQueryWhereSort
   QueryBuilder<EmpresaCollection, EmpresaCollection, QAfterWhere> anyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+
+  QueryBuilder<EmpresaCollection, EmpresaCollection, QAfterWhere>
+      anyPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'pendienteSincronizacion'),
+      );
     });
   }
 }
@@ -390,6 +421,51 @@ extension EmpresaCollectionQueryWhere
               indexName: r'serverId',
               lower: [],
               upper: [serverId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<EmpresaCollection, EmpresaCollection, QAfterWhereClause>
+      pendienteSincronizacionEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'pendienteSincronizacion',
+        value: [pendienteSincronizacion],
+      ));
+    });
+  }
+
+  QueryBuilder<EmpresaCollection, EmpresaCollection, QAfterWhereClause>
+      pendienteSincronizacionNotEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
               includeUpper: false,
             ));
       }
@@ -1058,6 +1134,16 @@ extension EmpresaCollectionQueryFilter
   }
 
   QueryBuilder<EmpresaCollection, EmpresaCollection, QAfterFilterCondition>
+      pendienteSincronizacionEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'pendienteSincronizacion',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<EmpresaCollection, EmpresaCollection, QAfterFilterCondition>
       rucIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -1650,6 +1736,20 @@ extension EmpresaCollectionQuerySortBy
     });
   }
 
+  QueryBuilder<EmpresaCollection, EmpresaCollection, QAfterSortBy>
+      sortByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<EmpresaCollection, EmpresaCollection, QAfterSortBy>
+      sortByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
   QueryBuilder<EmpresaCollection, EmpresaCollection, QAfterSortBy> sortByRuc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'ruc', Sort.asc);
@@ -1805,6 +1905,20 @@ extension EmpresaCollectionQuerySortThenBy
     });
   }
 
+  QueryBuilder<EmpresaCollection, EmpresaCollection, QAfterSortBy>
+      thenByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<EmpresaCollection, EmpresaCollection, QAfterSortBy>
+      thenByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
   QueryBuilder<EmpresaCollection, EmpresaCollection, QAfterSortBy> thenByRuc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'ruc', Sort.asc);
@@ -1907,6 +2021,13 @@ extension EmpresaCollectionQueryWhereDistinct
     });
   }
 
+  QueryBuilder<EmpresaCollection, EmpresaCollection, QDistinct>
+      distinctByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'pendienteSincronizacion');
+    });
+  }
+
   QueryBuilder<EmpresaCollection, EmpresaCollection, QDistinct> distinctByRuc(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -1982,6 +2103,13 @@ extension EmpresaCollectionQueryProperty
       nombreComercialProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'nombreComercial');
+    });
+  }
+
+  QueryBuilder<EmpresaCollection, bool, QQueryOperations>
+      pendienteSincronizacionProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'pendienteSincronizacion');
     });
   }
 

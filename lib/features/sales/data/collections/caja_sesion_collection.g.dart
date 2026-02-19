@@ -54,33 +54,38 @@ const CajaSesionCollectionSchema = CollectionSchema(
       name: r'montoInicial',
       type: IsarType.double,
     ),
-    r'serverId': PropertySchema(
+    r'pendienteSincronizacion': PropertySchema(
       id: 7,
+      name: r'pendienteSincronizacion',
+      type: IsarType.bool,
+    ),
+    r'serverId': PropertySchema(
+      id: 8,
       name: r'serverId',
       type: IsarType.string,
     ),
     r'totalEfectivoReal': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'totalEfectivoReal',
       type: IsarType.double,
     ),
     r'totalVentasSistema': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'totalVentasSistema',
       type: IsarType.double,
     ),
     r'ultimaActualizacion': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'ultimaActualizacion',
       type: IsarType.dateTime,
     ),
     r'usuarioAperturaId': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'usuarioAperturaId',
       type: IsarType.string,
     ),
     r'usuarioCierreId': PropertySchema(
-      id: 12,
+      id: 13,
       name: r'usuarioCierreId',
       type: IsarType.string,
     )
@@ -114,6 +119,19 @@ const CajaSesionCollectionSchema = CollectionSchema(
           name: r'cajaId',
           type: IndexType.hash,
           caseSensitive: true,
+        )
+      ],
+    ),
+    r'pendienteSincronizacion': IndexSchema(
+      id: 3214759188604201326,
+      name: r'pendienteSincronizacion',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'pendienteSincronizacion',
+          type: IndexType.value,
+          caseSensitive: false,
         )
       ],
     )
@@ -157,12 +175,13 @@ void _cajaSesionCollectionSerialize(
   writer.writeDateTime(offsets[4], object.fechaCierre);
   writer.writeDateTime(offsets[5], object.fechaEliminacion);
   writer.writeDouble(offsets[6], object.montoInicial);
-  writer.writeString(offsets[7], object.serverId);
-  writer.writeDouble(offsets[8], object.totalEfectivoReal);
-  writer.writeDouble(offsets[9], object.totalVentasSistema);
-  writer.writeDateTime(offsets[10], object.ultimaActualizacion);
-  writer.writeString(offsets[11], object.usuarioAperturaId);
-  writer.writeString(offsets[12], object.usuarioCierreId);
+  writer.writeBool(offsets[7], object.pendienteSincronizacion);
+  writer.writeString(offsets[8], object.serverId);
+  writer.writeDouble(offsets[9], object.totalEfectivoReal);
+  writer.writeDouble(offsets[10], object.totalVentasSistema);
+  writer.writeDateTime(offsets[11], object.ultimaActualizacion);
+  writer.writeString(offsets[12], object.usuarioAperturaId);
+  writer.writeString(offsets[13], object.usuarioCierreId);
 }
 
 CajaSesionCollection _cajaSesionCollectionDeserialize(
@@ -182,12 +201,13 @@ CajaSesionCollection _cajaSesionCollectionDeserialize(
   object.fechaEliminacion = reader.readDateTimeOrNull(offsets[5]);
   object.id = id;
   object.montoInicial = reader.readDouble(offsets[6]);
-  object.serverId = reader.readString(offsets[7]);
-  object.totalEfectivoReal = reader.readDouble(offsets[8]);
-  object.totalVentasSistema = reader.readDouble(offsets[9]);
-  object.ultimaActualizacion = reader.readDateTime(offsets[10]);
-  object.usuarioAperturaId = reader.readString(offsets[11]);
-  object.usuarioCierreId = reader.readStringOrNull(offsets[12]);
+  object.pendienteSincronizacion = reader.readBool(offsets[7]);
+  object.serverId = reader.readString(offsets[8]);
+  object.totalEfectivoReal = reader.readDouble(offsets[9]);
+  object.totalVentasSistema = reader.readDouble(offsets[10]);
+  object.ultimaActualizacion = reader.readDateTime(offsets[11]);
+  object.usuarioAperturaId = reader.readString(offsets[12]);
+  object.usuarioCierreId = reader.readStringOrNull(offsets[13]);
   return object;
 }
 
@@ -215,16 +235,18 @@ P _cajaSesionCollectionDeserializeProp<P>(
     case 6:
       return (reader.readDouble(offset)) as P;
     case 7:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 8:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 9:
       return (reader.readDouble(offset)) as P;
     case 10:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readDouble(offset)) as P;
     case 11:
-      return (reader.readString(offset)) as P;
+      return (reader.readDateTime(offset)) as P;
     case 12:
+      return (reader.readString(offset)) as P;
+    case 13:
       return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -319,6 +341,15 @@ extension CajaSesionCollectionQueryWhereSort
       anyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+
+  QueryBuilder<CajaSesionCollection, CajaSesionCollection, QAfterWhere>
+      anyPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'pendienteSincronizacion'),
+      );
     });
   }
 }
@@ -477,6 +508,51 @@ extension CajaSesionCollectionQueryWhere
               indexName: r'cajaId',
               lower: [],
               upper: [cajaId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<CajaSesionCollection, CajaSesionCollection, QAfterWhereClause>
+      pendienteSincronizacionEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'pendienteSincronizacion',
+        value: [pendienteSincronizacion],
+      ));
+    });
+  }
+
+  QueryBuilder<CajaSesionCollection, CajaSesionCollection, QAfterWhereClause>
+      pendienteSincronizacionNotEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
               includeUpper: false,
             ));
       }
@@ -1068,6 +1144,16 @@ extension CajaSesionCollectionQueryFilter on QueryBuilder<CajaSesionCollection,
         upper: upper,
         includeUpper: includeUpper,
         epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<CajaSesionCollection, CajaSesionCollection,
+      QAfterFilterCondition> pendienteSincronizacionEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'pendienteSincronizacion',
+        value: value,
       ));
     });
   }
@@ -1800,6 +1886,20 @@ extension CajaSesionCollectionQuerySortBy
   }
 
   QueryBuilder<CajaSesionCollection, CajaSesionCollection, QAfterSortBy>
+      sortByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<CajaSesionCollection, CajaSesionCollection, QAfterSortBy>
+      sortByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<CajaSesionCollection, CajaSesionCollection, QAfterSortBy>
       sortByServerId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'serverId', Sort.asc);
@@ -1999,6 +2099,20 @@ extension CajaSesionCollectionQuerySortThenBy
   }
 
   QueryBuilder<CajaSesionCollection, CajaSesionCollection, QAfterSortBy>
+      thenByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<CajaSesionCollection, CajaSesionCollection, QAfterSortBy>
+      thenByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<CajaSesionCollection, CajaSesionCollection, QAfterSortBy>
       thenByServerId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'serverId', Sort.asc);
@@ -2135,6 +2249,13 @@ extension CajaSesionCollectionQueryWhereDistinct
   }
 
   QueryBuilder<CajaSesionCollection, CajaSesionCollection, QDistinct>
+      distinctByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'pendienteSincronizacion');
+    });
+  }
+
+  QueryBuilder<CajaSesionCollection, CajaSesionCollection, QDistinct>
       distinctByServerId({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'serverId', caseSensitive: caseSensitive);
@@ -2233,6 +2354,13 @@ extension CajaSesionCollectionQueryProperty on QueryBuilder<
       montoInicialProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'montoInicial');
+    });
+  }
+
+  QueryBuilder<CajaSesionCollection, bool, QQueryOperations>
+      pendienteSincronizacionProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'pendienteSincronizacion');
     });
   }
 

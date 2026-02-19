@@ -38,13 +38,18 @@ const ReglaCostoCollectionSchema = CollectionSchema(
       name: r'nombre',
       type: IsarType.string,
     ),
-    r'serverId': PropertySchema(
+    r'pendienteSincronizacion': PropertySchema(
       id: 4,
+      name: r'pendienteSincronizacion',
+      type: IsarType.bool,
+    ),
+    r'serverId': PropertySchema(
+      id: 5,
       name: r'serverId',
       type: IsarType.string,
     ),
     r'ultimaActualizacion': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'ultimaActualizacion',
       type: IsarType.dateTime,
     )
@@ -78,6 +83,19 @@ const ReglaCostoCollectionSchema = CollectionSchema(
           name: r'empresaId',
           type: IndexType.hash,
           caseSensitive: true,
+        )
+      ],
+    ),
+    r'pendienteSincronizacion': IndexSchema(
+      id: 3214759188604201326,
+      name: r'pendienteSincronizacion',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'pendienteSincronizacion',
+          type: IndexType.value,
+          caseSensitive: false,
         )
       ],
     )
@@ -117,8 +135,9 @@ void _reglaCostoCollectionSerialize(
   writer.writeString(offsets[1], object.empresaId);
   writer.writeDouble(offsets[2], object.factorRedondeo);
   writer.writeString(offsets[3], object.nombre);
-  writer.writeString(offsets[4], object.serverId);
-  writer.writeDateTime(offsets[5], object.ultimaActualizacion);
+  writer.writeBool(offsets[4], object.pendienteSincronizacion);
+  writer.writeString(offsets[5], object.serverId);
+  writer.writeDateTime(offsets[6], object.ultimaActualizacion);
 }
 
 ReglaCostoCollection _reglaCostoCollectionDeserialize(
@@ -133,8 +152,9 @@ ReglaCostoCollection _reglaCostoCollectionDeserialize(
   object.factorRedondeo = reader.readDouble(offsets[2]);
   object.id = id;
   object.nombre = reader.readStringOrNull(offsets[3]);
-  object.serverId = reader.readString(offsets[4]);
-  object.ultimaActualizacion = reader.readDateTime(offsets[5]);
+  object.pendienteSincronizacion = reader.readBool(offsets[4]);
+  object.serverId = reader.readString(offsets[5]);
+  object.ultimaActualizacion = reader.readDateTime(offsets[6]);
   return object;
 }
 
@@ -154,8 +174,10 @@ P _reglaCostoCollectionDeserializeProp<P>(
     case 3:
       return (reader.readStringOrNull(offset)) as P;
     case 4:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 5:
+      return (reader.readString(offset)) as P;
+    case 6:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -239,6 +261,15 @@ extension ReglaCostoCollectionQueryWhereSort
       anyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+
+  QueryBuilder<ReglaCostoCollection, ReglaCostoCollection, QAfterWhere>
+      anyPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'pendienteSincronizacion'),
+      );
     });
   }
 }
@@ -397,6 +428,51 @@ extension ReglaCostoCollectionQueryWhere
               indexName: r'empresaId',
               lower: [],
               upper: [empresaId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<ReglaCostoCollection, ReglaCostoCollection, QAfterWhereClause>
+      pendienteSincronizacionEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'pendienteSincronizacion',
+        value: [pendienteSincronizacion],
+      ));
+    });
+  }
+
+  QueryBuilder<ReglaCostoCollection, ReglaCostoCollection, QAfterWhereClause>
+      pendienteSincronizacionNotEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
               includeUpper: false,
             ));
       }
@@ -833,6 +909,16 @@ extension ReglaCostoCollectionQueryFilter on QueryBuilder<ReglaCostoCollection,
   }
 
   QueryBuilder<ReglaCostoCollection, ReglaCostoCollection,
+      QAfterFilterCondition> pendienteSincronizacionEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'pendienteSincronizacion',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ReglaCostoCollection, ReglaCostoCollection,
       QAfterFilterCondition> serverIdEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -1092,6 +1178,20 @@ extension ReglaCostoCollectionQuerySortBy
   }
 
   QueryBuilder<ReglaCostoCollection, ReglaCostoCollection, QAfterSortBy>
+      sortByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ReglaCostoCollection, ReglaCostoCollection, QAfterSortBy>
+      sortByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<ReglaCostoCollection, ReglaCostoCollection, QAfterSortBy>
       sortByServerId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'serverId', Sort.asc);
@@ -1193,6 +1293,20 @@ extension ReglaCostoCollectionQuerySortThenBy
   }
 
   QueryBuilder<ReglaCostoCollection, ReglaCostoCollection, QAfterSortBy>
+      thenByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ReglaCostoCollection, ReglaCostoCollection, QAfterSortBy>
+      thenByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<ReglaCostoCollection, ReglaCostoCollection, QAfterSortBy>
       thenByServerId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'serverId', Sort.asc);
@@ -1252,6 +1366,13 @@ extension ReglaCostoCollectionQueryWhereDistinct
   }
 
   QueryBuilder<ReglaCostoCollection, ReglaCostoCollection, QDistinct>
+      distinctByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'pendienteSincronizacion');
+    });
+  }
+
+  QueryBuilder<ReglaCostoCollection, ReglaCostoCollection, QDistinct>
       distinctByServerId({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'serverId', caseSensitive: caseSensitive);
@@ -1298,6 +1419,13 @@ extension ReglaCostoCollectionQueryProperty on QueryBuilder<
       nombreProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'nombre');
+    });
+  }
+
+  QueryBuilder<ReglaCostoCollection, bool, QQueryOperations>
+      pendienteSincronizacionProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'pendienteSincronizacion');
     });
   }
 

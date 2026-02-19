@@ -49,28 +49,33 @@ const HistorialPagoCollectionSchema = CollectionSchema(
       name: r'montoPagado',
       type: IsarType.double,
     ),
-    r'referencia': PropertySchema(
+    r'pendienteSincronizacion': PropertySchema(
       id: 6,
+      name: r'pendienteSincronizacion',
+      type: IsarType.bool,
+    ),
+    r'referencia': PropertySchema(
+      id: 7,
       name: r'referencia',
       type: IsarType.string,
     ),
     r'serverId': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'serverId',
       type: IsarType.string,
     ),
     r'ultimaActualizacion': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'ultimaActualizacion',
       type: IsarType.dateTime,
     ),
     r'usuarioRegistroId': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'usuarioRegistroId',
       type: IsarType.string,
     ),
     r'ventaId': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'ventaId',
       type: IsarType.string,
     )
@@ -119,6 +124,19 @@ const HistorialPagoCollectionSchema = CollectionSchema(
           caseSensitive: true,
         )
       ],
+    ),
+    r'pendienteSincronizacion': IndexSchema(
+      id: 3214759188604201326,
+      name: r'pendienteSincronizacion',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'pendienteSincronizacion',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
     )
   },
   links: {},
@@ -165,11 +183,12 @@ void _historialPagoCollectionSerialize(
   writer.writeDateTime(offsets[3], object.fechaRegistro);
   writer.writeByte(offsets[4], object.metodoDePago.index);
   writer.writeDouble(offsets[5], object.montoPagado);
-  writer.writeString(offsets[6], object.referencia);
-  writer.writeString(offsets[7], object.serverId);
-  writer.writeDateTime(offsets[8], object.ultimaActualizacion);
-  writer.writeString(offsets[9], object.usuarioRegistroId);
-  writer.writeString(offsets[10], object.ventaId);
+  writer.writeBool(offsets[6], object.pendienteSincronizacion);
+  writer.writeString(offsets[7], object.referencia);
+  writer.writeString(offsets[8], object.serverId);
+  writer.writeDateTime(offsets[9], object.ultimaActualizacion);
+  writer.writeString(offsets[10], object.usuarioRegistroId);
+  writer.writeString(offsets[11], object.ventaId);
 }
 
 HistorialPagoCollection _historialPagoCollectionDeserialize(
@@ -188,11 +207,12 @@ HistorialPagoCollection _historialPagoCollectionDeserialize(
           reader.readByteOrNull(offsets[4])] ??
       MetodoPago.efectivo;
   object.montoPagado = reader.readDouble(offsets[5]);
-  object.referencia = reader.readStringOrNull(offsets[6]);
-  object.serverId = reader.readString(offsets[7]);
-  object.ultimaActualizacion = reader.readDateTime(offsets[8]);
-  object.usuarioRegistroId = reader.readStringOrNull(offsets[9]);
-  object.ventaId = reader.readString(offsets[10]);
+  object.pendienteSincronizacion = reader.readBool(offsets[6]);
+  object.referencia = reader.readStringOrNull(offsets[7]);
+  object.serverId = reader.readString(offsets[8]);
+  object.ultimaActualizacion = reader.readDateTime(offsets[9]);
+  object.usuarioRegistroId = reader.readStringOrNull(offsets[10]);
+  object.ventaId = reader.readString(offsets[11]);
   return object;
 }
 
@@ -218,14 +238,16 @@ P _historialPagoCollectionDeserializeProp<P>(
     case 5:
       return (reader.readDouble(offset)) as P;
     case 6:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 7:
-      return (reader.readString(offset)) as P;
-    case 8:
-      return (reader.readDateTime(offset)) as P;
-    case 9:
       return (reader.readStringOrNull(offset)) as P;
+    case 8:
+      return (reader.readString(offset)) as P;
+    case 9:
+      return (reader.readDateTime(offset)) as P;
     case 10:
+      return (reader.readStringOrNull(offset)) as P;
+    case 11:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -322,6 +344,15 @@ extension HistorialPagoCollectionQueryWhereSort
       anyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+
+  QueryBuilder<HistorialPagoCollection, HistorialPagoCollection, QAfterWhere>
+      anyPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'pendienteSincronizacion'),
+      );
     });
   }
 }
@@ -525,6 +556,53 @@ extension HistorialPagoCollectionQueryWhere on QueryBuilder<
               indexName: r'cajaSesionId',
               lower: [],
               upper: [cajaSesionId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<HistorialPagoCollection, HistorialPagoCollection,
+          QAfterWhereClause>
+      pendienteSincronizacionEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'pendienteSincronizacion',
+        value: [pendienteSincronizacion],
+      ));
+    });
+  }
+
+  QueryBuilder<HistorialPagoCollection, HistorialPagoCollection,
+          QAfterWhereClause>
+      pendienteSincronizacionNotEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
               includeUpper: false,
             ));
       }
@@ -986,6 +1064,16 @@ extension HistorialPagoCollectionQueryFilter on QueryBuilder<
         upper: upper,
         includeUpper: includeUpper,
         epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<HistorialPagoCollection, HistorialPagoCollection,
+      QAfterFilterCondition> pendienteSincronizacionEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'pendienteSincronizacion',
+        value: value,
       ));
     });
   }
@@ -1728,6 +1816,20 @@ extension HistorialPagoCollectionQuerySortBy
   }
 
   QueryBuilder<HistorialPagoCollection, HistorialPagoCollection, QAfterSortBy>
+      sortByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<HistorialPagoCollection, HistorialPagoCollection, QAfterSortBy>
+      sortByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<HistorialPagoCollection, HistorialPagoCollection, QAfterSortBy>
       sortByReferencia() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'referencia', Sort.asc);
@@ -1899,6 +2001,20 @@ extension HistorialPagoCollectionQuerySortThenBy on QueryBuilder<
   }
 
   QueryBuilder<HistorialPagoCollection, HistorialPagoCollection, QAfterSortBy>
+      thenByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<HistorialPagoCollection, HistorialPagoCollection, QAfterSortBy>
+      thenByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<HistorialPagoCollection, HistorialPagoCollection, QAfterSortBy>
       thenByReferencia() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'referencia', Sort.asc);
@@ -2014,6 +2130,13 @@ extension HistorialPagoCollectionQueryWhereDistinct on QueryBuilder<
   }
 
   QueryBuilder<HistorialPagoCollection, HistorialPagoCollection, QDistinct>
+      distinctByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'pendienteSincronizacion');
+    });
+  }
+
+  QueryBuilder<HistorialPagoCollection, HistorialPagoCollection, QDistinct>
       distinctByReferencia({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'referencia', caseSensitive: caseSensitive);
@@ -2097,6 +2220,13 @@ extension HistorialPagoCollectionQueryProperty on QueryBuilder<
       montoPagadoProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'montoPagado');
+    });
+  }
+
+  QueryBuilder<HistorialPagoCollection, bool, QQueryOperations>
+      pendienteSincronizacionProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'pendienteSincronizacion');
     });
   }
 

@@ -59,24 +59,29 @@ const MovimientoProductoCollectionSchema = CollectionSchema(
       name: r'fechaRegistro',
       type: IsarType.dateTime,
     ),
-    r'serverId': PropertySchema(
+    r'pendienteSincronizacion': PropertySchema(
       id: 8,
+      name: r'pendienteSincronizacion',
+      type: IsarType.bool,
+    ),
+    r'serverId': PropertySchema(
+      id: 9,
       name: r'serverId',
       type: IsarType.string,
     ),
     r'tipoMovimiento': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'tipoMovimiento',
       type: IsarType.byte,
       enumMap: _MovimientoProductoCollectiontipoMovimientoEnumValueMap,
     ),
     r'ultimaActualizacion': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'ultimaActualizacion',
       type: IsarType.dateTime,
     ),
     r'usuarioRegistroId': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'usuarioRegistroId',
       type: IsarType.string,
     )
@@ -110,6 +115,19 @@ const MovimientoProductoCollectionSchema = CollectionSchema(
           name: r'empresaId',
           type: IndexType.hash,
           caseSensitive: true,
+        )
+      ],
+    ),
+    r'pendienteSincronizacion': IndexSchema(
+      id: 3214759188604201326,
+      name: r'pendienteSincronizacion',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'pendienteSincronizacion',
+          type: IndexType.value,
+          caseSensitive: false,
         )
       ],
     )
@@ -171,10 +189,11 @@ void _movimientoProductoCollectionSerialize(
   writer.writeByte(offsets[5], object.estadoMovimiento.index);
   writer.writeDateTime(offsets[6], object.fechaEliminacion);
   writer.writeDateTime(offsets[7], object.fechaRegistro);
-  writer.writeString(offsets[8], object.serverId);
-  writer.writeByte(offsets[9], object.tipoMovimiento.index);
-  writer.writeDateTime(offsets[10], object.ultimaActualizacion);
-  writer.writeString(offsets[11], object.usuarioRegistroId);
+  writer.writeBool(offsets[8], object.pendienteSincronizacion);
+  writer.writeString(offsets[9], object.serverId);
+  writer.writeByte(offsets[10], object.tipoMovimiento.index);
+  writer.writeDateTime(offsets[11], object.ultimaActualizacion);
+  writer.writeString(offsets[12], object.usuarioRegistroId);
 }
 
 MovimientoProductoCollection _movimientoProductoCollectionDeserialize(
@@ -196,13 +215,14 @@ MovimientoProductoCollection _movimientoProductoCollectionDeserialize(
   object.fechaEliminacion = reader.readDateTimeOrNull(offsets[6]);
   object.fechaRegistro = reader.readDateTime(offsets[7]);
   object.id = id;
-  object.serverId = reader.readString(offsets[8]);
+  object.pendienteSincronizacion = reader.readBool(offsets[8]);
+  object.serverId = reader.readString(offsets[9]);
   object.tipoMovimiento =
       _MovimientoProductoCollectiontipoMovimientoValueEnumMap[
-              reader.readByteOrNull(offsets[9])] ??
+              reader.readByteOrNull(offsets[10])] ??
           TipoMovimiento.compra;
-  object.ultimaActualizacion = reader.readDateTime(offsets[10]);
-  object.usuarioRegistroId = reader.readStringOrNull(offsets[11]);
+  object.ultimaActualizacion = reader.readDateTime(offsets[11]);
+  object.usuarioRegistroId = reader.readStringOrNull(offsets[12]);
   return object;
 }
 
@@ -232,14 +252,16 @@ P _movimientoProductoCollectionDeserializeProp<P>(
     case 7:
       return (reader.readDateTime(offset)) as P;
     case 8:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 9:
+      return (reader.readString(offset)) as P;
+    case 10:
       return (_MovimientoProductoCollectiontipoMovimientoValueEnumMap[
               reader.readByteOrNull(offset)] ??
           TipoMovimiento.compra) as P;
-    case 10:
-      return (reader.readDateTime(offset)) as P;
     case 11:
+      return (reader.readDateTime(offset)) as P;
+    case 12:
       return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -349,6 +371,15 @@ extension MovimientoProductoCollectionQueryWhereSort on QueryBuilder<
       QAfterWhere> anyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+
+  QueryBuilder<MovimientoProductoCollection, MovimientoProductoCollection,
+      QAfterWhere> anyPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'pendienteSincronizacion'),
+      );
     });
   }
 }
@@ -507,6 +538,53 @@ extension MovimientoProductoCollectionQueryWhere on QueryBuilder<
               indexName: r'empresaId',
               lower: [],
               upper: [empresaId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<MovimientoProductoCollection, MovimientoProductoCollection,
+          QAfterWhereClause>
+      pendienteSincronizacionEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'pendienteSincronizacion',
+        value: [pendienteSincronizacion],
+      ));
+    });
+  }
+
+  QueryBuilder<MovimientoProductoCollection, MovimientoProductoCollection,
+          QAfterWhereClause>
+      pendienteSincronizacionNotEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
               includeUpper: false,
             ));
       }
@@ -1377,6 +1455,16 @@ extension MovimientoProductoCollectionQueryFilter on QueryBuilder<
   }
 
   QueryBuilder<MovimientoProductoCollection, MovimientoProductoCollection,
+      QAfterFilterCondition> pendienteSincronizacionEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'pendienteSincronizacion',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MovimientoProductoCollection, MovimientoProductoCollection,
       QAfterFilterCondition> serverIdEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -1908,6 +1996,20 @@ extension MovimientoProductoCollectionQuerySortBy on QueryBuilder<
   }
 
   QueryBuilder<MovimientoProductoCollection, MovimientoProductoCollection,
+      QAfterSortBy> sortByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MovimientoProductoCollection, MovimientoProductoCollection,
+      QAfterSortBy> sortByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MovimientoProductoCollection, MovimientoProductoCollection,
       QAfterSortBy> sortByServerId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'serverId', Sort.asc);
@@ -2093,6 +2195,20 @@ extension MovimientoProductoCollectionQuerySortThenBy on QueryBuilder<
   }
 
   QueryBuilder<MovimientoProductoCollection, MovimientoProductoCollection,
+      QAfterSortBy> thenByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MovimientoProductoCollection, MovimientoProductoCollection,
+      QAfterSortBy> thenByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MovimientoProductoCollection, MovimientoProductoCollection,
       QAfterSortBy> thenByServerId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'serverId', Sort.asc);
@@ -2210,6 +2326,13 @@ extension MovimientoProductoCollectionQueryWhereDistinct on QueryBuilder<
   }
 
   QueryBuilder<MovimientoProductoCollection, MovimientoProductoCollection,
+      QDistinct> distinctByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'pendienteSincronizacion');
+    });
+  }
+
+  QueryBuilder<MovimientoProductoCollection, MovimientoProductoCollection,
       QDistinct> distinctByServerId({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'serverId', caseSensitive: caseSensitive);
@@ -2303,6 +2426,13 @@ extension MovimientoProductoCollectionQueryProperty on QueryBuilder<
       fechaRegistroProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'fechaRegistro');
+    });
+  }
+
+  QueryBuilder<MovimientoProductoCollection, bool, QQueryOperations>
+      pendienteSincronizacionProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'pendienteSincronizacion');
     });
   }
 

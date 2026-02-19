@@ -1,5 +1,3 @@
-import 'package:isar/isar.dart';
-
 enum TipoMovimiento { compra, traslado, ajuste, solicitud }
 
 enum EstadoMovimiento { pendiente, aprobado, rechazado }

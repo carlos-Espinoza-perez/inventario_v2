@@ -33,25 +33,45 @@ const CategoriaCollectionSchema = CollectionSchema(
       name: r'especificacionJson',
       type: IsarType.string,
     ),
-    r'fechaEliminacion': PropertySchema(
+    r'estado': PropertySchema(
       id: 3,
+      name: r'estado',
+      type: IsarType.bool,
+    ),
+    r'fechaEliminacion': PropertySchema(
+      id: 4,
       name: r'fechaEliminacion',
       type: IsarType.dateTime,
     ),
+    r'fechaRegistro': PropertySchema(
+      id: 5,
+      name: r'fechaRegistro',
+      type: IsarType.dateTime,
+    ),
     r'nombre': PropertySchema(
-      id: 4,
+      id: 6,
       name: r'nombre',
       type: IsarType.string,
     ),
+    r'pendienteSincronizacion': PropertySchema(
+      id: 7,
+      name: r'pendienteSincronizacion',
+      type: IsarType.bool,
+    ),
     r'serverId': PropertySchema(
-      id: 5,
+      id: 8,
       name: r'serverId',
       type: IsarType.string,
     ),
     r'ultimaActualizacion': PropertySchema(
-      id: 6,
+      id: 9,
       name: r'ultimaActualizacion',
       type: IsarType.dateTime,
+    ),
+    r'usuarioRegistroId': PropertySchema(
+      id: 10,
+      name: r'usuarioRegistroId',
+      type: IsarType.string,
     )
   },
   estimateSize: _categoriaCollectionEstimateSize,
@@ -85,6 +105,32 @@ const CategoriaCollectionSchema = CollectionSchema(
           caseSensitive: true,
         )
       ],
+    ),
+    r'categoriaPadreId': IndexSchema(
+      id: -8227588913759222664,
+      name: r'categoriaPadreId',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'categoriaPadreId',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
+    r'pendienteSincronizacion': IndexSchema(
+      id: 3214759188604201326,
+      name: r'pendienteSincronizacion',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'pendienteSincronizacion',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
     )
   },
   links: {},
@@ -116,6 +162,7 @@ int _categoriaCollectionEstimateSize(
   }
   bytesCount += 3 + object.nombre.length * 3;
   bytesCount += 3 + object.serverId.length * 3;
+  bytesCount += 3 + object.usuarioRegistroId.length * 3;
   return bytesCount;
 }
 
@@ -128,10 +175,14 @@ void _categoriaCollectionSerialize(
   writer.writeString(offsets[0], object.categoriaPadreId);
   writer.writeString(offsets[1], object.empresaId);
   writer.writeString(offsets[2], object.especificacionJson);
-  writer.writeDateTime(offsets[3], object.fechaEliminacion);
-  writer.writeString(offsets[4], object.nombre);
-  writer.writeString(offsets[5], object.serverId);
-  writer.writeDateTime(offsets[6], object.ultimaActualizacion);
+  writer.writeBool(offsets[3], object.estado);
+  writer.writeDateTime(offsets[4], object.fechaEliminacion);
+  writer.writeDateTime(offsets[5], object.fechaRegistro);
+  writer.writeString(offsets[6], object.nombre);
+  writer.writeBool(offsets[7], object.pendienteSincronizacion);
+  writer.writeString(offsets[8], object.serverId);
+  writer.writeDateTime(offsets[9], object.ultimaActualizacion);
+  writer.writeString(offsets[10], object.usuarioRegistroId);
 }
 
 CategoriaCollection _categoriaCollectionDeserialize(
@@ -144,11 +195,15 @@ CategoriaCollection _categoriaCollectionDeserialize(
   object.categoriaPadreId = reader.readStringOrNull(offsets[0]);
   object.empresaId = reader.readString(offsets[1]);
   object.especificacionJson = reader.readStringOrNull(offsets[2]);
-  object.fechaEliminacion = reader.readDateTimeOrNull(offsets[3]);
+  object.estado = reader.readBool(offsets[3]);
+  object.fechaEliminacion = reader.readDateTimeOrNull(offsets[4]);
+  object.fechaRegistro = reader.readDateTime(offsets[5]);
   object.id = id;
-  object.nombre = reader.readString(offsets[4]);
-  object.serverId = reader.readString(offsets[5]);
-  object.ultimaActualizacion = reader.readDateTime(offsets[6]);
+  object.nombre = reader.readString(offsets[6]);
+  object.pendienteSincronizacion = reader.readBool(offsets[7]);
+  object.serverId = reader.readString(offsets[8]);
+  object.ultimaActualizacion = reader.readDateTime(offsets[9]);
+  object.usuarioRegistroId = reader.readString(offsets[10]);
   return object;
 }
 
@@ -166,13 +221,21 @@ P _categoriaCollectionDeserializeProp<P>(
     case 2:
       return (reader.readStringOrNull(offset)) as P;
     case 3:
-      return (reader.readDateTimeOrNull(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 4:
-      return (reader.readString(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 5:
-      return (reader.readString(offset)) as P;
-    case 6:
       return (reader.readDateTime(offset)) as P;
+    case 6:
+      return (reader.readString(offset)) as P;
+    case 7:
+      return (reader.readBool(offset)) as P;
+    case 8:
+      return (reader.readString(offset)) as P;
+    case 9:
+      return (reader.readDateTime(offset)) as P;
+    case 10:
+      return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -253,6 +316,15 @@ extension CategoriaCollectionQueryWhereSort
   QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterWhere> anyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterWhere>
+      anyPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'pendienteSincronizacion'),
+      );
     });
   }
 }
@@ -411,6 +483,118 @@ extension CategoriaCollectionQueryWhere
               indexName: r'empresaId',
               lower: [],
               upper: [empresaId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterWhereClause>
+      categoriaPadreIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'categoriaPadreId',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterWhereClause>
+      categoriaPadreIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'categoriaPadreId',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterWhereClause>
+      categoriaPadreIdEqualTo(String? categoriaPadreId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'categoriaPadreId',
+        value: [categoriaPadreId],
+      ));
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterWhereClause>
+      categoriaPadreIdNotEqualTo(String? categoriaPadreId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'categoriaPadreId',
+              lower: [],
+              upper: [categoriaPadreId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'categoriaPadreId',
+              lower: [categoriaPadreId],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'categoriaPadreId',
+              lower: [categoriaPadreId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'categoriaPadreId',
+              lower: [],
+              upper: [categoriaPadreId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterWhereClause>
+      pendienteSincronizacionEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'pendienteSincronizacion',
+        value: [pendienteSincronizacion],
+      ));
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterWhereClause>
+      pendienteSincronizacionNotEqualTo(bool pendienteSincronizacion) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [pendienteSincronizacion],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'pendienteSincronizacion',
+              lower: [],
+              upper: [pendienteSincronizacion],
               includeUpper: false,
             ));
       }
@@ -865,6 +1049,16 @@ extension CategoriaCollectionQueryFilter on QueryBuilder<CategoriaCollection,
   }
 
   QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterFilterCondition>
+      estadoEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'estado',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterFilterCondition>
       fechaEliminacionIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -930,6 +1124,62 @@ extension CategoriaCollectionQueryFilter on QueryBuilder<CategoriaCollection,
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
         property: r'fechaEliminacion',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterFilterCondition>
+      fechaRegistroEqualTo(DateTime value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'fechaRegistro',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterFilterCondition>
+      fechaRegistroGreaterThan(
+    DateTime value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'fechaRegistro',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterFilterCondition>
+      fechaRegistroLessThan(
+    DateTime value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'fechaRegistro',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterFilterCondition>
+      fechaRegistroBetween(
+    DateTime lower,
+    DateTime upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'fechaRegistro',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -1131,6 +1381,16 @@ extension CategoriaCollectionQueryFilter on QueryBuilder<CategoriaCollection,
   }
 
   QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterFilterCondition>
+      pendienteSincronizacionEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'pendienteSincronizacion',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterFilterCondition>
       serverIdEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -1321,6 +1581,142 @@ extension CategoriaCollectionQueryFilter on QueryBuilder<CategoriaCollection,
       ));
     });
   }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterFilterCondition>
+      usuarioRegistroIdEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterFilterCondition>
+      usuarioRegistroIdGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterFilterCondition>
+      usuarioRegistroIdLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterFilterCondition>
+      usuarioRegistroIdBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'usuarioRegistroId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterFilterCondition>
+      usuarioRegistroIdStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterFilterCondition>
+      usuarioRegistroIdEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterFilterCondition>
+      usuarioRegistroIdContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'usuarioRegistroId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterFilterCondition>
+      usuarioRegistroIdMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'usuarioRegistroId',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterFilterCondition>
+      usuarioRegistroIdIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'usuarioRegistroId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterFilterCondition>
+      usuarioRegistroIdIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'usuarioRegistroId',
+        value: '',
+      ));
+    });
+  }
 }
 
 extension CategoriaCollectionQueryObject on QueryBuilder<CategoriaCollection,
@@ -1374,6 +1770,20 @@ extension CategoriaCollectionQuerySortBy
   }
 
   QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterSortBy>
+      sortByEstado() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estado', Sort.asc);
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterSortBy>
+      sortByEstadoDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estado', Sort.desc);
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterSortBy>
       sortByFechaEliminacion() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'fechaEliminacion', Sort.asc);
@@ -1388,6 +1798,20 @@ extension CategoriaCollectionQuerySortBy
   }
 
   QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterSortBy>
+      sortByFechaRegistro() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fechaRegistro', Sort.asc);
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterSortBy>
+      sortByFechaRegistroDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fechaRegistro', Sort.desc);
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterSortBy>
       sortByNombre() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'nombre', Sort.asc);
@@ -1398,6 +1822,20 @@ extension CategoriaCollectionQuerySortBy
       sortByNombreDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'nombre', Sort.desc);
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterSortBy>
+      sortByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterSortBy>
+      sortByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
     });
   }
 
@@ -1426,6 +1864,20 @@ extension CategoriaCollectionQuerySortBy
       sortByUltimaActualizacionDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'ultimaActualizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterSortBy>
+      sortByUsuarioRegistroId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'usuarioRegistroId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterSortBy>
+      sortByUsuarioRegistroIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'usuarioRegistroId', Sort.desc);
     });
   }
 }
@@ -1475,6 +1927,20 @@ extension CategoriaCollectionQuerySortThenBy
   }
 
   QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterSortBy>
+      thenByEstado() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estado', Sort.asc);
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterSortBy>
+      thenByEstadoDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estado', Sort.desc);
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterSortBy>
       thenByFechaEliminacion() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'fechaEliminacion', Sort.asc);
@@ -1485,6 +1951,20 @@ extension CategoriaCollectionQuerySortThenBy
       thenByFechaEliminacionDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'fechaEliminacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterSortBy>
+      thenByFechaRegistro() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fechaRegistro', Sort.asc);
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterSortBy>
+      thenByFechaRegistroDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fechaRegistro', Sort.desc);
     });
   }
 
@@ -1517,6 +1997,20 @@ extension CategoriaCollectionQuerySortThenBy
   }
 
   QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterSortBy>
+      thenByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterSortBy>
+      thenByPendienteSincronizacionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterSortBy>
       thenByServerId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'serverId', Sort.asc);
@@ -1541,6 +2035,20 @@ extension CategoriaCollectionQuerySortThenBy
       thenByUltimaActualizacionDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'ultimaActualizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterSortBy>
+      thenByUsuarioRegistroId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'usuarioRegistroId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QAfterSortBy>
+      thenByUsuarioRegistroIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'usuarioRegistroId', Sort.desc);
     });
   }
 }
@@ -1571,6 +2079,13 @@ extension CategoriaCollectionQueryWhereDistinct
   }
 
   QueryBuilder<CategoriaCollection, CategoriaCollection, QDistinct>
+      distinctByEstado() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'estado');
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QDistinct>
       distinctByFechaEliminacion() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'fechaEliminacion');
@@ -1578,9 +2093,23 @@ extension CategoriaCollectionQueryWhereDistinct
   }
 
   QueryBuilder<CategoriaCollection, CategoriaCollection, QDistinct>
+      distinctByFechaRegistro() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'fechaRegistro');
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QDistinct>
       distinctByNombre({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'nombre', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QDistinct>
+      distinctByPendienteSincronizacion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'pendienteSincronizacion');
     });
   }
 
@@ -1595,6 +2124,14 @@ extension CategoriaCollectionQueryWhereDistinct
       distinctByUltimaActualizacion() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'ultimaActualizacion');
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, CategoriaCollection, QDistinct>
+      distinctByUsuarioRegistroId({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'usuarioRegistroId',
+          caseSensitive: caseSensitive);
     });
   }
 }
@@ -1628,6 +2165,12 @@ extension CategoriaCollectionQueryProperty
     });
   }
 
+  QueryBuilder<CategoriaCollection, bool, QQueryOperations> estadoProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'estado');
+    });
+  }
+
   QueryBuilder<CategoriaCollection, DateTime?, QQueryOperations>
       fechaEliminacionProperty() {
     return QueryBuilder.apply(this, (query) {
@@ -1635,9 +2178,23 @@ extension CategoriaCollectionQueryProperty
     });
   }
 
+  QueryBuilder<CategoriaCollection, DateTime, QQueryOperations>
+      fechaRegistroProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'fechaRegistro');
+    });
+  }
+
   QueryBuilder<CategoriaCollection, String, QQueryOperations> nombreProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'nombre');
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, bool, QQueryOperations>
+      pendienteSincronizacionProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'pendienteSincronizacion');
     });
   }
 
@@ -1652,6 +2209,13 @@ extension CategoriaCollectionQueryProperty
       ultimaActualizacionProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'ultimaActualizacion');
+    });
+  }
+
+  QueryBuilder<CategoriaCollection, String, QQueryOperations>
+      usuarioRegistroIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'usuarioRegistroId');
     });
   }
 }

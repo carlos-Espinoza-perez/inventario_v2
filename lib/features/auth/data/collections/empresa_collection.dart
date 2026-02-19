@@ -4,10 +4,10 @@ part 'empresa_collection.g.dart';
 
 @collection
 class EmpresaCollection {
-  // ID interno de Isar (siempre necesario)
+  // ID interno de Isar
   Id id = Isar.autoIncrement;
 
-  // Tu 'Id guid' de la base de datos (Clave primaria real)
+  // Clave primaria real (Supabase UUID)
   @Index(unique: true, replace: true)
   late String serverId;
 
@@ -15,32 +15,34 @@ class EmpresaCollection {
   String? nombreComercial;
   String? ruc;
 
-  // Tu campo 'Configuracion string [JSON]'
-  // Isar no guarda JSON nativo, lo guardamos como String
+  // JSON guardado como String localmente
   String? configuracion;
 
   // --- Auditoría ---
   bool estado = true;
-
-  // Aunque en SQL tiene default now(), aquí puede venir nulo si no se ha sincronizado aún
   DateTime? fechaRegistro;
+  String? usuarioRegistroId;
 
-  String? usuarioRegistroId; // GUID del usuario creador
+  late DateTime ultimaActualizacion;
+  DateTime? fechaEliminacion;
 
-  late DateTime ultimaActualizacion; // VITAL para tu Sync
-  DateTime? fechaEliminacion; // VITAL para Soft Delete
+  // =========================================================
+  // CAMPOS PARA SINCRONIZACIÓN (OFFLINE FIRST)
+  // =========================================================
+
+  @Index()
+  bool pendienteSincronizacion = true;
 
   // Constructor vacío
   EmpresaCollection();
 
-  // Mapper para convertir lo que llega de Supabase
+  // Mapper: De Supabase (snake_case) a Isar
   factory EmpresaCollection.fromJson(Map<String, dynamic> json) {
     return EmpresaCollection()
       ..serverId = json['id']
       ..nombre = json['nombre']
       ..nombreComercial = json['nombre_comercial']
       ..ruc = json['ruc']
-      // Si Supabase devuelve un Map (JSON), lo convertimos a String para guardarlo local
       ..configuracion = json['configuracion']?.toString()
       ..estado = json['estado'] ?? true
       ..fechaRegistro = json['fecha_registro'] != null
@@ -51,5 +53,21 @@ class EmpresaCollection {
       ..fechaEliminacion = json['fecha_eliminacion'] != null
           ? DateTime.parse(json['fecha_eliminacion'])
           : null;
+  }
+
+  // Mapper: De Isar a Supabase (snake_case)
+  Map<String, dynamic> toJson() {
+    return {
+      'id': serverId,
+      'nombre': nombre,
+      'nombre_comercial': nombreComercial,
+      'ruc': ruc,
+      'configuracion': configuracion,
+      'estado': estado,
+      'fecha_registro': fechaRegistro?.toIso8601String(),
+      'usuario_registro_id': usuarioRegistroId,
+      'ultima_actualizacion': ultimaActualizacion.toIso8601String(),
+      'fecha_eliminacion': fechaEliminacion?.toIso8601String(),
+    };
   }
 }
