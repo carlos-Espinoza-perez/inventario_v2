@@ -1,204 +1,368 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:isar/isar.dart';
+import 'package:inventario_v2/core/providers/app_bar_provider.dart';
+import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
+import 'package:inventario_v2/core/providers/database_provider.dart';
+import 'package:inventario_v2/features/inventory/data/collections/inventario_collection.dart';
+import 'package:inventario_v2/features/inventory/data/collections/producto_collection.dart';
 
-class InventoryReportScreen extends StatelessWidget {
+// ------------------------------------------------------------------
+// MODEL
+// ------------------------------------------------------------------
+class InventoryReportModel {
+  final double valorTotal;
+  final int totalItems;
+  final int criticos; // stock <= 5
+  final int medios; // stock 6-20
+  final int saludables; // stock > 20
+  final List<LowStockItem> lowStock;
+
+  InventoryReportModel({
+    required this.valorTotal,
+    required this.totalItems,
+    required this.criticos,
+    required this.medios,
+    required this.saludables,
+    required this.lowStock,
+  });
+}
+
+class LowStockItem {
+  final String nombre;
+  final String sku;
+  final int cantidadActual;
+  final int stockMinimo;
+
+  LowStockItem({
+    required this.nombre,
+    required this.sku,
+    required this.cantidadActual,
+    required this.stockMinimo,
+  });
+}
+
+// ------------------------------------------------------------------
+// PROVIDER
+// ------------------------------------------------------------------
+final inventoryReportProvider =
+    FutureProvider.autoDispose<InventoryReportModel>((ref) async {
+      final isar = await ref.watch(isarDbProvider.future);
+
+      final validBodegaIds = await ref.watch(validBodegasIdsProvider.future);
+
+      // Obtener todos los inventarios
+      final inventariosGlobal = await isar.inventarioCollections
+          .where()
+          .findAll();
+      final inventarios = inventariosGlobal.where(
+        (i) => validBodegaIds.contains(i.bodegaId),
+      );
+
+      double valorTotal = 0;
+      int criticos = 0, medios = 0, saludables = 0;
+      final List<LowStockItem> lowStockList = [];
+
+      for (final inv in inventarios) {
+        // Obtener producto para nombre y costo
+        final producto = await isar.productoCollections
+            .filter()
+            .serverIdEqualTo(inv.productoId)
+            .findFirst();
+
+        if (producto == null) continue;
+
+        final cantidad = inv.cantidadActual.toInt();
+        final costo = inv.costoPromedio > 0
+            ? inv.costoPromedio
+            : producto.ultimoCosto;
+
+        valorTotal += inv.cantidadActual * costo;
+
+        // Clasificar estado de stock
+        if (cantidad <= 5) {
+          criticos++;
+          lowStockList.add(
+            LowStockItem(
+              nombre: producto.nombre,
+              sku: producto.codigoPersonalizado ?? 'Sin SKU',
+              cantidadActual: cantidad,
+              stockMinimo:
+                  5, // umbral de alerta: crítico por debajo de 5 unidades
+            ),
+          );
+        } else if (cantidad <= 20) {
+          medios++;
+        } else {
+          saludables++;
+        }
+      }
+
+      // Ordenar stock bajo de menor a mayor
+      lowStockList.sort((a, b) => a.cantidadActual.compareTo(b.cantidadActual));
+
+      final total = criticos + medios + saludables;
+
+      return InventoryReportModel(
+        valorTotal: valorTotal,
+        totalItems: total,
+        criticos: criticos,
+        medios: medios,
+        saludables: saludables,
+        lowStock: lowStockList.take(10).toList(),
+      );
+    });
+
+// ------------------------------------------------------------------
+// SCREEN
+// ------------------------------------------------------------------
+class InventoryReportScreen extends ConsumerStatefulWidget {
   const InventoryReportScreen({super.key});
 
   @override
+  ConsumerState<InventoryReportScreen> createState() =>
+      _InventoryReportScreenState();
+}
+
+class _InventoryReportScreenState extends ConsumerState<InventoryReportScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref
+          .read(appBarProvider.notifier)
+          .setOptions(
+            title: "Estado de Inventario",
+            subtitle: "Distribución y valorización",
+            showBackButton: true,
+            actions: [
+              IconButton(
+                onPressed: () => ref.invalidate(inventoryReportProvider),
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
+          );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final reportAsync = ref.watch(inventoryReportProvider);
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: const Text(
-          "Estado de Inventario",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 1. KPI PRINCIPAL: VALOR DEL INVENTARIO
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.indigo.shade800, Colors.indigo.shade500],
+      body: reportAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text("Error: $e")),
+        data: (report) => SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. KPI: VALOR TOTAL
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.indigo.shade800, Colors.indigo.shade500],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.indigo.withValues(alpha: 0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
                 ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.indigo.withValues(alpha: 0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Valor Total en Bodega",
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontWeight: FontWeight.bold,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Valor Total en Bodega",
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                      SizedBox(height: 5),
-                      Text(
-                        "\$ 45,200.00",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 26,
+                        const SizedBox(height: 5),
+                        Text(
+                          "\$ ${report.valorTotal.toStringAsFixed(2)}",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 26,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.inventory,
-                      color: Colors.white,
-                      size: 30,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 30),
-
-            // 2. GRÁFICO DE DONA: STOCK POR ESTADO
-            const Text(
-              "Distribución de Stock",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.blueGrey,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Container(
-              height: 250,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  PieChart(
-                    PieChartData(
-                      sectionsSpace: 0,
-                      centerSpaceRadius: 70,
-                      sections: [
-                        PieChartSectionData(
-                          color: Colors.green,
-                          value: 70,
-                          title: '',
-                          radius: 25,
-                        ), // Saludable
-                        PieChartSectionData(
-                          color: Colors.orange,
-                          value: 20,
-                          title: '',
-                          radius: 25,
-                        ), // Medio
-                        PieChartSectionData(
-                          color: Colors.red,
-                          value: 10,
-                          title: '',
-                          radius: 30,
-                        ), // Crítico
+                        Text(
+                          "${report.totalItems} productos en stock",
+                          style: const TextStyle(
+                            color: Colors.white60,
+                            fontSize: 12,
+                          ),
+                        ),
                       ],
                     ),
-                  ),
-                  const Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        "Total Items",
-                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
                       ),
-                      Text(
-                        "1,250",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 22,
+                      child: const Icon(
+                        Icons.inventory,
+                        color: Colors.white,
+                        size: 30,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 30),
+
+              // 2. GRÁFICO DE DONA
+              const Text(
+                "Distribución de Stock",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blueGrey,
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              if (report.totalItems == 0)
+                const Center(child: Text("No hay productos en inventario."))
+              else ...[
+                Container(
+                  height: 250,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      PieChart(
+                        PieChartData(
+                          sectionsSpace: 0,
+                          centerSpaceRadius: 70,
+                          sections: [
+                            if (report.saludables > 0)
+                              PieChartSectionData(
+                                color: Colors.green,
+                                value: report.saludables.toDouble(),
+                                title: '',
+                                radius: 25,
+                              ),
+                            if (report.medios > 0)
+                              PieChartSectionData(
+                                color: Colors.orange,
+                                value: report.medios.toDouble(),
+                                title: '',
+                                radius: 25,
+                              ),
+                            if (report.criticos > 0)
+                              PieChartSectionData(
+                                color: Colors.red,
+                                value: report.criticos.toDouble(),
+                                title: '',
+                                radius: 30,
+                              ),
+                          ],
                         ),
+                      ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            "Total Items",
+                            style: TextStyle(color: Colors.grey, fontSize: 12),
+                          ),
+                          Text(
+                            "${report.totalItems}",
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 22,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            // Leyenda Manual
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _LegendItem(color: Colors.green, label: "Saludable (70%)"),
-                const SizedBox(width: 15),
-                _LegendItem(color: Colors.orange, label: "Medio (20%)"),
-                const SizedBox(width: 15),
-                _LegendItem(color: Colors.red, label: "Crítico (10%)"),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _LegendItem(
+                      color: Colors.green,
+                      label: "Saludable (${report.saludables})",
+                    ),
+                    const SizedBox(width: 15),
+                    _LegendItem(
+                      color: Colors.orange,
+                      label: "Medio (${report.medios})",
+                    ),
+                    const SizedBox(width: 15),
+                    _LegendItem(
+                      color: Colors.red,
+                      label: "Crítico (${report.criticos})",
+                    ),
+                  ],
+                ),
               ],
-            ),
 
-            const SizedBox(height: 30),
+              const SizedBox(height: 30),
 
-            // 3. LISTA DE ALERTA: STOCK BAJO
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  "⚠️ Alerta: Stock Bajo",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.red,
-                  ),
+              // 3. LISTA DE STOCK BAJO
+              if (report.lowStock.isNotEmpty) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      "⚠️ Alerta: Stock Bajo",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red,
+                      ),
+                    ),
+                    Text(
+                      "${report.lowStock.length} productos",
+                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                    ),
+                  ],
                 ),
-                TextButton(onPressed: () {}, child: const Text("Ver Todo")),
+                const SizedBox(height: 10),
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: report.lowStock.length,
+                  itemBuilder: (context, index) {
+                    final item = report.lowStock[index];
+                    final percent =
+                        item.cantidadActual /
+                        (item.stockMinimo > 0 ? item.stockMinimo : 1);
+                    return _LowStockItem(
+                      name: item.nombre,
+                      sku: item.sku,
+                      stock: item.cantidadActual,
+                      maxStock: item.stockMinimo,
+                      percent: percent.clamp(0.0, 1.0),
+                    );
+                  },
+                ),
               ],
-            ),
-            ListView(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              children: const [
-                _LowStockItem(
-                  name: "Jeans 501 Azul",
-                  sku: "SKU-1020",
-                  stock: 2,
-                  maxStock: 20,
-                ),
-                _LowStockItem(
-                  name: "Camisa Blanca S",
-                  sku: "SKU-3301",
-                  stock: 1,
-                  maxStock: 15,
-                ),
-                _LowStockItem(
-                  name: "Zapatos Escolares #38",
-                  sku: "SKU-5050",
-                  stock: 3,
-                  maxStock: 10,
-                ),
-              ],
-            ),
-          ],
+
+              const SizedBox(height: 40),
+            ],
+          ),
         ),
       ),
     );
@@ -234,17 +398,18 @@ class _LowStockItem extends StatelessWidget {
   final String sku;
   final int stock;
   final int maxStock;
+  final double percent;
 
   const _LowStockItem({
     required this.name,
     required this.sku,
     required this.stock,
     required this.maxStock,
+    required this.percent,
   });
 
   @override
   Widget build(BuildContext context) {
-    double percent = stock / maxStock;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),

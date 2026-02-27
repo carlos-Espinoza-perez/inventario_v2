@@ -54,6 +54,9 @@ dependencies:
   cached_network_image: ^3.4.1
   qr_flutter: ^4.1.0
 
+  path: any
+  pdf: ^3.11.3
+  printing: ^5.14.2
 dev_dependencies:
   flutter_test:
     sdk: flutter

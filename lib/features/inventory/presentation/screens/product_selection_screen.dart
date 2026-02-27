@@ -3,17 +3,28 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/features/inventory/data/domain/models/product_with_stock.dart';
-
 import 'package:inventario_v2/features/inventory/data/collections/producto_collection.dart';
 import 'package:inventario_v2/features/inventory/data/providers/categoria_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/producto_provider.dart';
 
 import 'product_detail_entry_screen.dart';
 
-class ProductSelectionScreen extends ConsumerStatefulWidget {
-  final String bodegaId;
+enum ProductSelectionMode { entry, transfer }
 
-  const ProductSelectionScreen({super.key, required this.bodegaId});
+class ProductSelectionScreen extends ConsumerStatefulWidget {
+  final ProductSelectionMode mode;
+  final String? originWarehouseId;
+
+  const ProductSelectionScreen({
+    super.key,
+    required this.mode,
+    this.originWarehouseId,
+    // Compatibilidad temporal (deprecado)
+    String? bodegaId,
+  }) : assert(
+         mode == ProductSelectionMode.entry || originWarehouseId != null,
+         'originWarehouseId is required for transfer mode',
+       );
 
   @override
   ConsumerState<ProductSelectionScreen> createState() =>
@@ -27,116 +38,147 @@ class _ProductSelectionScreenState
 
   @override
   Widget build(BuildContext context) {
-    // 1. Cargar Categorías (Para los filtros y nombres en las cards)
+    // 1. Cargar Categorías
     final asyncCategorias = ref.watch(listCategoriasAllProvider);
     final listaCategorias = asyncCategorias.value ?? [];
-
-    // Mapa para obtener nombre de categoría por ID rápido
     final categoryNameMap = {
       for (var cat in listaCategorias) cat.serverId: cat.nombre,
     };
 
-    // 2. Cargar Productos con Stock (Usando el nuevo provider)
-    final asyncProducts = ref.watch(productsWithStockProvider(widget.bodegaId));
+    // 2. Cargar Productos según MODO
+    final AsyncValue<List<ProductWithStock>> asyncProducts;
 
-    return asyncProducts.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, stack) => Center(child: Text('Error: $err')),
-      data: (allProducts) {
-        // 3. Lógica de Filtrado en Memoria
-        final filteredProducts = allProducts.where((item) {
-          // Filtro Categoría
-          final matchesCategory =
-              _selectedCategoryId == "Todos" ||
-              item.producto.categoriaId == _selectedCategoryId;
+    if (widget.mode == ProductSelectionMode.entry) {
+      // ENTRY: Cargamos TODOS los productos globales (sin importar stock)
+      final allProductsAsync = ref.watch(listaProductosProvider);
+      asyncProducts = allProductsAsync.whenData((list) {
+        // Mapeamos a ProductWithStock con cantidad 0 (porque es irrelevante para entrada)
+        return list
+            .map((p) => ProductWithStock(producto: p, cantidad: 0))
+            .toList();
+      });
+    } else {
+      // TRANSFER: Solo productos con stock en origen
+      asyncProducts = ref.watch(
+        productsWithStockProvider(widget.originWarehouseId!),
+      );
+    }
 
-          // Filtro Buscador
-          final matchesSearch = item.producto.nombre.toLowerCase().contains(
-            _searchCtrl.text.toLowerCase(),
-          );
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          widget.mode == ProductSelectionMode.entry
+              ? "Seleccionar Producto"
+              : "Elegir para Traslado",
+        ),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+      ),
+      backgroundColor: Colors.grey[50],
+      body: asyncProducts.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(child: Text('Error: $err')),
+        data: (allProducts) {
+          // 3. Filtrado en Memoria
+          final filteredProducts = allProducts.where((item) {
+            final matchesCategory =
+                _selectedCategoryId == "Todos" ||
+                item.producto.categoriaId == _selectedCategoryId;
 
-          return matchesCategory && matchesSearch;
-        }).toList();
+            final matchesSearch = item.producto.nombre.toLowerCase().contains(
+              _searchCtrl.text.toLowerCase(),
+            );
 
-        return Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: .03),
-                    blurRadius: 10,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(12),
+            // Siempre filtramos que haya al menos 1 unidad para mostrar en la lista
+            if (item.cantidad < 1.0) return false;
+
+            return matchesCategory && matchesSearch;
+          }).toList();
+
+          return Column(
+            children: [
+              // Barra de Búsqueda y Filtros
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
                     ),
-                    child: TextField(
-                      controller: _searchCtrl,
-                      onChanged: (_) => setState(() {}),
-                      decoration: const InputDecoration(
-                        hintText: "Buscar producto...",
-                        prefixIcon: Icon(Icons.search, color: Colors.grey),
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(vertical: 14),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _buildFilterChip("Todos", "Todos"),
-                        ...listaCategorias.map(
-                          (cat) => _buildFilterChip(cat.nombre, cat.serverId),
+                      child: TextField(
+                        controller: _searchCtrl,
+                        onChanged: (_) => setState(() {}),
+                        decoration: const InputDecoration(
+                          hintText: "Buscar producto...",
+                          prefixIcon: Icon(Icons.search, color: Colors.grey),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(vertical: 14),
                         ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            Expanded(
-              child: filteredProducts.isEmpty
-                  ? Center(
-                      child: Text(
-                        "No se encontraron productos",
-                        style: TextStyle(color: Colors.grey[400]),
                       ),
-                    )
-                  : GridView.builder(
-                      padding: const EdgeInsets.all(16),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            childAspectRatio: 0.75,
-                            crossAxisSpacing: 16,
-                            mainAxisSpacing: 16,
-                          ),
-                      itemCount: filteredProducts.length,
-                      itemBuilder: (context, index) {
-                        final item = filteredProducts[index];
-                        final catName =
-                            categoryNameMap[item.producto.categoriaId] ??
-                            'General';
-                        return _buildProductGridCard(item, catName);
-                      },
                     ),
-            ),
-          ],
-        );
-      },
+                    const SizedBox(height: 12),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _buildFilterChip("Todos", "Todos"),
+                          ...listaCategorias.map(
+                            (cat) => _buildFilterChip(cat.nombre, cat.serverId),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Grid de Productos
+              Expanded(
+                child: filteredProducts.isEmpty
+                    ? Center(
+                        child: Text(
+                          "No se encontraron productos",
+                          style: TextStyle(color: Colors.grey[400]),
+                        ),
+                      )
+                    : GridView.builder(
+                        padding: const EdgeInsets.all(16),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              childAspectRatio:
+                                  0.70, // Más alto para caber stock info
+                              crossAxisSpacing: 16,
+                              mainAxisSpacing: 16,
+                            ),
+                        itemCount: filteredProducts.length,
+                        itemBuilder: (context, index) {
+                          final item = filteredProducts[index];
+                          final catName =
+                              categoryNameMap[item.producto.categoriaId] ??
+                              'General';
+                          return _buildProductGridCard(item, catName);
+                        },
+                      ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -170,35 +212,43 @@ class _ProductSelectionScreenState
   Widget _buildProductGridCard(ProductWithStock item, String categoryName) {
     final product = item.producto;
     final stock = item.cantidad;
+    final isTransfer = widget.mode == ProductSelectionMode.transfer;
+
+    // Si es Transfer y no tiene stock, deshabilitamos visualmente
+    final bool isDisabled = isTransfer && stock <= 0;
 
     return GestureDetector(
-      onTap: () => _goToScanningWorker(item),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: .04),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // A. Imagen del Producto (Parte Superior)
-            Expanded(
-              flex: 3,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey[50], // Fondo suave
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(20),
+      onTap: isDisabled ? null : () => _onProductSelected(item),
+      child: Opacity(
+        opacity: isDisabled ? 0.5 : 1.0,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: isDisabled
+                ? Border.all(color: Colors.red.shade100, width: 2)
+                : null,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Imagen
+              Expanded(
+                flex: 3,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(20),
+                    ),
                   ),
-                ),
-                child: Center(
                   child: ClipRRect(
                     borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(20),
@@ -207,71 +257,88 @@ class _ProductSelectionScreenState
                   ),
                 ),
               ),
-            ),
 
-            Expanded(
-              flex: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          categoryName,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          product.nombre,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            height: 1.2,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        if (stock <= 0)
-                          const Text(
-                            "Agotado",
+              // Info
+              Expanded(
+                flex: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            categoryName,
                             style: TextStyle(
                               fontSize: 10,
-                              color: Colors.red,
+                              color: Colors.grey[600],
                               fontWeight: FontWeight.bold,
                             ),
-                          )
-                        else
-                          Text(
-                            "${stock.toStringAsFixed(0)} unds",
-                            style: const TextStyle(
-                              fontSize: 10,
-                              color: Colors.green,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                      ],
-                    ),
-                  ],
+                          const SizedBox(height: 4),
+                          Text(
+                            product.nombre,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              height: 1.2,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+
+                      // Footer: Stock (Solo relevante si Transfer o si queremos mostrarlo)
+                      if (isTransfer)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            if (stock <= 0)
+                              const Text(
+                                "SIN STOCK",
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              )
+                            else
+                              Text(
+                                "Disp: ${stock.toStringAsFixed(0)}",
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.green,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            Icon(
+                              Icons.arrow_forward_ios,
+                              size: 12,
+                              color: Colors.grey[400],
+                            ),
+                          ],
+                        )
+                      else
+                        // Modo Entrada: No mostramos stock (o mostramos icono de agregar)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Icon(
+                            Icons.add_circle,
+                            color: Colors.orange.shade800,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -305,25 +372,396 @@ class _ProductSelectionScreenState
     return Icon(
       Icons.checkroom,
       size: 60,
-      color: Colors.cyan.shade800.withValues(alpha: .5),
+      color: Colors.cyan.shade800.withValues(alpha: 0.5),
     );
   }
 
-  void _goToScanningWorker(ProductWithStock item) async {
+  void _onProductSelected(ProductWithStock item) async {
     final product = item.producto;
 
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ProductDetailEntryScreen(
-          productId: product.serverId,
-          categoriaId: product.categoriaId,
+    // Si es ENTRY, vamos a la pantalla de detalle de entrada (Lotes, etc)
+    if (widget.mode == ProductSelectionMode.entry) {
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProductDetailEntryScreen(
+            productId: product.serverId,
+            categoriaId: product.categoriaId,
+          ),
         ),
-      ),
-    );
+      );
 
-    if (result != null && mounted) {
+      if (result != null && mounted) {
+        Navigator.pop(context, result);
+      }
+    } else {
+      // 1. Intentar buscar variantes (Tallas) con stock en origen
+      final repo = await ref.read(productoRepositoryProvider.future);
+      try {
+        final variantes = await repo.getStockPorVariante(
+          bodegaId: widget.originWarehouseId!,
+          productoId: product.serverId,
+        );
+
+        if (variantes.isNotEmpty) {
+          if (!mounted) return;
+          // Mostramos selector de tallas MULTIPLE
+          final List<Map<String, dynamic>>? seleccion =
+              await showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                useSafeArea: true,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                builder: (ctx) => _VariantSelectorSheet(
+                  variantes: variantes,
+                  product: product,
+                ),
+              );
+
+          if (seleccion != null && seleccion.isNotEmpty && mounted) {
+            Navigator.pop(context, seleccion);
+          }
+          return;
+        }
+      } catch (e) {
+        debugPrint("Error consultando variantes: $e");
+      }
+
+      // 2. Fallback: Producto sin variantes, usar datos globales
+      if (!mounted) return;
+      final result = [
+        {
+          'productId': product.serverId,
+          'name': product.nombre,
+          'qr': "MANUAL-SELECT",
+          'size': "U",
+          'cantidad': 1.0,
+          'price': product.ultimoPrecioVenta,
+          'cost': item.costoPromedio,
+          'availableStock': item.cantidad,
+          'image': product.imagenUrl,
+        },
+      ];
       Navigator.pop(context, result);
     }
+  }
+}
+
+class _VariantSelectorSheet extends StatefulWidget {
+  final List<Map<String, dynamic>> variantes;
+  final ProductoCollection product;
+
+  const _VariantSelectorSheet({required this.variantes, required this.product});
+
+  @override
+  State<_VariantSelectorSheet> createState() => _VariantSelectorSheetState();
+}
+
+class _VariantSelectorSheetState extends State<_VariantSelectorSheet> {
+  // Map SKU -> Cantidad
+  final Map<String, double> _quantities = {};
+
+  @override
+  void initState() {
+    super.initState();
+    final grouped = _groupVariants();
+    for (var key in grouped.keys) {
+      _quantities[key] = 0.0;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 1. Agrupar variantes
+    final grouped = _groupVariants();
+
+    int tiposItems = _quantities.values.where((q) => q > 0).length;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      height: MediaQuery.of(context).size.height * 0.85,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    "Tallas: ${widget.product.nombre}",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+          const Divider(),
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.only(bottom: 80),
+              itemCount: grouped.keys.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final key = grouped.keys.elementAt(index);
+                final items = grouped[key]!;
+
+                // Descomponer clave "_#_"
+                // key = Talla_#_Costo_#_Precio
+                final parts = key.split('_#_');
+                final talla = parts[0];
+                final costoGrp = double.tryParse(parts[1]) ?? 0.0;
+                final precioGrp = double.tryParse(parts[2]) ?? 0.0;
+
+                // Calcular Stock Total del Grupo
+                double totalStock = 0;
+                for (var i in items) {
+                  totalStock += (i['cantidad'] as num).toDouble();
+                }
+
+                final currentQty = _quantities[key] ?? 0.0;
+                final bool hasStock = totalStock > 0;
+
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 16,
+                  ),
+                  color: currentQty > 0
+                      ? Colors.blue.withValues(alpha: 0.05)
+                      : null,
+                  child: Row(
+                    children: [
+                      // INFO (Talla + Precios + Stock Total)
+                      Expanded(
+                        flex: 4,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[200],
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    talla,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                if (items.length > 1)
+                                  Text(
+                                    "(${items.length} lotes)",
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.grey[500],
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 8,
+                              children: [
+                                Text(
+                                  "Costo: ${costoGrp.toStringAsFixed(0)}",
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                Text(
+                                  "Venta: ${precioGrp.toStringAsFixed(0)}",
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.blue[800],
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              "Disp: ${totalStock.toInt()}",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: hasStock ? Colors.green : Colors.red,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // SELECTOR
+                      Expanded(
+                        flex: 3,
+                        child: !hasStock
+                            ? const Center(
+                                child: Text(
+                                  "Agotado",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.remove_circle_outline,
+                                      color: Colors.red,
+                                    ),
+                                    onPressed: currentQty > 0
+                                        ? () {
+                                            setState(() {
+                                              _quantities[key] = currentQty - 1;
+                                            });
+                                          }
+                                        : null,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  SizedBox(
+                                    width: 30,
+                                    child: Center(
+                                      child: Text(
+                                        currentQty.toInt().toString(),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.add_circle,
+                                      color: Colors.green,
+                                    ),
+                                    onPressed: currentQty < totalStock
+                                        ? () {
+                                            setState(() {
+                                              _quantities[key] = currentQty + 1;
+                                            });
+                                          }
+                                        : null,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: tiposItems > 0
+                      ? Colors.cyan.shade800
+                      : Colors.grey,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: tiposItems > 0 ? _confirmSelection : null,
+                child: const Text(
+                  "AGREGAR SELECCIÓN",
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Método helper para agrupar logicamente
+  Map<String, List<Map<String, dynamic>>> _groupVariants() {
+    final Map<String, List<Map<String, dynamic>>> grouped = {};
+    for (var v in widget.variantes) {
+      final t = (v['talla'] as String?) ?? "U";
+      final costo = v['costoPromedio'] != null
+          ? (v['costoPromedio'] as num).toDouble()
+          : 0.0;
+      final precio = v['precioEspecifico'] != null
+          ? (v['precioEspecifico'] as num).toDouble()
+          : widget.product.ultimoPrecioVenta;
+
+      // Clave separada por _#_ para seguridad
+      final key = "${t}_#_${costo}_#_$precio";
+
+      if (!grouped.containsKey(key)) {
+        grouped[key] = [];
+      }
+      grouped[key]!.add(v);
+    }
+    return grouped;
+  }
+
+  void _confirmSelection() {
+    List<Map<String, dynamic>> seleccionados = [];
+    final grouped = _groupVariants();
+
+    grouped.forEach((key, items) {
+      double qtyNeeded = _quantities[key] ?? 0.0;
+      if (qtyNeeded > 0) {
+        // Algoritmo de distribución: Tomar de los items disponibles hasta completar qtyNeeded
+        for (var item in items) {
+          if (qtyNeeded <= 0) break;
+
+          double stockItem = (item['cantidad'] as num).toDouble();
+          if (stockItem <= 0) continue;
+
+          double toTake = qtyNeeded;
+          if (toTake > stockItem) {
+            toTake = stockItem;
+          }
+
+          seleccionados.add({
+            'productId': widget.product.serverId,
+            'name': widget.product.nombre,
+            'qr': item['sku'], // SKU específico del lote/variante
+            'size': item['talla'],
+            'cantidad': toTake,
+            'availableStock': stockItem,
+            'cost': (item['costoPromedio'] as num).toDouble(),
+            'price':
+                item['precioEspecifico'] ??
+                widget.product.ultimoPrecioVenta, // Precio real
+            'image': widget.product.imagenUrl,
+          });
+
+          qtyNeeded -= toTake;
+        }
+      }
+    });
+
+    Navigator.pop(context, seleccionados);
   }
 }

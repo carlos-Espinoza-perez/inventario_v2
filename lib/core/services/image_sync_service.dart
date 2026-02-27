@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:inventario_v2/features/inventory/data/collections/producto_collection.dart';
 
@@ -5,7 +6,7 @@ class ImageSyncService {
   /// Descarga y guarda en caché todas las imágenes de la lista de productos.
   /// Ideal para llamar después de traer los datos de Supabase.
   Future<void> preCacheImages(List<ProductoCollection> productos) async {
-    print("🔄 Iniciando sincronización de imágenes en segundo plano...");
+    debugPrint("🔄 Iniciando sincronización de imágenes en segundo plano...");
 
     int descargadas = 0;
     int existentes = 0;
@@ -27,14 +28,14 @@ class ImageSyncService {
             existentes++;
           }
         } catch (e) {
-          print("❌ Error pre-cargando imagen para ${producto.nombre}: $e");
+          debugPrint("❌ Error pre-cargando imagen para ${producto.nombre}: $e");
           // Continuamos con el siguiente, no detenemos el proceso
         }
       }
     }
 
-    print("✅ Sincronización de imágenes terminada.");
-    print("   ⬇️ Descargadas: $descargadas");
-    print("   📂 Ya en caché: $existentes");
+    debugPrint("✅ Sincronización de imágenes terminada.");
+    debugPrint("   ⬇️ Descargadas: $descargadas");
+    debugPrint("   📂 Ya en caché: $existentes");
   }
 }

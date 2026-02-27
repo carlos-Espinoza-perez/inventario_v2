@@ -132,9 +132,8 @@ class WarehouseScreen extends ConsumerWidget {
   }
 
   void _navegarABodega(BuildContext context, BodegaCollection bodega) {
-    // Pasamos el ID real de la bodega o el objeto entero
-    // Asegúrate de que tu ruta '/warehouse-inventory' acepte un parámetro 'id'
-    context.push('/warehouse-inventory', extra: bodega);
-    // O: context.push('/warehouse-inventory/${bodega.id}');
+    // ¡CRÍTICO! Usar serverId (UUID) para sincronización con Supabase.
+    // NO usar bodega.id (int local), ya que causará error 22P02 en Postgres.
+    context.push('/warehouse-inventory/${bodega.serverId}', extra: bodega);
   }
 }

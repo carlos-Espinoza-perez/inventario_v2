@@ -1,133 +1,198 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-class CashRegisterScreen extends StatefulWidget {
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:isar/isar.dart';
+import 'package:inventario_v2/core/constants/app_enums.dart';
+import 'package:inventario_v2/core/providers/app_bar_provider.dart';
+import 'package:inventario_v2/core/providers/database_provider.dart';
+import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
+import 'package:inventario_v2/features/sales/data/collections/caja_movimiento_extra_collection.dart';
+import 'package:inventario_v2/features/sales/data/collections/venta_collection.dart';
+import 'package:inventario_v2/features/sales/data/repositories/caja_repository.dart';
+import 'package:inventario_v2/features/auth/presentation/providers/auth_provider.dart';
+import 'package:inventario_v2/features/sales/data/collections/historial_pago_collection.dart';
+
+// ------------------------------------------------------------------
+// Provider: gastos reales de la sesión actual desde Isar
+// ------------------------------------------------------------------
+final gastosActivosProvider = FutureProvider.autoDispose
+    .family<List<CajaMovimientoExtraCollection>, String>((
+      ref,
+      cajaSesionId,
+    ) async {
+      final repo = ref.read(cajaRepositoryProvider);
+      return await repo.obtenerMovimientosExtras(cajaSesionId);
+    });
+
+// ------------------------------------------------------------------
+// Provider: ventas en efectivo de la caja activa (solo contado + abonos)
+// ------------------------------------------------------------------
+final ventasEfectivoProvider = FutureProvider.autoDispose.family<double, String>((
+  ref,
+  cajaSesionId,
+) async {
+  final isar = await ref.watch(isarDbProvider.future);
+  // Todos los pagos o abonos (entradas de dinero) que sucedieron en esta sesión
+  final pagos = await isar.historialPagoCollections
+      .filter()
+      .cajaSesionIdEqualTo(cajaSesionId)
+      .findAll();
+
+  double totalEfectivo = 0;
+  for (var p in pagos) {
+    totalEfectivo += p.montoPagado;
+  }
+  return totalEfectivo;
+});
+
+// ------------------------------------------------------------------
+// Provider: ventas a crédito de la sesión (informativo)
+// ------------------------------------------------------------------
+final ventasCreditoProvider = FutureProvider.autoDispose.family<double, String>(
+  (ref, cajaSesionId) async {
+    final isar = await ref.watch(isarDbProvider.future);
+    final ventas = await isar.ventaCollections
+        .filter()
+        .cajaSesionIdEqualTo(cajaSesionId)
+        .estadoEqualTo(true)
+        .tipoVentaEqualTo(TipoVenta.credito)
+        .findAll();
+
+    // Sumar el saldo pendiente, esto ya resta los abonos realizados
+    return ventas.fold<double>(0.0, (sum, v) => sum + v.saldoPendiente);
+  },
+);
+
+// ------------------------------------------------------------------
+// Screen
+// ------------------------------------------------------------------
+class CashRegisterScreen extends ConsumerStatefulWidget {
   const CashRegisterScreen({super.key});
 
   @override
-  State<CashRegisterScreen> createState() => _CashRegisterScreenState();
+  ConsumerState<CashRegisterScreen> createState() => _CashRegisterScreenState();
 }
 
-class _CashRegisterScreenState extends State<CashRegisterScreen> {
-  // ESTADO DE LA CAJA (Simulado)
-  bool _isRegisterOpen = false;
-
-  // CONTROLADORES
+class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
   final TextEditingController _expenseAmountCtrl = TextEditingController();
   final TextEditingController _expenseReasonCtrl = TextEditingController();
+  bool _isSubmitting = false;
 
-  // DATOS DE CAJA
-  DateTime? _openingDate;
-
-  // METRICAS DE MOVIMIENTOS (MOCK - Esto vendría de tu DB Isar)
-  // 1. Dinero REAL (Afecta el arqueo)
-  double _initialCash = 0.0; // Ahora inicia en 0 por defecto
-  double _currentSalesCash = 0.0; // Ventas cobradas en efectivo
-
-  // 2. Métricas INFORMATIVAS (No suman al efectivo físico pero son vitales)
-  double _currentSalesCredit = 0.0; // Ventas al Fiado
-  double _estimatedProfit = 0.0; // Ganancia (Venta - Costo)
-
-  final List<Map<String, dynamic>> _registeredExpenses = [];
-
-  // CÁLCULOS
-  double get _totalExpenses => _registeredExpenses.fold(
-    0.0,
-    (sum, item) => sum + (item['amount'] as double),
-  );
-
-  // El dinero que DEBERÍA haber físicamente en el cajón
-  double get _currentBalance =>
-      (_initialCash + _currentSalesCash) - _totalExpenses;
+  @override
+  void dispose() {
+    _expenseAmountCtrl.dispose();
+    _expenseReasonCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: Text(
-          _isRegisterOpen ? "Monitor de Caja" : "Caja Cerrada",
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-        actions: [
-          if (_isRegisterOpen)
-            Container(
-              margin: const EdgeInsets.only(right: 16),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green),
-              ),
-              child: const Row(
-                children: [
-                  Icon(
-                    Icons.fiber_manual_record,
-                    size: 10,
-                    color: Colors.green,
-                  ),
-                  SizedBox(width: 4),
-                  Text(
-                    "EN CURSO",
-                    style: TextStyle(
-                      color: Colors.green,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
+    final dashboardAsync = ref.watch(dashboardProvider);
 
-      bottomNavigationBar: _isRegisterOpen
-          ? Container(
-              padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 10,
-                    offset: Offset(0, -5),
-                  ),
-                ],
-              ),
-              child: SafeArea(
-                child: ElevatedButton.icon(
-                  onPressed: _showCloseRegisterDialog,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red.shade700,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  icon: const Icon(Icons.lock_outline, color: Colors.white),
-                  label: const Text(
-                    "REALIZAR CORTE",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ),
-            )
-          : null,
+    return dashboardAsync.when(
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (e, st) => Scaffold(body: Center(child: Text('Error: $e'))),
+      data: (dashboardState) {
+        final isRegisterOpen = dashboardState.cajaAbierta != null;
+        final cajaSesionId = dashboardState.cajaAbierta?.serverId ?? '';
+        final openingDate = dashboardState.cajaAbierta?.fechaApertura;
+        final initialCash = dashboardState.cajaAbierta?.montoInicial ?? 0.0;
 
-      body: _isRegisterOpen
-          ? _buildOpenRegisterView()
-          : _buildClosedRegisterView(),
+        Future.microtask(() {
+          ref
+              .read(appBarProvider.notifier)
+              .setOptions(
+                title: isRegisterOpen ? "Monitor de Caja" : "Caja Cerrada",
+                showBackButton: true,
+                actions: [
+                  if (isRegisterOpen)
+                    Container(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.green),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.fiber_manual_record,
+                            size: 10,
+                            color: Colors.green,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            "EN CURSO",
+                            style: TextStyle(
+                              color: Colors.green,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              );
+        });
+
+        return Scaffold(
+          backgroundColor: Colors.grey[50],
+          bottomNavigationBar: isRegisterOpen
+              ? Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 10,
+                        offset: Offset(0, -5),
+                      ),
+                    ],
+                  ),
+                  child: SafeArea(
+                    child: ElevatedButton.icon(
+                      onPressed: _showCloseRegisterDialog,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade700,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: const Icon(Icons.lock_outline, color: Colors.white),
+                      label: const Text(
+                        "REALIZAR CORTE",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              : null,
+          body: isRegisterOpen
+              ? _buildOpenRegisterView(cajaSesionId, openingDate, initialCash)
+              : _buildClosedRegisterView(),
+        );
+      },
     );
   }
 
-  // --- VISTA 1: CAJA CERRADA (SIMPLIFICADA) ---
+  // --- VISTA: CAJA CERRADA ---
   Widget _buildClosedRegisterView() {
     return Center(
       child: Column(
@@ -140,7 +205,7 @@ class _CashRegisterScreenState extends State<CashRegisterScreen> {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 20,
                   offset: const Offset(0, 5),
                 ),
@@ -171,8 +236,6 @@ class _CashRegisterScreenState extends State<CashRegisterScreen> {
             ),
           ),
           const SizedBox(height: 40),
-
-          // BOTÓN DE APERTURA SIN MONTO
           SizedBox(
             width: 200,
             height: 55,
@@ -200,112 +263,141 @@ class _CashRegisterScreenState extends State<CashRegisterScreen> {
     );
   }
 
-  // --- VISTA 2: DASHBOARD CAJA ABIERTA ---
-  Widget _buildOpenRegisterView() {
+  // --- VISTA: CAJA ABIERTA (con datos reales de Isar) ---
+  Widget _buildOpenRegisterView(
+    String cajaSesionId,
+    DateTime? openingDate,
+    double initialCash,
+  ) {
+    final gastosAsync = ref.watch(gastosActivosProvider(cajaSesionId));
+    final ventasEfectivoAsync = ref.watch(ventasEfectivoProvider(cajaSesionId));
+    final ventasCreditoAsync = ref.watch(ventasCreditoProvider(cajaSesionId));
+    final gananciasEsperadas =
+        ref.watch(dashboardProvider).value?.gananciasEsperadas ?? 0.0;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. TARJETA DE SALDO Y MÉTRICAS
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.indigo.shade900, Colors.blue.shade800],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.indigo.withOpacity(0.4),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "EFECTIVO EN CAJA (TEÓRICO)",
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  NumberFormat.simpleCurrency().format(_currentBalance),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 40,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 20),
+          // 1. TARJETA DE BALANCE
+          gastosAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Text("Error gastos: $e"),
+            data: (gastos) {
+              final totalGastos = gastos.fold(0.0, (sum, g) => sum + g.monto);
 
-                // GRID DE MÉTRICAS DETALLADAS
-                // Usamos un Wrap o Column/Row anidado para organizar la info extra
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white12),
-                  ),
-                  child: Column(
-                    children: [
-                      // Fila 1: Entradas y Salidas de Efectivo
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          _BalanceDetailItem(
-                            label: "Ventas Efec. (+)",
-                            value: _currentSalesCash,
-                            icon: Icons.arrow_upward,
-                            color: Colors.green.shade200,
-                          ),
-                          _BalanceDetailItem(
-                            label: "Gastos (-)",
-                            value: _totalExpenses,
-                            icon: Icons.arrow_downward,
-                            color: Colors.orange.shade200,
-                          ),
-                        ],
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                        child: Divider(color: Colors.white12, height: 1),
-                      ),
+              return ventasEfectivoAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Text("Error ventas: $e"),
+                data: (salesCash) {
+                  final balance = (initialCash + salesCash) - totalGastos;
 
-                      // Fila 2: Métricas de Negocio (Ganancia y Fiado)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          _BalanceDetailItem(
-                            label: "Fiado / Crédito",
-                            value: _currentSalesCredit,
-                            icon: Icons.receipt_long,
-                            color: Colors.blue.shade200,
-                          ),
-                          _BalanceDetailItem(
-                            label: "Ganancia Est.",
-                            value: _estimatedProfit,
-                            icon: Icons.trending_up,
-                            color: Colors.yellow.shade200,
-                          ),
-                        ],
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.indigo.shade900, Colors.blue.shade800],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.indigo.withValues(alpha: 0.4),
+                          blurRadius: 10,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "EFECTIVO EN CAJA (TEÓRICO)",
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          NumberFormat.simpleCurrency().format(balance),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 40,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white12),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  _BalanceDetailItem(
+                                    label: "Ventas Efec. (+)",
+                                    value: salesCash,
+                                    icon: Icons.arrow_upward,
+                                    color: Colors.green.shade200,
+                                  ),
+                                  _BalanceDetailItem(
+                                    label: "Gastos (-)",
+                                    value: totalGastos,
+                                    icon: Icons.arrow_downward,
+                                    color: Colors.orange.shade200,
+                                  ),
+                                ],
+                              ),
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8),
+                                child: Divider(
+                                  color: Colors.white12,
+                                  height: 1,
+                                ),
+                              ),
+                              ventasCreditoAsync.when(
+                                data: (credit) => Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    _BalanceDetailItem(
+                                      label: "Fiado / Crédito",
+                                      value: credit,
+                                      icon: Icons.receipt_long,
+                                      color: Colors.blue.shade200,
+                                    ),
+                                    _BalanceDetailItem(
+                                      label: "Ganancia Est.",
+                                      value: gananciasEsperadas,
+                                      icon: Icons.trending_up,
+                                      color: Colors.yellow.shade200,
+                                    ),
+                                  ],
+                                ),
+                                loading: () => const SizedBox.shrink(),
+                                error: (e, _) => const SizedBox.shrink(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
           ),
 
           const SizedBox(height: 25),
@@ -374,7 +466,9 @@ class _CashRegisterScreenState extends State<CashRegisterScreen> {
                   width: double.infinity,
                   height: 45,
                   child: ElevatedButton.icon(
-                    onPressed: _addExpense,
+                    onPressed: _isSubmitting
+                        ? null
+                        : () => _addExpense(cajaSesionId),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.orange.shade800,
                       foregroundColor: Colors.white,
@@ -382,7 +476,16 @@ class _CashRegisterScreenState extends State<CashRegisterScreen> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    icon: const Icon(Icons.output, size: 20),
+                    icon: _isSubmitting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.output, size: 20),
                     label: const Text(
                       "REGISTRAR SALIDA",
                       style: TextStyle(fontWeight: FontWeight.bold),
@@ -395,103 +498,106 @@ class _CashRegisterScreenState extends State<CashRegisterScreen> {
 
           const SizedBox(height: 25),
 
-          // 3. LISTA DE MOVIMIENTOS
+          // 3. LISTA DE MOVIMIENTOS (desde Isar)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                "Últimos Movimientos",
+                "Gastos del Turno",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                   color: Colors.black87,
                 ),
               ),
-              if (_openingDate != null)
+              if (openingDate != null)
                 Text(
-                  DateFormat('dd MMM - HH:mm').format(_openingDate!),
+                  DateFormat('dd MMM - HH:mm').format(openingDate),
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
             ],
           ),
           const SizedBox(height: 10),
-
-          if (_registeredExpenses.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(30),
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                children: [
-                  Icon(Icons.history, color: Colors.grey[300], size: 40),
-                  const SizedBox(height: 5),
-                  Text(
-                    "Sin gastos registrados",
-                    style: TextStyle(color: Colors.grey[400]),
-                  ),
-                ],
-              ),
-            )
-          else
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _registeredExpenses.length,
-              itemBuilder: (context, index) {
-                final expense =
-                    _registeredExpenses[(_registeredExpenses.length - 1) -
-                        index];
+          gastosAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Text("Error: $e"),
+            data: (gastos) {
+              if (gastos.isEmpty) {
                 return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(30),
+                  width: double.infinity,
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.02),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.history, color: Colors.grey[300], size: 40),
+                      const SizedBox(height: 5),
+                      Text(
+                        "Sin gastos registrados",
+                        style: TextStyle(color: Colors.grey[400]),
                       ),
                     ],
                   ),
-                  child: ListTile(
-                    dense: true,
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.red.shade50,
-                      radius: 18,
-                      child: Icon(
-                        Icons.arrow_downward,
-                        color: Colors.red.shade800,
-                        size: 16,
-                      ),
-                    ),
-                    title: Text(
-                      expense['reason'],
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                    ),
-                    subtitle: Text(
-                      DateFormat('HH:mm').format(expense['time']),
-                      style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                    ),
-                    trailing: Text(
-                      "- ${NumberFormat.simpleCurrency().format(expense['amount'])}",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.red.shade700,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
                 );
-              },
-            ),
+              }
 
+              return ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: gastos.length,
+                itemBuilder: (context, index) {
+                  final expense = gastos[index];
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: ListTile(
+                      dense: true,
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.red.shade50,
+                        radius: 18,
+                        child: Icon(
+                          Icons.arrow_downward,
+                          color: Colors.red.shade800,
+                          size: 16,
+                        ),
+                      ),
+                      title: Text(
+                        expense.motivo ?? 'Sin motivo',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      subtitle: Text(
+                        DateFormat('HH:mm').format(expense.ultimaActualizacion),
+                        style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                      ),
+                      trailing: Text(
+                        "- ${NumberFormat.simpleCurrency().format(expense.monto)}",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red.shade700,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
           const SizedBox(height: 40),
         ],
       ),
@@ -500,40 +606,79 @@ class _CashRegisterScreenState extends State<CashRegisterScreen> {
 
   // --- LÓGICA DE NEGOCIO ---
 
-  void _openRegister() {
-    // Ya no pedimos monto, iniciamos directo
-    setState(() {
-      _initialCash =
-          0.0; // Inicia en 0 o se cargaría el remanente del día anterior desde BD
-      _openingDate = DateTime.now();
-      _isRegisterOpen = true;
+  Future<void> _openRegister() async {
+    final user = ref.read(authControllerProvider.notifier).usuarioActual;
+    final repo = ref.read(cajaRepositoryProvider);
 
-      // Simulamos datos cargados de las ventas del día actual
-      _currentSalesCash = 4500.00;
-      _currentSalesCredit = 1200.00; // Ventas que no entraron en caja
-      _estimatedProfit = 1500.00; // Ganancia estimada de todas las ventas
-
-      _registeredExpenses.clear();
-    });
+    if (user != null) {
+      await repo.abrirCaja(usuarioId: user.serverId, cajaId: 'caja_principal');
+      ref.invalidate(dashboardProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("✅ Turno abierto correctamente"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
   }
 
-  void _addExpense() {
+  Future<void> _addExpense(String cajaSesionId) async {
     final double? amount = double.tryParse(_expenseAmountCtrl.text);
-    final String reason = _expenseReasonCtrl.text;
+    final String reason = _expenseReasonCtrl.text.trim();
 
-    if (amount == null || amount <= 0) return;
-    if (reason.isEmpty) return;
+    if (amount == null || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("⚠️ Ingresa un monto válido")),
+      );
+      return;
+    }
+    if (reason.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("⚠️ Ingresa el motivo del gasto")),
+      );
+      return;
+    }
 
-    setState(() {
-      _registeredExpenses.add({
-        'amount': amount,
-        'reason': reason,
-        'time': DateTime.now(),
-      });
+    setState(() => _isSubmitting = true);
+
+    try {
+      final user = ref.read(authControllerProvider.notifier).usuarioActual;
+      final repo = ref.read(cajaRepositoryProvider);
+
+      await repo.registrarGasto(
+        cajaSesionId: cajaSesionId,
+        amount: amount,
+        reason: reason,
+        usuarioId: user?.serverId ?? 'unknown',
+      );
+
       _expenseAmountCtrl.clear();
       _expenseReasonCtrl.clear();
       FocusManager.instance.primaryFocus?.unfocus();
-    });
+
+      // Refrescar gastos y dashboard
+      ref.invalidate(gastosActivosProvider(cajaSesionId));
+      ref.invalidate(dashboardProvider);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("✅ Gasto registrado"),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   void _showCloseRegisterDialog() {
@@ -542,7 +687,7 @@ class _CashRegisterScreenState extends State<CashRegisterScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text("¿Cerrar Turno?"),
         content: const Text(
-          "Se guardará el balance actual y la caja quedará inactiva.",
+          "Se calculará el balance final y la caja quedará inactiva.",
         ),
         actions: [
           TextButton(
@@ -550,15 +695,32 @@ class _CashRegisterScreenState extends State<CashRegisterScreen> {
             child: const Text("Cancelar"),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
-              setState(() {
-                _isRegisterOpen = false;
-                // Aquí guardarías el histórico en la BD
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("✅ Turno cerrado correctamente")),
-              );
+              final cajaAbierta = ref
+                  .read(dashboardProvider)
+                  .value
+                  ?.cajaAbierta;
+              final user = ref
+                  .read(authControllerProvider.notifier)
+                  .usuarioActual;
+              final repo = ref.read(cajaRepositoryProvider);
+
+              if (cajaAbierta != null && user != null) {
+                await repo.cerrarCaja(
+                  cajaSesionId: cajaAbierta.serverId,
+                  usuarioCierreId: user.serverId,
+                );
+                ref.invalidate(dashboardProvider);
+              }
+
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("✅ Turno cerrado correctamente"),
+                  ),
+                );
+              }
             },
             child: const Text(
               "CONFIRMAR",

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:inventario_v2/core/services/image_sync_service.dart';
 import 'package:isar/isar.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -22,6 +23,8 @@ import 'package:inventario_v2/features/inventory/data/collections/movimiento_pro
 import 'package:inventario_v2/features/inventory/data/collections/detalle_movimiento_producto_collection.dart';
 import 'package:inventario_v2/features/inventory/data/collections/regla_costo_collection.dart';
 import 'package:inventario_v2/features/inventory/data/collections/cargo_adicional_collection.dart';
+import 'package:inventario_v2/features/inventory/data/collections/codigo_producto_collection.dart';
+import 'package:inventario_v2/features/inventory/data/collections/inventario_codigo_producto_collection.dart';
 
 // Sales & POS
 import 'package:inventario_v2/features/sales/data/collections/cliente_collection.dart';
@@ -42,7 +45,7 @@ class SyncRepository {
   /// 1. PUSH: SUBIDA MASIVA (Local -> Nube)
   /// ==============================================================================
   Future<void> pushCambiosLocales() async {
-    print("🚀 [Sync] Iniciando Push Masivo...");
+    debugPrint("🚀 [Sync] Iniciando Push Masivo...");
 
     try {
       // NIVEL 0: Configuración y Entidades Raíz
@@ -62,9 +65,11 @@ class SyncRepository {
       await _syncBodegaUsuarios();
       await _syncCajas();
       await _syncProductos();
+      await _syncCodigosProducto();
 
       // NIVEL 3: Operaciones Principales
       await _syncInventario();
+      await _syncInventarioCodigosProducto();
       await _syncMovimientos();
       await _syncCajaSesiones();
 
@@ -77,9 +82,9 @@ class SyncRepository {
       await _syncDetallesVentas();
       await _syncHistorialPagos();
 
-      print("✅ [Sync] Push Masivo completado exitosamente.");
+      debugPrint("✅ [Sync] Push Masivo completado exitosamente.");
     } catch (e) {
-      print("❌ [Sync] Error crítico en Push Masivo: $e");
+      debugPrint("❌ [Sync] Error crítico en Push Masivo: $e");
     }
   }
 
@@ -87,7 +92,7 @@ class SyncRepository {
   // 2. REALTIME: SUBSCRIPCIÓN A CAMBIOS (Nube -> Local)
   // ==============================================================================
   void subscribeToRealtimeChanges() {
-    print("📡 [Realtime] Iniciando suscripción a TODAS las tablas...");
+    debugPrint("📡 [Realtime] Iniciando suscripción a TODAS las tablas...");
 
     // --- CONFIG ---
     _subscribeTable<EmpresaCollection>(
@@ -157,6 +162,18 @@ class SyncRepository {
       tableName: 'inventario_producto',
       collection: _isar.inventarioCollections,
       fromJson: (json) => InventarioCollection.fromJson(json),
+    );
+
+    _subscribeTable<CodigoProductoCollection>(
+      tableName: 'codigo_producto',
+      collection: _isar.codigoProductoCollections,
+      fromJson: (json) => CodigoProductoCollection.fromJson(json),
+    );
+
+    _subscribeTable<InventarioCodigoProductoCollection>(
+      tableName: 'inventario_codigo_producto',
+      collection: _isar.inventarioCodigoProductoCollections,
+      fromJson: (json) => InventarioCodigoProductoCollection.fromJson(json),
     );
 
     _subscribeTable<MovimientoProductoCollection>(
@@ -229,7 +246,7 @@ class SyncRepository {
           schema: 'public',
           table: tableName,
           callback: (payload) async {
-            // print("🔔 [Realtime] Cambio en $tableName: ${payload.eventType}");
+            // debugPrint("🔔 [Realtime] Cambio en $tableName: ${payload.eventType}");
 
             await _isar.writeTxn(() async {
               // INSERT o UPDATE
@@ -248,13 +265,13 @@ class SyncRepository {
                   // Nota: Asegúrate de que tus colecciones tengan @Index(unique: true, replace: true) en serverId
                   await collection.put(item);
                 } catch (e) {
-                  print("   ❌ Error Realtime $tableName: $e");
+                  debugPrint("   ❌ Error Realtime $tableName: $e");
                 }
               }
               // DELETE (Opcional: Si usas Soft Delete, esto rara vez se llama)
               else if (payload.eventType == PostgresChangeEvent.delete) {
                 // Si borras físicamente en Supabase, aquí deberías borrar en local.
-                // print("   ⚠️ Delete físico recibido en $tableName");
+                // debugPrint("   ⚠️ Delete físico recibido en $tableName");
               }
             });
           },
@@ -274,18 +291,54 @@ class SyncRepository {
     if (items.isEmpty) return;
 
     try {
-      final data = items.map((e) {
-        final json = toJson(e);
-        json.remove('pendienteSincronizacion');
-        return json;
-      }).toList();
+      final data = items
+          .map((e) {
+            final json = toJson(e);
+            json.remove('pendienteSincronizacion');
+            return json;
+          })
+          .where((json) {
+            // ID PRINCIPAL
+            final id = json['id'].toString();
+            if (id == '1' || id.isEmpty || id.length < 32) {
+              debugPrint(
+                "⚠️ [Sync] Descartando $tableName por ID inválido: $id",
+              );
+              return false;
+            }
+
+            // VALIDACIÓN DE FOREIGN KEYS (Campos que terminan en _id)
+            // Si una FK tiene un valor corto (ej: "7"), es un ID local corrupto y romperá Postgres.
+            for (var key in json.keys) {
+              if (key.endsWith('_id')) {
+                final val = json[key]?.toString();
+                if (val != null && val.isNotEmpty && val.length < 32) {
+                  debugPrint(
+                    "⚠️ [Sync] Descartando $tableName por FK inválida ($key: $val)",
+                  );
+                  return false;
+                }
+              }
+            }
+
+            return true;
+          })
+          .toList();
+
+      if (data.isEmpty) {
+        debugPrint(
+          "ℹ️ [Sync] No hay datos válidos para subir en $tableName después de filtrar.",
+        );
+        await onCleanup(items); // Limpiamos flags para no reintentar basura
+        return;
+      }
 
       await _supabase.from(tableName).upsert(data);
       await onCleanup(items);
 
-      print("⬆️ [Sync] $tableName: ${items.length} subidos.");
+      debugPrint("⬆️ [Sync] $tableName: ${items.length} subidos.");
     } catch (e) {
-      print("⚠️ [Sync] Falló tabla $tableName: $e");
+      debugPrint("⚠️ [Sync] Falló tabla $tableName: $e");
       rethrow;
     }
   }
@@ -476,13 +529,30 @@ class SyncRepository {
         }
 
         ImageSyncService().preCacheImages(list).then((_) {
-          print("Imágenes listas para offline");
+          debugPrint("Imágenes listas para offline");
         });
       }),
     );
   }
 
-  // --- INVENTARIO ---
+  Future<void> _syncCodigosProducto() async {
+    final items = await _isar.codigoProductoCollections
+        .filter()
+        .pendienteSincronizacionEqualTo(true)
+        .findAll();
+    await _syncTable(
+      tableName: 'codigo_producto',
+      items: items,
+      toJson: (i) => i.toJson(),
+      onCleanup: (list) => _isar.writeTxn(() async {
+        for (var i in list) {
+          i.pendienteSincronizacion = false;
+          await _isar.codigoProductoCollections.put(i);
+        }
+      }),
+    );
+  }
+
   Future<void> _syncInventario() async {
     final items = await _isar.inventarioCollections
         .filter()
@@ -496,6 +566,24 @@ class SyncRepository {
         for (var i in list) {
           i.pendienteSincronizacion = false;
           await _isar.inventarioCollections.put(i);
+        }
+      }),
+    );
+  }
+
+  Future<void> _syncInventarioCodigosProducto() async {
+    final items = await _isar.inventarioCodigoProductoCollections
+        .filter()
+        .pendienteSincronizacionEqualTo(true)
+        .findAll();
+    await _syncTable(
+      tableName: 'inventario_codigo_producto',
+      items: items,
+      toJson: (i) => i.toJson(),
+      onCleanup: (list) => _isar.writeTxn(() async {
+        for (var i in list) {
+          i.pendienteSincronizacion = false;
+          await _isar.inventarioCodigoProductoCollections.put(i);
         }
       }),
     );
@@ -670,7 +758,7 @@ class SyncRepository {
   // Ejecutar esto al iniciar la app para traer cambios ocurridos offline.
   // ==============================================================================
   Future<void> pullRemoteChanges() async {
-    print("⬇️ [Sync] Iniciando Bajada Masiva (Pull)...");
+    debugPrint("⬇️ [Sync] Iniciando Bajada Masiva (Pull)...");
 
     try {
       // El orden importa menos aquí que en el Push, pero es bueno mantener jerarquía
@@ -734,6 +822,16 @@ class SyncRepository {
         (j) => InventarioCollection.fromJson(j),
       );
       await _pullTable(
+        'codigo_producto',
+        _isar.codigoProductoCollections,
+        (j) => CodigoProductoCollection.fromJson(j),
+      );
+      await _pullTable(
+        'inventario_codigo_producto',
+        _isar.inventarioCodigoProductoCollections,
+        (j) => InventarioCodigoProductoCollection.fromJson(j),
+      );
+      await _pullTable(
         'movimiento_producto',
         _isar.movimientoProductoCollections,
         (j) => MovimientoProductoCollection.fromJson(j),
@@ -781,9 +879,9 @@ class SyncRepository {
         (j) => HistorialPagoCollection.fromJson(j),
       );
 
-      print("✅ [Sync] Bajada Masiva completada.");
+      debugPrint("✅ [Sync] Bajada Masiva completada.");
     } catch (e) {
-      print("❌ [Sync] Error en Bajada Masiva: $e");
+      debugPrint("❌ [Sync] Error en Bajada Masiva: $e");
     }
   }
 
@@ -809,10 +907,10 @@ class SyncRepository {
           // putAll inserta o actualiza si ya existe el ID (serverId indexado)
           await collection.putAll(items);
         });
-        print("   ⬇️ $tableName: ${items.length} recibidos.");
+        debugPrint("   ⬇️ $tableName: ${items.length} recibidos.");
       }
     } catch (e) {
-      print("   ⚠️ Error bajando $tableName: $e");
+      debugPrint("   ⚠️ Error bajando $tableName: $e");
     }
   }
 }

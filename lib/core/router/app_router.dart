@@ -15,6 +15,12 @@ import 'package:inventario_v2/features/inventory/presentation/screens/warehouse_
 import 'package:inventario_v2/features/inventory/presentation/screens/warehouse_screen.dart';
 import 'package:inventario_v2/features/inventory/presentation/screens/warehouse_transfer_screen.dart';
 import 'package:inventario_v2/features/report/presentation/reports_dashboard_screen.dart';
+import 'package:inventario_v2/features/report/presentation/sales_report_screen.dart';
+import 'package:inventario_v2/features/report/presentation/inventory_report_screen.dart';
+import 'package:inventario_v2/features/report/presentation/financial_report_screen.dart';
+import 'package:inventario_v2/features/report/presentation/receivables_report_screen.dart';
+import 'package:inventario_v2/features/report/presentation/cash_flow_report_screen.dart';
+
 import 'package:inventario_v2/features/sales/presentation/cash_register_detail_screen.dart';
 import 'package:inventario_v2/features/sales/presentation/cash_register_history_screen.dart';
 import 'package:inventario_v2/features/sales/presentation/cash_register_screen.dart';
@@ -28,6 +34,7 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/create_user_screen.dart';
 import '../../features/auth/presentation/screens/create_company_sreen.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
+import '../../features/auth/presentation/screens/user_profile_screen.dart';
 import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -112,6 +119,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: '/dashboard',
             builder: (context, state) => const DashboardScreen(),
           ),
+          GoRoute(
+            path: '/profile',
+            builder: (context, state) => const UserProfileScreen(),
+          ),
 
           GoRoute(
             path: '/warehouse',
@@ -122,28 +133,29 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const WarehouseCreateScreen(),
           ),
           GoRoute(
-            path: '/warehouse-inventory',
-            builder: (context, state) =>
-                const WarehouseInventoryScreen(warehouseId: '1'),
+            path: '/warehouse-inventory/:warehouseId',
+            builder: (context, state) => WarehouseInventoryScreen(
+              warehouseId: state.pathParameters['warehouseId']!,
+            ),
           ),
           GoRoute(
-            path: '/warehouse-history',
-            builder: (context, state) =>
-                const WarehouseHistoryScreen(warehouseId: '1'),
+            path: '/warehouse-history/:warehouseId',
+            builder: (context, state) => WarehouseHistoryScreen(
+              warehouseId: state.pathParameters['warehouseId']!,
+            ),
           ),
           GoRoute(
-            path: '/movement-detail',
-            builder: (context, state) =>
-                const MovementDetailScreen(movementId: '1'),
+            path: '/movement-detail/:movementId',
+            builder: (context, state) => MovementDetailScreen(
+              movementId: state.pathParameters['movementId']!,
+            ),
           ),
           GoRoute(
-            path: '/barcode-scanner',
-            builder: (context, state) => const BarcodeScannerScreen(),
-          ),
-          GoRoute(
-            path: '/product-detail',
-            builder: (context, state) =>
-                const ProductDetailScreen(productId: '1', warehouseId: '1'),
+            path: '/product-detail/:productId',
+            builder: (context, state) => ProductDetailScreen(
+              productId: state.pathParameters['productId']!,
+              bodegaId: state.uri.queryParameters['bodegaId'],
+            ),
           ),
           GoRoute(
             path: '/product-create',
@@ -154,14 +166,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const MagicCameraScreen(),
           ),
           GoRoute(
+            path: '/barcode-scanner',
+            builder: (context, state) => BarcodeScannerScreen(
+              bodegaId: state.uri.queryParameters['bodegaId'],
+            ),
+          ),
+          GoRoute(
             path: '/batch-entry/:bodegaId',
             builder: (context, state) => WarehouseEntryScreen(
               bodegaId: state.pathParameters['bodegaId']!,
             ),
           ),
           GoRoute(
-            path: '/warehouse-transfer',
-            builder: (context, state) => const WarehouseTransferScreen(),
+            path: '/warehouse-transfer/:bodegaId',
+            builder: (context, state) => WarehouseTransferScreen(
+              bodegaOrigenId: state.pathParameters['bodegaId'] ?? '',
+            ),
           ),
           GoRoute(
             path: '/product-list',
@@ -175,8 +195,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const SalesDashboardScreen(),
           ),
           GoRoute(
-            path: '/sales-detail',
-            builder: (context, state) => const SaleDetailScreen(saleId: ''),
+            path: '/sales-detail/:saleId',
+            builder: (context, state) =>
+                SaleDetailScreen(saleId: state.pathParameters['saleId']!),
           ),
           GoRoute(
             path: '/cash-register',
@@ -187,15 +208,36 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const CashRegisterHistoryScreen(),
           ),
           GoRoute(
-            path: '/cash-register-detail',
-            builder: (context, state) =>
-                const CashRegisterDetailScreen(sessionId: ''),
+            path: '/cash-register-detail/:sessionId',
+            builder: (context, state) => CashRegisterDetailScreen(
+              sessionId: state.pathParameters['sessionId']!,
+            ),
           ),
 
           // Modulo de Reportes
           GoRoute(
             path: '/reports',
             builder: (context, state) => const ReportsDashboardScreen(),
+          ),
+          GoRoute(
+            path: '/reports/sales',
+            builder: (context, state) => const SalesReportScreen(),
+          ),
+          GoRoute(
+            path: '/reports/inventory',
+            builder: (context, state) => const InventoryReportScreen(),
+          ),
+          GoRoute(
+            path: '/reports/financial',
+            builder: (context, state) => const FinancialReportScreen(),
+          ),
+          GoRoute(
+            path: '/reports/receivables',
+            builder: (context, state) => const ReceivablesReportScreen(),
+          ),
+          GoRoute(
+            path: '/reports/cash-history',
+            builder: (context, state) => const CashFlowReportScreen(),
           ),
         ],
       ),

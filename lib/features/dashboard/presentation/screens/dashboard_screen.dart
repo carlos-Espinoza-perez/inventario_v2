@@ -3,14 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/features/dashboard/presentation/widgets/content_view_dashboard.dart';
 
-// --- 1. PROVIDER SIMULADO (Para ver el Skeleton) ---
-// En el futuro, aquí usarás tu 'dashboardInfoProvider' real.
-final dashboardFakeLoaderProvider = FutureProvider.autoDispose<bool>((
-  ref,
-) async {
-  await Future.delayed(const Duration(seconds: 3)); // Simula carga de DB
-  return true;
-});
+import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -28,8 +21,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Escuchamos el provider simulado
-    final asyncData = ref.watch(dashboardFakeLoaderProvider);
+    // Escuchamos el provider REAL
+    final asyncData = ref.watch(dashboardProvider);
 
     return SingleChildScrollView(
       child: asyncData.when(
@@ -37,10 +30,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         loading: () => const _DashboardSkeletonView(),
 
         // B. ESTADO DE ERROR
-        error: (err, stack) => Center(child: Text('Error: $err')),
+        error: (err, stack) =>
+            Center(child: Text('Error al cargar datos: $err')),
 
-        // C. ESTADO CARGADO (CONTENIDO REAL/MOCK)
-        data: (_) => const ContentViewDashboard(),
+        // C. ESTADO CARGADO (CONTENIDO REAL)
+        data: (state) => ContentViewDashboard(state: state),
       ),
     );
   }

@@ -84,10 +84,18 @@ class _BarcodeCaptureScreenState extends State<BarcodeCaptureScreen> {
               if (_isScanned) return;
               final List<Barcode> barcodes = capture.barcodes;
               for (final barcode in barcodes) {
-                if (barcode.rawValue != null) {
-                  setState(() => _isScanned = true);
-                  Navigator.pop(context, barcode.rawValue);
-                  break;
+                final raw = barcode.rawValue;
+                if (raw != null) {
+                  // Normalizar: trim + eliminar caracteres de control (\n, \r, \t, etc.)
+                  final code = raw.trim().replaceAll(
+                    RegExp(r'[\x00-\x1F\x7F]'),
+                    '',
+                  );
+                  if (code.isNotEmpty) {
+                    setState(() => _isScanned = true);
+                    Navigator.pop(context, code);
+                    break;
+                  }
                 }
               }
             },

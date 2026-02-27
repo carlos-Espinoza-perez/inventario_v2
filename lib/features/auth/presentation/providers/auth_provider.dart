@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:inventario_v2/features/auth/data/collections/usuario_collection.dart';
 import 'package:inventario_v2/features/auth/data/repositories/auth_repository.dart';
 import 'package:isar/isar.dart';
@@ -48,12 +49,16 @@ class AuthController extends _$AuthController {
       return;
     }
 
-    state = const AsyncLoading();
+    // NO ponemos AsyncLoading aquí: hacemos la carga localmente en el widget
+    // para evitar que el router intercepte y redirija al /splash.
+    // Sólo cambiamos el estado cuando hay éxito o error definitivo.
 
     try {
       final supabase = ref.read(supabaseClientProvider);
 
-      // Generando usuario
+      debugPrint('🔐 [Auth] Iniciando registro: $correo');
+
+      // 1. Crear usuario en Supabase Auth
       final authResponse = await supabase.auth.signUp(
         email: correo,
         password: contrasena,
@@ -68,7 +73,9 @@ class AuthController extends _$AuthController {
         );
       }
 
-      // Generando empresa
+      debugPrint('✅ [Auth] Usuario Auth creado: ${user.id}');
+
+      // 2. Crear empresa, rol y usuario en Supabase + Isar
       final isar = await ref.read(isarDbProvider.future);
       final repo = AuthRepository(supabase, isar);
 
@@ -82,9 +89,19 @@ class AuthController extends _$AuthController {
         userPassword: contrasena,
       );
 
+      debugPrint('✅ [Auth] Empresa creada exitosamente');
+
+      // 3. Cargar el usuario local inmediatamente para que el router
+      //    vea _usuarioLocal != null y redirija a /dashboard
+      _usuarioLocal = await isar.usuarioCollections.where().findFirst();
+      debugPrint('✅ [Auth] Usuario local cargado: $_usuarioLocal');
+
+      // 4. Notificar éxito (dispara redirect del router → /dashboard)
       state = const AsyncValue.data(null);
-    } catch (e) {
-      state = AsyncError(e.toString(), StackTrace.current);
+    } catch (e, st) {
+      debugPrint('❌ [Auth] Error en createUser: $e');
+      debugPrint('   StackTrace: $st');
+      state = AsyncError(e.toString(), st);
     }
   }
 
@@ -98,8 +115,6 @@ class AuthController extends _$AuthController {
   Future<void> checkAuthStatus() async {
     final isar = await ref.read(isarDbProvider.future);
 
-    // Buscamos si existe ALGÚN usuario guardado
-    // Como es "Un Solo Usuario", el primero que encontremos es el dueño.
     final user = await isar.usuarioCollections.where().findFirst();
 
     if (user != null) {
@@ -130,15 +145,36 @@ class AuthController extends _$AuthController {
         if (esErrorDeRed) {
           await repo.signInOffline(email, password);
         } else {
-          // Si es contraseña incorrecta o usuario no encontrado, relanzamos el error
           rethrow;
         }
       }
+
+      // Actualizar usuario local después de login exitoso
+      final user = await isar.usuarioCollections.where().findFirst();
+      _usuarioLocal = user;
+      debugPrint('✅ [Auth] Login exitoso: $_usuarioLocal');
     } catch (e, stackTrace) {
+      debugPrint('❌ [Auth] Error en login: $e');
       state = AsyncError(e, stackTrace);
+      return;
     }
 
-    checkAuthStatus();
+    state = const AsyncData(null);
+  }
+
+  Future<void> logout() async {
+    final isar = await ref.read(isarDbProvider.future);
+    final supabase = ref.read(supabaseClientProvider);
+
+    try {
+      await supabase.auth.signOut();
+    } catch (_) {}
+
+    await isar.writeTxn(() async {
+      await isar.usuarioCollections.clear();
+    });
+
+    _usuarioLocal = null;
     state = const AsyncData(null);
   }
 }

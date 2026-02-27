@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:inventario_v2/features/auth/presentation/providers/auth_provider.dart';
 import 'package:inventario_v2/features/auth/presentation/widgets/headline_custom.dart';
 
@@ -28,42 +27,49 @@ class _FormUserCreateState extends ConsumerState<FormUserCreate> {
     super.dispose();
   }
 
-  void _onSubmit() {
+  bool _isLoading = false;
+
+  void _onSubmit() async {
     if (_formKey.currentState!.validate()) {
       FocusScope.of(context).unfocus();
 
-      ref
-          .read(authControllerProvider.notifier)
-          .createUser(
-            _nombreCtr.text.trim(),
-            _emailCtr.text.trim(),
-            _passwordCtr.text.trim(),
-          );
+      setState(() => _isLoading = true);
+
+      try {
+        await ref
+            .read(authControllerProvider.notifier)
+            .createUser(
+              _nombreCtr.text.trim(),
+              _emailCtr.text.trim(),
+              _passwordCtr.text.trim(),
+            );
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authControllerProvider);
-    final isLoading = authState.isLoading;
+    ref.watch(authControllerProvider);
 
     ref.listen(authControllerProvider, (previous, next) {
-      // A. Manejo de Errores
-      if (next is AsyncError) {
+      // A. Manejo de Errores: solo mostrar si cambió a AsyncError
+      if (next is AsyncError && previous is! AsyncError) {
+        final msg = next.error.toString().replaceFirst('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(next.error.toString()),
+            content: Text(msg),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 5),
           ),
         );
+        setState(() => _isLoading = false);
       }
 
-      // B. Manejo de Éxito
-      if (next is AsyncData && !next.isLoading) {
-        // Si terminó bien, vamos al dashboard
-        context.go('/dashboard');
-      }
+      // B. Éxito: el router se encarga de redirigir al /dashboard
+      // automáticamente cuando _usuarioLocal != null y state = AsyncData
     });
 
     return Column(
@@ -193,23 +199,17 @@ class _FormUserCreateState extends ConsumerState<FormUserCreate> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  // Deshabilitamos el botón (null) si está cargando
-                  onPressed: isLoading ? null : _onSubmit,
-
+                  onPressed: _isLoading ? null : _onSubmit,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.teal,
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.teal.withOpacity(
-                      0.5,
-                    ), // Color al cargar
+                    disabledBackgroundColor: Colors.teal.withValues(alpha: 0.5),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(55),
                     ),
                     minimumSize: const Size(double.infinity, 50),
                   ),
-
-                  // Cambiamos el contenido según el estado
-                  child: isLoading
+                  child: _isLoading
                       ? const SizedBox(
                           height: 24,
                           width: 24,

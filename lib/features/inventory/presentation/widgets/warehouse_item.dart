@@ -15,7 +15,7 @@ class WarehouseItem extends StatelessWidget {
         // Mismo estilo de sombra que el Dashboard
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -28,8 +28,8 @@ class WarehouseItem extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           // Usamos el efecto de ola suave que configuramos antes
-          splashColor: Colors.blue.withOpacity(0.1),
-          highlightColor: Colors.blue.withOpacity(0.05),
+          splashColor: Colors.blue.withValues(alpha: 0.1),
+          highlightColor: Colors.blue.withValues(alpha: 0.05),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             child: Row(
@@ -38,7 +38,7 @@ class WarehouseItem extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.blue.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(

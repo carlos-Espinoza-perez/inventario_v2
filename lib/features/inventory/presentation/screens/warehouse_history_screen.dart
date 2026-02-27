@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
+import '../providers/warehouse_history_provider.dart';
 
 class WarehouseHistoryScreen extends ConsumerStatefulWidget {
   final String warehouseId;
@@ -16,60 +17,6 @@ class WarehouseHistoryScreen extends ConsumerStatefulWidget {
 class _WarehouseHistoryScreenState
     extends ConsumerState<WarehouseHistoryScreen> {
   String _selectedFilter = 'Todos'; // Filtro actual
-
-  // Simulación de Datos (Basado en tu Table MovimientoProducto)
-  final List<Map<String, dynamic>> _mockMovements = [
-    {
-      "tipo": "COMPRA",
-      "fecha": DateTime.now().subtract(const Duration(minutes: 45)),
-      "referencia": "Factura #FAC-9921",
-      "items": 120, // Cantidad de productos
-      "total": 15400.00,
-      "usuario": "Juan Pérez",
-      "direccion": "ENTRADA", // Calculado según BodegaDestinoId == warehouseId
-      "estado": "APROBADO",
-    },
-    {
-      "tipo": "VENTA",
-      "fecha": DateTime.now().subtract(const Duration(hours: 3)),
-      "referencia": "Ticket #Tk-004",
-      "items": 3,
-      "total": 850.00,
-      "usuario": "Caja 1",
-      "direccion": "SALIDA",
-      "estado": "APROBADO",
-    },
-    {
-      "tipo": "TRASLADO",
-      "fecha": DateTime.now().subtract(const Duration(days: 1)),
-      "referencia": "A Bodega Norte",
-      "items": 50,
-      "total": 0.0,
-      "usuario": "Admin",
-      "direccion": "SALIDA_TRASLADO", // Salió de aquí hacia otra
-      "estado": "PENDIENTE",
-    },
-    {
-      "tipo": "AJUSTE",
-      "fecha": DateTime.now().subtract(const Duration(days: 2)),
-      "referencia": "Merma por daño",
-      "items": 2,
-      "total": 0.0,
-      "usuario": "Supervisor",
-      "direccion": "SALIDA",
-      "estado": "APROBADO",
-    },
-    {
-      "tipo": "TRASLADO",
-      "fecha": DateTime.now().subtract(const Duration(days: 3)),
-      "referencia": "Desde Bodega Sur",
-      "items": 15,
-      "total": 0.0,
-      "usuario": "Admin",
-      "direccion": "ENTRADA_TRASLADO", // Llegó aquí desde otra
-      "estado": "APROBADO",
-    },
-  ];
 
   @override
   void initState() {
@@ -97,24 +44,35 @@ class _WarehouseHistoryScreenState
     });
   }
 
-  // Lógica simple de filtrado en memoria
-  List<Map<String, dynamic>> get _filteredMovements {
-    if (_selectedFilter == 'Todos') return _mockMovements;
+  // Lógica de filtrado en resultados de base de datos
+  List<Map<String, dynamic>> _getFilteredMovements(
+    List<Map<String, dynamic>> movements,
+  ) {
+    if (_selectedFilter == 'Todos') return movements;
     if (_selectedFilter == 'Entradas') {
-      return _mockMovements
+      return movements
           .where((m) => m['direccion'].toString().contains('ENTRADA'))
           .toList();
     }
     if (_selectedFilter == 'Salidas') {
-      return _mockMovements
+      return movements
           .where((m) => m['direccion'].toString().contains('SALIDA'))
           .toList();
     }
-    return _mockMovements;
+    if (_selectedFilter == 'Pendientes') {
+      return movements
+          .where((m) => m['estado'].toString().contains('PENDIENTE'))
+          .toList();
+    }
+    return movements;
   }
 
   @override
   Widget build(BuildContext context) {
+    final historyAsync = ref.watch(
+      warehouseHistoryProvider(widget.warehouseId),
+    );
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       body: Column(
@@ -160,12 +118,26 @@ class _WarehouseHistoryScreenState
 
           // 2. LISTA DE MOVIMIENTOS
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _filteredMovements.length,
-              itemBuilder: (context, index) {
-                final mov = _filteredMovements[index];
-                return _MovementCard(movement: mov);
+            child: historyAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (err, stack) => Center(child: Text("Error: $err")),
+              data: (movements) {
+                final filteredMovements = _getFilteredMovements(movements);
+
+                if (filteredMovements.isEmpty) {
+                  return const Center(
+                    child: Text("No existen movimientos registrados"),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filteredMovements.length,
+                  itemBuilder: (context, index) {
+                    final mov = filteredMovements[index];
+                    return _MovementCard(movement: mov);
+                  },
+                );
               },
             ),
           ),
@@ -215,7 +187,7 @@ class _MovementCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -227,11 +199,11 @@ class _MovementCard extends StatelessWidget {
           vertical: 12,
         ),
         onTap: () {
-          context.push('/movement-detail');
+          context.push('/movement-detail/${movement['id']}');
         },
         // ICONO IZQUIERDO (Circular)
         leading: CircleAvatar(
-          backgroundColor: themeColor.withOpacity(0.1),
+          backgroundColor: themeColor.withValues(alpha: 0.1),
           child: Icon(icon, color: themeColor),
         ),
 
@@ -334,7 +306,7 @@ class _FilterTab extends StatelessWidget {
         margin: const EdgeInsets.only(right: 12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isActive ? activeColor.withOpacity(0.1) : Colors.white,
+          color: isActive ? activeColor.withValues(alpha: 0.1) : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isActive ? activeColor : Colors.grey.shade300,

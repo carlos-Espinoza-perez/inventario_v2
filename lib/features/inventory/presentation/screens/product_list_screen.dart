@@ -89,7 +89,7 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
+                  color: Colors.black.withValues(alpha: 0.03),
                   blurRadius: 10,
                   offset: const Offset(0, 5),
                 ),
@@ -205,7 +205,7 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -364,7 +364,7 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
       child: Icon(
         Icons.checkroom, // El icono de ropa que tenías en la referencia
         size: 50,
-        color: Colors.cyan.shade800.withOpacity(0.3),
+        color: Colors.cyan.shade800.withValues(alpha: 0.3),
       ),
     );
   }

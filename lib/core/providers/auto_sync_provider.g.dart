@@ -22,7 +22,7 @@ final syncRepositoryProvider =
 );
 
 typedef SyncRepositoryRef = AutoDisposeFutureProviderRef<SyncRepository>;
-String _$autoSyncHash() => r'33ce39c999959afa1aff365510c199401ccdeb9f';
+String _$autoSyncHash() => r'4cb54618198a8603de8f5727936261775e24d04f';
 
 /// See also [AutoSync].
 @ProviderFor(AutoSync)

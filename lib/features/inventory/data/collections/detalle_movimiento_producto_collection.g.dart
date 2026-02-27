@@ -67,6 +67,11 @@ const DetalleMovimientoProductoCollectionSchema = CollectionSchema(
       id: 9,
       name: r'ultimaActualizacion',
       type: IsarType.dateTime,
+    ),
+    r'variantesJson': PropertySchema(
+      id: 10,
+      name: r'variantesJson',
+      type: IsarType.string,
     )
   },
   estimateSize: _detalleMovimientoProductoCollectionEstimateSize,
@@ -151,6 +156,12 @@ int _detalleMovimientoProductoCollectionEstimateSize(
   bytesCount += 3 + object.movimientoProductoId.length * 3;
   bytesCount += 3 + object.productoId.length * 3;
   bytesCount += 3 + object.serverId.length * 3;
+  {
+    final value = object.variantesJson;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   return bytesCount;
 }
 
@@ -170,6 +181,7 @@ void _detalleMovimientoProductoCollectionSerialize(
   writer.writeString(offsets[7], object.productoId);
   writer.writeString(offsets[8], object.serverId);
   writer.writeDateTime(offsets[9], object.ultimaActualizacion);
+  writer.writeString(offsets[10], object.variantesJson);
 }
 
 DetalleMovimientoProductoCollection
@@ -191,6 +203,7 @@ DetalleMovimientoProductoCollection
   object.productoId = reader.readString(offsets[7]);
   object.serverId = reader.readString(offsets[8]);
   object.ultimaActualizacion = reader.readDateTime(offsets[9]);
+  object.variantesJson = reader.readStringOrNull(offsets[10]);
   return object;
 }
 
@@ -221,6 +234,8 @@ P _detalleMovimientoProductoCollectionDeserializeProp<P>(
       return (reader.readString(offset)) as P;
     case 9:
       return (reader.readDateTime(offset)) as P;
+    case 10:
+      return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -1680,6 +1695,182 @@ extension DetalleMovimientoProductoCollectionQueryFilter on QueryBuilder<
       ));
     });
   }
+
+  QueryBuilder<
+      DetalleMovimientoProductoCollection,
+      DetalleMovimientoProductoCollection,
+      QAfterFilterCondition> variantesJsonIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'variantesJson',
+      ));
+    });
+  }
+
+  QueryBuilder<
+      DetalleMovimientoProductoCollection,
+      DetalleMovimientoProductoCollection,
+      QAfterFilterCondition> variantesJsonIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'variantesJson',
+      ));
+    });
+  }
+
+  QueryBuilder<
+      DetalleMovimientoProductoCollection,
+      DetalleMovimientoProductoCollection,
+      QAfterFilterCondition> variantesJsonEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'variantesJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<
+      DetalleMovimientoProductoCollection,
+      DetalleMovimientoProductoCollection,
+      QAfterFilterCondition> variantesJsonGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'variantesJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<
+      DetalleMovimientoProductoCollection,
+      DetalleMovimientoProductoCollection,
+      QAfterFilterCondition> variantesJsonLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'variantesJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<
+      DetalleMovimientoProductoCollection,
+      DetalleMovimientoProductoCollection,
+      QAfterFilterCondition> variantesJsonBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'variantesJson',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<
+      DetalleMovimientoProductoCollection,
+      DetalleMovimientoProductoCollection,
+      QAfterFilterCondition> variantesJsonStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'variantesJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<
+      DetalleMovimientoProductoCollection,
+      DetalleMovimientoProductoCollection,
+      QAfterFilterCondition> variantesJsonEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'variantesJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<DetalleMovimientoProductoCollection,
+          DetalleMovimientoProductoCollection, QAfterFilterCondition>
+      variantesJsonContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'variantesJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<DetalleMovimientoProductoCollection,
+          DetalleMovimientoProductoCollection, QAfterFilterCondition>
+      variantesJsonMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'variantesJson',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<
+      DetalleMovimientoProductoCollection,
+      DetalleMovimientoProductoCollection,
+      QAfterFilterCondition> variantesJsonIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'variantesJson',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<
+      DetalleMovimientoProductoCollection,
+      DetalleMovimientoProductoCollection,
+      QAfterFilterCondition> variantesJsonIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'variantesJson',
+        value: '',
+      ));
+    });
+  }
 }
 
 extension DetalleMovimientoProductoCollectionQueryObject on QueryBuilder<
@@ -1863,6 +2054,22 @@ extension DetalleMovimientoProductoCollectionQuerySortBy on QueryBuilder<
       QAfterSortBy> sortByUltimaActualizacionDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'ultimaActualizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<DetalleMovimientoProductoCollection,
+      DetalleMovimientoProductoCollection, QAfterSortBy> sortByVariantesJson() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'variantesJson', Sort.asc);
+    });
+  }
+
+  QueryBuilder<
+      DetalleMovimientoProductoCollection,
+      DetalleMovimientoProductoCollection,
+      QAfterSortBy> sortByVariantesJsonDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'variantesJson', Sort.desc);
     });
   }
 }
@@ -2054,6 +2261,22 @@ extension DetalleMovimientoProductoCollectionQuerySortThenBy on QueryBuilder<
       return query.addSortBy(r'ultimaActualizacion', Sort.desc);
     });
   }
+
+  QueryBuilder<DetalleMovimientoProductoCollection,
+      DetalleMovimientoProductoCollection, QAfterSortBy> thenByVariantesJson() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'variantesJson', Sort.asc);
+    });
+  }
+
+  QueryBuilder<
+      DetalleMovimientoProductoCollection,
+      DetalleMovimientoProductoCollection,
+      QAfterSortBy> thenByVariantesJsonDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'variantesJson', Sort.desc);
+    });
+  }
 }
 
 extension DetalleMovimientoProductoCollectionQueryWhereDistinct on QueryBuilder<
@@ -2149,6 +2372,16 @@ extension DetalleMovimientoProductoCollectionQueryWhereDistinct on QueryBuilder<
       return query.addDistinctBy(r'ultimaActualizacion');
     });
   }
+
+  QueryBuilder<
+      DetalleMovimientoProductoCollection,
+      DetalleMovimientoProductoCollection,
+      QDistinct> distinctByVariantesJson({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'variantesJson',
+          caseSensitive: caseSensitive);
+    });
+  }
 }
 
 extension DetalleMovimientoProductoCollectionQueryProperty on QueryBuilder<
@@ -2229,6 +2462,13 @@ extension DetalleMovimientoProductoCollectionQueryProperty on QueryBuilder<
       ultimaActualizacionProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'ultimaActualizacion');
+    });
+  }
+
+  QueryBuilder<DetalleMovimientoProductoCollection, String?, QQueryOperations>
+      variantesJsonProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'variantesJson');
     });
   }
 }

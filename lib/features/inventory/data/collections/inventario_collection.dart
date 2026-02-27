@@ -20,6 +20,7 @@ class InventarioCollection {
   String? ubicacionPasillo;
 
   double costoPromedio = 0.0;
+  double? precioVenta;
 
   // --- Auditoría (Según esquema: ActualizadoPor) ---
   String? actualizadoPor; // GUID del usuario que modificó el stock
@@ -53,6 +54,9 @@ class InventarioCollection {
       ..costoPromedio = (json['costo_promedio'] == null)
           ? 0.0
           : (json['costo_promedio'] as num).toDouble()
+      ..precioVenta = (json['precio_venta'] == null)
+          ? null
+          : (json['precio_venta'] as num).toDouble()
       // Auditoría
       ..actualizadoPor = json['actualizado_por']
       ..ultimaActualizacion = DateTime.parse(json['ultima_actualizacion'])
@@ -71,6 +75,7 @@ class InventarioCollection {
       'cantidad_reservada': cantidadReservada,
       'ubicacion_pasillo': ubicacionPasillo,
       'costo_promedio': costoPromedio,
+      'precio_venta': precioVenta,
       'actualizado_por': actualizadoPor,
 
       'ultima_actualizacion': ultimaActualizacion.toIso8601String(),

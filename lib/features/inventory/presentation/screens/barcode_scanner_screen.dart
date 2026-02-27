@@ -1,462 +1,780 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
-class BarcodeScannerScreen extends StatefulWidget {
-  const BarcodeScannerScreen({super.key});
+import 'package:inventario_v2/features/inventory/data/providers/codigo_producto_provider.dart';
+import 'package:inventario_v2/features/inventory/data/providers/producto_provider.dart';
+import 'package:inventario_v2/features/inventory/data/collections/codigo_producto_collection.dart';
+import 'package:inventario_v2/features/inventory/data/collections/producto_collection.dart';
 
-  @override
-  State<BarcodeScannerScreen> createState() => _BarcodeScannerScreenState();
+// ─────────────────────────────────────────────────────────────────────────────
+// Modelo de resultado combinado
+// ─────────────────────────────────────────────────────────────────────────────
+class _SkuResult {
+  final CodigoProductoCollection codigo;
+  final ProductoCollection? producto;
+
+  const _SkuResult({required this.codigo, this.producto});
+
+  String get nombre => producto?.nombre ?? '—';
+
+  String get marca {
+    if (producto?.especificacionJson == null) return '—';
+    try {
+      final m = jsonDecode(producto!.especificacionJson!);
+      return m['marca']?.toString() ??
+          m['brand']?.toString() ??
+          m['Marca']?.toString() ??
+          '—';
+    } catch (_) {
+      return '—';
+    }
+  }
+
+  double get precio => codigo.precioEspecifico ?? producto?.precioBase ?? 0.0;
+  double get costo => codigo.costoEspecifico ?? producto?.ultimoCosto ?? 0.0;
+  String get imagenUrl => producto?.imagenUrl ?? producto?.imagenLocal ?? '';
 }
 
-class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
-  // Controlador para manejar la cámara (flash, pausa, etc)
-  final MobileScannerController _controller = MobileScannerController(
-    detectionSpeed: DetectionSpeed.noDuplicates,
-    returnImage: false,
-  );
+// ─────────────────────────────────────────────────────────────────────────────
+// Provider: busca todos los códigos que coincidan con el SKU escaneado
+// ─────────────────────────────────────────────────────────────────────────────
+final _skuResultsProvider = FutureProvider.family<List<_SkuResult>, String>((
+  ref,
+  sku,
+) async {
+  if (sku.isEmpty) return [];
 
-  bool _isProcessing = false; // Evita lecturas múltiples
+  final repoCodigo = await ref.read(codigoProductoRepositoryProvider.future);
+  final repoProducto = await ref.read(productoRepositoryProvider.future);
 
-  // SIMULACIÓN DE BASE DE DATOS
-  final List<Map<String, dynamic>> _mockDb = [
-    {
-      "sku": "740123456789", // Ejemplo de código EAN-13 real
-      "nombre": "Gorra Nike SB Negra",
-      "stock": 15,
-      "precio": 250.00,
-      "costo": 120.00,
-      "categoria": "Accesorio",
-      "imagen": null,
-    },
-    // Puedes agregar más productos para probar
-  ];
+  final codigos = await repoCodigo.getCodigosBySkuOBarcode(sku);
+  if (codigos.isEmpty) return [];
+
+  final results = <_SkuResult>[];
+  for (final c in codigos) {
+    try {
+      final prod = await repoProducto.getProductoPorServerId(c.productoId);
+      results.add(_SkuResult(codigo: c, producto: prod));
+    } catch (_) {
+      results.add(_SkuResult(codigo: c));
+    }
+  }
+  return results;
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pantalla principal
+// ─────────────────────────────────────────────────────────────────────────────
+class BarcodeScannerScreen extends ConsumerStatefulWidget {
+  final String? bodegaId;
+  const BarcodeScannerScreen({super.key, this.bodegaId});
 
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  ConsumerState<BarcodeScannerScreen> createState() =>
+      _BarcodeScannerScreenState();
+}
 
-  // Lógica cuando se detecta un código
+class _BarcodeScannerScreenState extends ConsumerState<BarcodeScannerScreen> {
+  String? _lastScannedCode;
+  bool _isScanning = true;
+  bool _torchOn = false;
+
   void _onDetect(BarcodeCapture capture) {
-    if (_isProcessing) return; // Si ya estamos procesando, ignorar
+    if (!_isScanning) return;
+    final raw = capture.barcodes.firstOrNull?.rawValue;
+    if (raw == null) return;
 
-    final List<Barcode> barcodes = capture.barcodes;
-    if (barcodes.isEmpty) return;
+    // Normalizar: trim + eliminar caracteres de control (\n, \r, \t, etc.)
+    final code = raw.trim().replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '');
 
-    setState(() => _isProcessing = true);
-
-    final String? code = barcodes.first.rawValue;
-
-    if (code != null) {
-      _buscarProducto(code);
-    } else {
-      setState(() => _isProcessing = false);
+    if (code.isNotEmpty && code != _lastScannedCode) {
+      setState(() {
+        _lastScannedCode = code;
+        _isScanning = false;
+      });
     }
   }
 
-  void _buscarProducto(String code) async {
-    // Simulamos delay de red
-    // await Future.delayed(const Duration(milliseconds: 300));
-
-    // Buscar en la lista mock (Aquí buscarías en Isar o Supabase)
-    final producto = _mockDb.firstWhere(
-      (p) =>
-          p['sku'] == code ||
-          p['sku'] == "740123456789", // Fallback para pruebas
-      orElse: () => {},
-    );
-
-    if (!mounted) return;
-
-    if (producto.isNotEmpty) {
-      // PRODUCTO ENCONTRADO -> Mostrar Ficha
-      await showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (context) => _ProductFoundSheet(product: producto),
-      );
-      // Al cerrar el modal, reactivamos el escáner
-      setState(() => _isProcessing = false);
-    } else {
-      // NO ENCONTRADO -> Mostrar error rápido
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Producto no encontrado: $code"),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      // Breve pausa antes de volver a escanear
-      await Future.delayed(const Duration(seconds: 2));
-      setState(() => _isProcessing = false);
-    }
+  void _resetScanner() {
+    setState(() {
+      _lastScannedCode = null;
+      _isScanning = true;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final panelHeight = MediaQuery.of(context).size.height * 0.68;
+
     return Scaffold(
       backgroundColor: Colors.black,
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.black.withValues(alpha: 0.55),
+        elevation: 0,
+        title: const Text(
+          "Escáner de Producto",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          onPressed: () => context.pop(),
+        ),
+        actions: [
+          // Linterna
+          IconButton(
+            icon: Icon(
+              _torchOn ? Icons.flashlight_on : Icons.flashlight_off,
+              color: _torchOn ? Colors.yellow : Colors.white70,
+            ),
+            onPressed: () => setState(() => _torchOn = !_torchOn),
+          ),
+          // Re-escanear
+          if (_lastScannedCode != null)
+            IconButton(
+              icon: const Icon(Icons.refresh, color: Colors.orange),
+              tooltip: "Volver a escanear",
+              onPressed: _resetScanner,
+            ),
+        ],
+      ),
+
       body: Stack(
         children: [
-          // 1. CÁMARA
-          MobileScanner(
-            controller: _controller,
-            onDetect: _onDetect,
-            errorBuilder: (context, error) {
-              return Center(
-                child: Text(
-                  "Error de cámara: $error",
-                  style: const TextStyle(color: Colors.white),
+          // ── Cámara ──────────────────────────────────────────────────
+          if (_isScanning)
+            MobileScanner(onDetect: _onDetect)
+          else
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.black, Color(0xFF111111)],
                 ),
-              );
-            },
-          ),
-
-          // 2. OVERLAY VISUAL (Caja de escaneo)
-          CustomPaint(painter: _ScannerOverlayPainter(), child: Container()),
-
-          // 3. CONTROLES SUPERIORES (Atrás y Flash)
-          Positioned(
-            top: 50,
-            left: 20,
-            right: 20,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                CircleAvatar(
-                  backgroundColor: Colors.black54,
-                  child: IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white),
-                    onPressed: () => context.pop(),
-                  ),
-                ),
-                CircleAvatar(
-                  backgroundColor: Colors.black54,
-                  child: IconButton(
-                    // CORRECCIÓN AQUÍ:
-                    // 1. Escuchamos al controlador completo (él tiene el estado)
-                    icon: ValueListenableBuilder(
-                      valueListenable: _controller,
-                      builder: (context, state, child) {
-                        // 2. Accedemos a state.torchState
-                        final isTorchOn = state.torchState == TorchState.on;
-
-                        return Icon(
-                          isTorchOn ? Icons.flash_on : Icons.flash_off,
-                          color: isTorchOn ? Colors.yellow : Colors.white,
-                        );
-                      },
-                    ),
-                    onPressed: () => _controller.toggleTorch(),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
 
-          // 4. TEXTO DE AYUDA
-          const Positioned(
-            bottom: 80,
+          // ── Marco de escaneo ─────────────────────────────────────────
+          if (_isScanning)
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 40), // Espacio para el AppBar
+                  _ScannerFrame(),
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      "Apunta al código de barras del producto",
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // ── Panel deslizable de resultados ───────────────────────────
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 450),
+            curve: Curves.easeOutCubic,
+            bottom: 0,
             left: 0,
             right: 0,
-            child: Text(
-              "Apunta el código de barras dentro del cuadro",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white70, fontSize: 14),
-            ),
+            height: _lastScannedCode != null ? panelHeight : 0,
+            child: _lastScannedCode != null
+                ? _ResultsPanel(
+                    scannedCode: _lastScannedCode!,
+                    bodegaId: widget.bodegaId,
+                    onReset: _resetScanner,
+                  )
+                : const SizedBox.shrink(),
           ),
+
+          // ── Pill del código escaneado ────────────────────────────────
+          if (_lastScannedCode != null)
+            Positioned(
+              bottom: panelHeight - 18,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade800,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black45,
+                        blurRadius: 10,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.qr_code, color: Colors.white, size: 15),
+                      const SizedBox(width: 6),
+                      Text(
+                        _lastScannedCode!,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 }
 
-// --- WIDGET DE RESULTADO (BOTTOM SHEET) ---
-class _ProductFoundSheet extends StatelessWidget {
-  final Map<String, dynamic> product;
+// ─────────────────────────────────────────────────────────────────────────────
+// Marco animado del escáner
+// ─────────────────────────────────────────────────────────────────────────────
+class _ScannerFrame extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    const double size = 270.0;
+    const double corner = 22.0;
+    const double thickness = 4.0;
 
-  const _ProductFoundSheet({required this.product});
+    // [left, top, flipH, flipV]
+    final positions = [
+      (left: 0.0, top: 0.0, flipH: false, flipV: false),
+      (left: size - corner, top: 0.0, flipH: true, flipV: false),
+      (left: 0.0, top: 150.0 - corner, flipH: false, flipV: true),
+      (left: size - corner, top: 150.0 - corner, flipH: true, flipV: true),
+    ];
+
+    return SizedBox(
+      width: size,
+      height: 150,
+      child: Stack(
+        children: [
+          for (final pos in positions)
+            Positioned(
+              left: pos.left,
+              top: pos.top,
+              child: _Corner(
+                flipH: pos.flipH,
+                flipV: pos.flipV,
+                size: corner,
+                thickness: thickness,
+              ),
+            ),
+
+          // Línea de escaneo animada
+          const Positioned.fill(child: _ScanLine()),
+        ],
+      ),
+    );
+  }
+}
+
+class _Corner extends StatelessWidget {
+  final bool flipH;
+  final bool flipV;
+  final double size;
+  final double thickness;
+  const _Corner({
+    required this.flipH,
+    required this.flipV,
+    required this.size,
+    required this.thickness,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final currency = NumberFormat.currency(symbol: "C\$ ", decimalDigits: 2);
-    final stock = product['stock'] as int;
-    final isLowStock = stock <= 3;
+    return Transform.scale(
+      scaleX: flipH ? -1 : 1,
+      scaleY: flipV ? -1 : 1,
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          children: [
+            Positioned(
+              top: 0,
+              left: 0,
+              child: Container(
+                width: size,
+                height: thickness,
+                color: Colors.orange,
+              ),
+            ),
+            Positioned(
+              top: 0,
+              left: 0,
+              child: Container(
+                width: thickness,
+                height: size,
+                color: Colors.orange,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ScanLine extends StatefulWidget {
+  const _ScanLine();
+  @override
+  State<_ScanLine> createState() => _ScanLineState();
+}
+
+class _ScanLineState extends State<_ScanLine>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+    _anim = Tween(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, __) => Align(
+        alignment: Alignment(_anim.value * 2 - 1, 0),
+        child: Container(
+          width: double.infinity,
+          height: 2,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.orange.withValues(alpha: 0),
+                Colors.orange.withValues(alpha: 0.9),
+                Colors.orange.withValues(alpha: 0),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Panel de resultados
+// ─────────────────────────────────────────────────────────────────────────────
+class _ResultsPanel extends ConsumerWidget {
+  final String scannedCode;
+  final String? bodegaId;
+  final VoidCallback onReset;
+
+  const _ResultsPanel({
+    required this.scannedCode,
+    this.bodegaId,
+    required this.onReset,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final asyncResults = ref.watch(_skuResultsProvider(scannedCode));
 
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      padding: const EdgeInsets.all(24),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Manija superior
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
+          // Handle
+          Container(
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.only(top: 12, bottom: 8),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
             ),
           ),
-          const SizedBox(height: 20),
 
-          // Contenido Principal
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Foto del producto
-              Container(
-                width: 90,
-                height: 90,
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(16),
+          // Cabecera
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 12, 4),
+            child: Row(
+              children: [
+                Icon(Icons.inventory_2_outlined, color: Colors.cyan.shade800),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    "Productos encontrados",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
                 ),
-                child: const Icon(
-                  Icons.checkroom_rounded,
-                  size: 40,
-                  color: Colors.grey,
+                TextButton.icon(
+                  onPressed: onReset,
+                  icon: const Icon(Icons.qr_code_scanner, size: 14),
+                  label: const Text("Escanear otro"),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.orange.shade800,
+                    textStyle: const TextStyle(fontSize: 12),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-
-              // Info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      product['categoria'],
-                      style: TextStyle(
-                        color: Colors.grey[500],
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      product['nombre'],
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        "SKU: ${product['sku']}",
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
+          const Divider(height: 1),
 
-          const SizedBox(height: 24),
-          const Divider(),
-          const SizedBox(height: 16),
-
-          // DATOS ECONÓMICOS
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _InfoColumn(
-                label: "Precio Venta",
-                value: currency.format(product['precio']),
-                valueColor: Colors.blue[700],
-                isBig: true,
+          // Contenido
+          Expanded(
+            child: asyncResults.when(
+              loading: () => const Center(
+                child: CircularProgressIndicator(strokeWidth: 2),
               ),
-              _InfoColumn(
-                label: "Stock Actual",
-                value: "$stock unds",
-                valueColor: isLowStock ? Colors.red : Colors.black87,
+              error: (err, _) => Center(
+                child: Text(
+                  "Error: $err",
+                  style: const TextStyle(color: Colors.red),
+                ),
               ),
-              // Costo (Discreto)
-              _InfoColumn(
-                label: "Costo Unit.",
-                value: currency.format(product['costo']),
-                valueColor: Colors.grey[600],
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 30),
-
-          // BOTÓN DE ACCIÓN
-          SizedBox(
-            width: double.infinity,
-            height: 56,
-            child: ElevatedButton(
-              onPressed: () {
-                // LÓGICA DE VENTA:
-                // 1. Agregar al carrito (State Management)
-                // 2. Cerrar modal y quizás ir a la pantalla de ventas
-                context.pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Agregado a la venta actual")),
+              data: (results) {
+                if (results.isEmpty) {
+                  return _EmptyState(code: scannedCode, onReset: onReset);
+                }
+                return ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                  itemCount: results.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (_, i) => _ProductResultCard(
+                    result: results[i],
+                    bodegaId: bodegaId,
+                  ),
                 );
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                elevation: 0,
-              ),
-              child: const Text(
-                "Vender / Agregar al Carrito",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
             ),
           ),
-          const SizedBox(height: 10),
         ],
       ),
     );
   }
 }
 
-class _InfoColumn extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color? valueColor;
-  final bool isBig;
-
-  const _InfoColumn({
-    required this.label,
-    required this.value,
-    this.valueColor,
-    this.isBig = false,
-  });
+// ─────────────────────────────────────────────────────────────────────────────
+// Card de cada resultado
+// ─────────────────────────────────────────────────────────────────────────────
+class _ProductResultCard extends StatelessWidget {
+  final _SkuResult result;
+  final String? bodegaId;
+  const _ProductResultCard({required this.result, this.bodegaId});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            color: Colors.grey[500],
-            fontWeight: FontWeight.w500,
-          ),
+    final precio = result.precio;
+    final costo = result.costo;
+    final margen = (precio > 0 && costo > 0)
+        ? ((precio - costo) / costo * 100)
+        : null;
+
+    return GestureDetector(
+      onTap: result.producto != null
+          ? () {
+              if (bodegaId != null) {
+                context.push(
+                  '/product-detail/${result.producto!.serverId}?bodegaId=$bodegaId',
+                );
+              } else {
+                context.push('/product-detail/${result.producto!.serverId}');
+              }
+            }
+          : null,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: isBig ? 20 : 16,
-            fontWeight: FontWeight.bold,
-            color: valueColor ?? Colors.black87,
-          ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Imagen ──────────────────────────────────────────────
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: result.imagenUrl.isNotEmpty
+                  ? Image.network(
+                      result.imagenUrl,
+                      width: 68,
+                      height: 68,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _ImagePlaceholder(),
+                    )
+                  : _ImagePlaceholder(),
+            ),
+            const SizedBox(width: 14),
+
+            // ── Info ────────────────────────────────────────────────
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Nombre
+                  Text(
+                    result.nombre,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 5),
+
+                  // Chips: Marca / Talla / Color
+                  Wrap(
+                    spacing: 5,
+                    runSpacing: 4,
+                    children: [
+                      if (result.marca != '—')
+                        _InfoChip(
+                          label: result.marca,
+                          icon: Icons.local_offer_outlined,
+                          color: Colors.blue.shade700,
+                        ),
+                      _InfoChip(
+                        label: "T: ${result.codigo.talla}",
+                        icon: Icons.straighten,
+                        color: Colors.cyan.shade700,
+                      ),
+                      if (result.codigo.color != null &&
+                          result.codigo.color!.isNotEmpty)
+                        _InfoChip(
+                          label: result.codigo.color!,
+                          icon: Icons.circle,
+                          color: Colors.purple.shade600,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Precio y margen
+                  Row(
+                    children: [
+                      // Precio venta
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.green.shade200),
+                        ),
+                        child: Text(
+                          precio > 0
+                              ? "\$${precio.toStringAsFixed(2)}"
+                              : "Sin precio",
+                          style: TextStyle(
+                            color: Colors.green.shade800,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+
+                      if (costo > 0) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          "Costo: \$${costo.toStringAsFixed(2)}",
+                          style: TextStyle(
+                            color: Colors.grey.shade500,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+
+                      if (margen != null) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            "${margen.toStringAsFixed(1)}%",
+                            style: TextStyle(
+                              color: Colors.orange.shade800,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Flecha detalle ───────────────────────────────────────
+            if (result.producto != null)
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 14,
+                color: Colors.grey.shade400,
+              ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
 
-// --- PINTOR PARA EL RECUADRO CON ESQUINAS ---
-class _ScannerOverlayPainter extends CustomPainter {
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+class _ImagePlaceholder extends StatelessWidget {
   @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.black54;
-    final width = size.width;
-    final height = size.height;
-    final scanWindowSize = width * 0.7; // Tamaño del cuadro
-
-    // Dibujar fondo oscuro con recorte en el centro
-    final backgroundPath = Path()
-      ..addRect(Rect.fromLTWH(0, 0, width, height))
-      ..addRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(
-            center: Offset(width / 2, height / 2),
-            width: scanWindowSize,
-            height: scanWindowSize,
-          ),
-          const Radius.circular(20),
-        ),
-      )
-      ..fillType = PathFillType.evenOdd;
-
-    canvas.drawPath(backgroundPath, paint);
-
-    // Dibujar esquinas blancas (Guías)
-    final borderPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round;
-
-    final rect = Rect.fromCenter(
-      center: Offset(width / 2, height / 2),
-      width: scanWindowSize,
-      height: scanWindowSize,
-    );
-    final cornerSize = 30.0;
-
-    // Esquinas
-    // Top Left
-    canvas.drawPath(
-      Path()
-        ..moveTo(rect.left, rect.top + cornerSize)
-        ..lineTo(rect.left, rect.top)
-        ..lineTo(rect.left + cornerSize, rect.top),
-      borderPaint,
-    );
-    // Top Right
-    canvas.drawPath(
-      Path()
-        ..moveTo(rect.right - cornerSize, rect.top)
-        ..lineTo(rect.right, rect.top)
-        ..lineTo(rect.right, rect.top + cornerSize),
-      borderPaint,
-    );
-    // Bottom Left
-    canvas.drawPath(
-      Path()
-        ..moveTo(rect.left, rect.bottom - cornerSize)
-        ..lineTo(rect.left, rect.bottom)
-        ..lineTo(rect.left + cornerSize, rect.bottom),
-      borderPaint,
-    );
-    // Bottom Right
-    canvas.drawPath(
-      Path()
-        ..moveTo(rect.right - cornerSize, rect.bottom)
-        ..lineTo(rect.right, rect.bottom)
-        ..lineTo(rect.right, rect.bottom - cornerSize),
-      borderPaint,
+  Widget build(BuildContext context) {
+    return Container(
+      width: 68,
+      height: 68,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(
+        Icons.inventory_2_outlined,
+        color: Colors.grey.shade400,
+        size: 28,
+      ),
     );
   }
+}
+
+class _InfoChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  const _InfoChip({
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 10, color: color),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final String code;
+  final VoidCallback onReset;
+  const _EmptyState({required this.code, required this.onReset});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.search_off, size: 72, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            const Text(
+              "Sin resultados",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "No hay productos con el código:\n$code",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: onReset,
+              icon: const Icon(Icons.qr_code_scanner),
+              label: const Text("Escanear de nuevo"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange.shade800,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

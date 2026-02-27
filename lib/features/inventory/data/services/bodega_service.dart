@@ -22,6 +22,43 @@ class BodegaService {
     return q.sortByNombre().watch(fireImmediately: true);
   }
 
+  // Escuchar bodegas a las que el usuario tiene acceso
+  Stream<List<BodegaCollection>> watchBodegasByUser(
+    String userId, {
+    String query = '',
+  }) async* {
+    // 1. Escuchar los IDs de bodega vinculados al usuario
+    final relacionesStream = _isar.bodegaUsuarioColletions
+        .filter()
+        .usuarioIdEqualTo(userId)
+        .and()
+        .estadoEqualTo(true)
+        .watch(fireImmediately: true);
+
+    await for (final relaciones in relacionesStream) {
+      final ids = relaciones.map((r) => r.bodegaId).toList();
+
+      if (ids.isEmpty) {
+        yield [];
+        continue;
+      }
+
+      // 2. Filtrar las bodegas que coincidan con esos IDs
+      QueryBuilder<BodegaCollection, BodegaCollection, QAfterFilterCondition>
+      q = _isar.bodegaCollections
+          .filter()
+          .anyOf(ids, (q, id) => q.serverIdEqualTo(id))
+          .and()
+          .estadoEqualTo(true);
+
+      if (query.isNotEmpty) {
+        q = q.nombreContains(query, caseSensitive: false);
+      }
+
+      yield await q.sortByNombre().findAll();
+    }
+  }
+
   // Método para guardar (crear/editar) que usaremos más adelante
   Future<void> saveBodega(BodegaCollection bodega) async {
     await _isar.writeTxn(() async {

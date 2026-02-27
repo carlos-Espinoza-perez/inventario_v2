@@ -20,6 +20,7 @@ class DetalleMovimientoProductoCollection {
   double costoProveedor = 0;
   String? cargosAdicionalesJson; // JSON snapshot
   double costoUnitarioFinal = 0;
+  String? variantesJson; // JSON con detalle de tallas/SKUs del movimiento
 
   late DateTime ultimaActualizacion;
   DateTime? fechaEliminacion;

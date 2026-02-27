@@ -1,12 +1,49 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:isar/isar.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
-import 'package:inventario_v2/features/report/presentation/cash_flow_report_screen.dart';
-import 'package:inventario_v2/features/report/presentation/financial_report_screen.dart';
-import 'package:inventario_v2/features/report/presentation/inventory_report_screen.dart';
-import 'package:inventario_v2/features/report/presentation/receivables_report_screen.dart';
-import 'package:inventario_v2/features/report/presentation/sales_report_screen.dart';
+import 'package:inventario_v2/core/providers/database_provider.dart';
+import 'package:go_router/go_router.dart';
+import 'package:inventario_v2/features/sales/data/collections/detalle_venta_collection.dart';
+import 'package:inventario_v2/features/sales/data/collections/venta_collection.dart';
+
+// ------------------------------------------------------------------
+// PROVIDER: Ventas y ganancia del día actual
+// ------------------------------------------------------------------
+final todayStatsProvider = FutureProvider.autoDispose<Map<String, double>>((
+  ref,
+) async {
+  final isar = await ref.watch(isarDbProvider.future);
+  final now = DateTime.now();
+  final startOfDay = DateTime(now.year, now.month, now.day);
+  final endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
+  final ventas = await isar.ventaCollections
+      .filter()
+      .fechaVentaGreaterThan(startOfDay)
+      .fechaVentaLessThan(endOfDay)
+      .estadoEqualTo(true)
+      .findAll();
+
+  double ventasHoy = 0;
+  double utilidadHoy = 0;
+
+  for (final v in ventas) {
+    ventasHoy += v.totalVenta;
+    final detalles = await isar.detalleVentaCollections
+        .filter()
+        .ventaIdEqualTo(v.serverId)
+        .findAll();
+    for (final d in detalles) {
+      final ingreso = d.subTotal - d.descuento;
+      final costo = d.costoHistoricoCompra * d.cantidad;
+      utilidadHoy += ingreso - costo;
+    }
+  }
+
+  return {'ventas': ventasHoy, 'utilidad': utilidadHoy};
+});
 
 class ReportsDashboardScreen extends ConsumerStatefulWidget {
   const ReportsDashboardScreen({super.key});
@@ -21,13 +58,13 @@ class _ReportsDashboardScreenState
   @override
   void initState() {
     super.initState();
-    Future.microtask(() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       ref
           .read(appBarProvider.notifier)
           .setOptions(
             title: "Centro de Reportes",
             subtitle: "Estadísticas y Análisis",
-            showBackButton: false, // Es una pestaña principal del menú inferior
+            showBackButton: false,
             actions: [],
           );
     });
@@ -92,26 +129,60 @@ class _ReportsDashboardScreenState
               ),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _FlashCard(
-                    title: "Ventas Hoy",
-                    value: 12500.00,
-                    icon: Icons.trending_up,
-                    color: Colors.blue,
+            Consumer(
+              builder: (ctx, ref, _) {
+                final statsAsync = ref.watch(todayStatsProvider);
+                return statsAsync.when(
+                  loading: () => Row(
+                    children: [
+                      Expanded(
+                        child: _FlashCard(
+                          title: 'Ventas Hoy',
+                          value: 0,
+                          icon: Icons.trending_up,
+                          color: Colors.blue,
+                          isLoading: true,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _FlashCard(
+                          title: 'Utilidad',
+                          value: 0,
+                          icon: Icons.attach_money,
+                          color: Colors.green,
+                          isLoading: true,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _FlashCard(
-                    title: "Utilidad",
-                    value: 3200.00,
-                    icon: Icons.attach_money,
-                    color: Colors.green,
+                  error: (e, _) => Text(
+                    'Error: $e',
+                    style: const TextStyle(color: Colors.red),
                   ),
-                ),
-              ],
+                  data: (stats) => Row(
+                    children: [
+                      Expanded(
+                        child: _FlashCard(
+                          title: 'Ventas Hoy',
+                          value: stats['ventas'] ?? 0,
+                          icon: Icons.trending_up,
+                          color: Colors.blue,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _FlashCard(
+                          title: 'Utilidad',
+                          value: stats['utilidad'] ?? 0,
+                          icon: Icons.attach_money,
+                          color: Colors.green,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
 
             const SizedBox(height: 30),
@@ -153,12 +224,14 @@ class _FlashCard extends StatelessWidget {
   final double value;
   final IconData icon;
   final Color color;
+  final bool isLoading;
 
   const _FlashCard({
     required this.title,
     required this.value,
     required this.icon,
     required this.color,
+    this.isLoading = false,
   });
 
   @override
@@ -230,27 +303,7 @@ class _ReportMenuItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         onTap: () {
           String route = item['route'];
-          Widget? page;
-
-          if (route == '/reports/sales') {
-            page = const SalesReportScreen();
-          } else if (route == '/reports/inventory') {
-            page = const InventoryReportScreen();
-          } else if (route == '/reports/financial') {
-            page = const FinancialReportScreen();
-          } else if (route == '/reports/receivables') {
-            page = const ReceivablesReportScreen();
-          } else if (route == '/reports/cash-history') {
-            page = const CashFlowReportScreen();
-          }
-
-          if (page != null) {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => page!));
-          } else {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text("Ruta no definida: $route")));
-          }
+          context.push(route);
         },
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -260,7 +313,7 @@ class _ReportMenuItem extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: (item['color'] as Color).withOpacity(0.1),
+                  color: (item['color'] as Color).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(item['icon'], color: item['color'], size: 28),

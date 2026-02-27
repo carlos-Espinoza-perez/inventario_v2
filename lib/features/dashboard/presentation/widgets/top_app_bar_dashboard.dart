@@ -99,7 +99,7 @@ class TopAppBarDashboard extends ConsumerWidget implements PreferredSizeWidget {
             child: IconButton(
               icon: const Icon(Icons.person_outline, color: Colors.black),
               onPressed: () {
-                // Lógica de perfil
+                context.push('/profile');
               },
             ),
           ),

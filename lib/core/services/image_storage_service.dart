@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:path/path.dart' as p;
 
@@ -41,7 +42,7 @@ class ImageStorageService {
     } catch (e) {
       // Aquí capturamos errores como falta de internet o permisos denegados.
       // Retornamos null para que la app sepa que no se pudo subir (y use la local).
-      print("Error subiendo imagen a Supabase: $e");
+      debugPrint("Error subiendo imagen a Supabase: $e");
       return null;
     }
   }

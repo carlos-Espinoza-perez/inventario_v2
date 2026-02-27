@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
+import 'package:inventario_v2/features/inventory/presentation/providers/movement_detail_provider.dart';
+import '../../utils/pdf_generator.dart';
 
 class MovementDetailScreen extends ConsumerStatefulWidget {
   final String movementId;
@@ -21,63 +23,39 @@ class MovementDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
-  // --- DATOS SIMULADOS (MOCK) ---
-  // Dependiendo del tipo, el backend te devolvería datos distintos
-  final Map<String, dynamic> _movementData = {
-    "fecha": DateTime.now(),
-    "estado": "APROBADO",
-    "usuario": "Admin",
-
-    // Solo para VENTAS
-    "cliente": "Maria Gonzalez",
-    "metodo_pago": "Efectivo",
-
-    // Solo para COMPRAS
-    "proveedor": "Importaciones S.A.",
-    "referencia_externa": "Factura F-9921",
-
-    // Solo para TRASLADOS
-    "origen": "Bodega Central",
-    "destino": "Sucursal Norte",
-    "costo_flete": 500.00, // Costo de envío
-    "costo_productos": 4500.00, // Valor de la mercadería
-    // PRODUCTOS (Lista larga simulada)
-    "items": List.generate(
-      15,
-      (index) => {
-        "nombre": index % 2 == 0 ? "Camisa Manga Larga" : "Pantalón Jingo",
-        "sku": "SKU-10${index}2",
-        "cantidad": (index + 1) * 2,
-        "precio_unitario": 250.00,
-        "subtotal": ((index + 1) * 2) * 250.00,
-      },
-    ),
-  };
+  Map<String, dynamic>? _currentData; // Para el appbar actions
 
   @override
   void initState() {
     super.initState();
-    // Configurar Header
+  }
+
+  void _setupHeader(Map<String, dynamic> data) {
     Future.microtask(() {
       String title = "Detalle de Movimiento";
-      if (widget.type == 'COMPRA') title = "Entrada de Mercadería";
-      if (widget.type == 'VENTA') title = "Detalle de Venta";
-      if (widget.type == 'TRASLADO') title = "Traslado entre Bodegas";
+      if (data['tipo'] == 'COMPRA') title = "Entrada de Mercadería";
+      if (data['tipo'] == 'VENTA') title = "Detalle de Venta";
+      if (data['tipo'] == 'TRASLADO') title = "Traslado entre Bodegas";
 
       ref
           .read(appBarProvider.notifier)
           .setOptions(
             title: title,
-            subtitle: "#${widget.movementId}",
+            subtitle: "#${widget.movementId}", // Podria ser referencia externa
             showBackButton: true,
             actions: [
-              IconButton(
-                icon: const Icon(Icons.share_outlined, color: Colors.black),
-                onPressed: () {}, // Compartir PDF/Comprobante
-              ),
+              if (data['tipo'] != 'TRASLADO')
+                IconButton(
+                  icon: const Icon(Icons.share_outlined, color: Colors.black),
+                  onPressed: () {}, // Compartir
+                ),
               IconButton(
                 icon: const Icon(Icons.print_outlined, color: Colors.black),
-                onPressed: () {}, // Imprimir
+                onPressed: () {
+                  if (_currentData != null) {
+                    PdfGenerator.generateMovementPdf(_currentData!);
+                  }
+                }, // Imprimir PDF
               ),
             ],
           );
@@ -86,61 +64,83 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final movementAsync = ref.watch(movementDetailProvider(widget.movementId));
     final currency = NumberFormat.currency(symbol: "C\$ ", decimalDigits: 2);
-    final themeColor = _getColorByType(widget.type);
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 1. HEADER DE ESTADO Y MONTO
-            _buildStatusHeader(currency, themeColor),
+      body: movementAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(child: Text("Error: $err")),
+        data: (data) {
+          if (data == null) {
+            return const Center(child: Text("No se encontró la información"));
+          }
 
-            const SizedBox(height: 16),
+          if (_currentData == null) {
+            _currentData = data;
+            _setupHeader(data);
+          }
 
-            // 2. CONTEXTO (Varía según si es Venta, Compra o Traslado)
-            if (widget.type == 'TRASLADO')
-              _buildTransferRouteCard(themeColor)
-            else if (widget.type == 'VENTA')
-              _buildClientInfoCard(themeColor)
-            else
-              _buildSupplierInfoCard(themeColor),
+          final themeColor = _getColorByType(data['tipo']);
+          final String type = data['tipo'];
 
-            const SizedBox(height: 16),
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. HEADER DE ESTADO Y MONTO
+                _buildStatusHeader(data, currency, themeColor),
 
-            // 3. LOGÍSTICA DE COSTOS (Solo para Traslados)
-            if (widget.type == 'TRASLADO') ...[
-              _buildLogisticsCostCard(currency),
-              const SizedBox(height: 16),
-            ],
+                const SizedBox(height: 16),
 
-            // 4. LISTA DE PRODUCTOS
-            const Text(
-              "Productos",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                // 2. CONTEXTO (Varía según si es Venta, Compra o Traslado)
+                if (type == 'TRASLADO')
+                  _buildTransferRouteCard(data, themeColor)
+                else if (type == 'VENTA')
+                  _buildClientInfoCard(data, themeColor)
+                else
+                  _buildSupplierInfoCard(data, themeColor),
+
+                const SizedBox(height: 16),
+
+                // 3. LOGÍSTICA DE COSTOS (Solo para Traslados)
+                if (type == 'TRASLADO' && data['costo_flete'] > 0) ...[
+                  _buildLogisticsCostCard(data, currency),
+                  const SizedBox(height: 16),
+                ],
+
+                // 4. LISTA DE PRODUCTOS
+                const Text(
+                  "Productos",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const SizedBox(height: 8),
+                _buildProductList(data, currency),
+
+                // Espacio final para que no pegue abajo
+                const SizedBox(height: 30),
+              ],
             ),
-            const SizedBox(height: 8),
-            _buildProductList(currency),
-
-            // Espacio final para que no pegue abajo
-            const SizedBox(height: 30),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 
   // --- SECCION 1: HEADER DE ESTADO ---
-  Widget _buildStatusHeader(NumberFormat currency, Color color) {
+  Widget _buildStatusHeader(
+    Map<String, dynamic> data,
+    NumberFormat currency,
+    Color color,
+  ) {
     double total = 0;
-    if (widget.type == 'TRASLADO') {
-      total = _movementData['costo_productos'] + _movementData['costo_flete'];
+    if (data['tipo'] == 'TRASLADO') {
+      total = data['costo_productos'] + (data['costo_flete'] ?? 0);
     } else {
       // Suma simple de items
-      total = (_movementData['items'] as List).fold(
+      total = (data['items'] as List).fold(
         0,
         (sum, item) => sum + item['subtotal'],
       );
@@ -176,7 +176,7 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  _movementData['estado'],
+                  data['estado'],
                   style: TextStyle(
                     color: color,
                     fontWeight: FontWeight.bold,
@@ -185,23 +185,21 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                 ),
               ),
               Text(
-                DateFormat(
-                  'dd MMM yyyy, hh:mm a',
-                ).format(_movementData['fecha']),
+                DateFormat('dd MMM yyyy, hh:mm a').format(data['fecha']),
                 style: TextStyle(color: Colors.grey[500], fontSize: 12),
               ),
             ],
           ),
           const SizedBox(height: 10),
           Text(
-            widget.type == 'TRASLADO'
+            data['tipo'] == 'TRASLADO'
                 ? "Valor Total Transferido"
                 : "Monto Total",
             style: TextStyle(color: Colors.grey[500], fontSize: 12),
           ),
           Text(
             currency.format(total),
-            style: TextStyle(
+            style: const TextStyle(
               color: Colors.black87,
               fontSize: 28,
               fontWeight: FontWeight.w900,
@@ -216,7 +214,7 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
   // --- SECCION 2: TARJETAS DE CONTEXTO ---
 
   // A. Para Traslados: Ruta Origen -> Destino
-  Widget _buildTransferRouteCard(Color color) {
+  Widget _buildTransferRouteCard(Map<String, dynamic> data, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -247,7 +245,7 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      _movementData['origen'],
+                      data['origen'],
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ],
@@ -273,7 +271,7 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     Text(
-                      _movementData['destino'],
+                      data['destino'],
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(width: 6),
@@ -289,7 +287,7 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
   }
 
   // B. Para Ventas: Cliente
-  Widget _buildClientInfoCard(Color color) {
+  Widget _buildClientInfoCard(Map<String, dynamic> data, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -311,7 +309,7 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                 style: TextStyle(fontSize: 10, color: Colors.grey[500]),
               ),
               Text(
-                _movementData['cliente'],
+                data['cliente'] ?? "N/A",
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
@@ -335,7 +333,7 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  _movementData['metodo_pago'],
+                  data['metodo_pago'] ?? "N/A",
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -350,7 +348,7 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
   }
 
   // C. Para Compras: Proveedor
-  Widget _buildSupplierInfoCard(Color color) {
+  Widget _buildSupplierInfoCard(Map<String, dynamic> data, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -381,7 +379,7 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                     style: TextStyle(fontSize: 10, color: Colors.grey[500]),
                   ),
                   Text(
-                    _movementData['proveedor'],
+                    data['proveedor'] ?? "N/A",
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
@@ -399,7 +397,7 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
               const Text("Referencia:", style: TextStyle(color: Colors.grey)),
               const SizedBox(width: 6),
               Text(
-                _movementData['referencia_externa'],
+                data['referencia_externa'] ?? "N/A",
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             ],
@@ -410,9 +408,12 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
   }
 
   // --- SECCION 3: LOGÍSTICA (Costo de envío) ---
-  Widget _buildLogisticsCostCard(NumberFormat currency) {
-    final costoProd = _movementData['costo_productos'];
-    final costoFlete = _movementData['costo_flete'];
+  Widget _buildLogisticsCostCard(
+    Map<String, dynamic> data,
+    NumberFormat currency,
+  ) {
+    final costoProd = data['costo_productos'];
+    final costoFlete = data['costo_flete'];
     final total = costoProd + costoFlete;
 
     // Calculamos cuánto aumentó el costo porcentualmente
@@ -503,8 +504,8 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
   }
 
   // --- SECCION 4: LISTA DE PRODUCTOS ---
-  Widget _buildProductList(NumberFormat currency) {
-    final items = _movementData['items'] as List;
+  Widget _buildProductList(Map<String, dynamic> data, NumberFormat currency) {
+    final items = data['items'] as List;
 
     return ListView.builder(
       shrinkWrap:
@@ -513,6 +514,8 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
       itemCount: items.length,
       itemBuilder: (context, index) {
         final item = items[index];
+        final List variaciones = item['variantes'] ?? [];
+
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(12),
@@ -520,61 +523,127 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Row(
+          child: Column(
             children: [
-              // Cuadro de Cantidad
-              Container(
-                width: 40,
-                height: 40,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  "${item['cantidad']}",
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-
-              // Descripción
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item['nombre'],
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    Text(
-                      item['sku'],
-                      style: TextStyle(fontSize: 11, color: Colors.grey[400]),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Totales
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              Row(
                 children: [
-                  Text(
-                    currency.format(item['subtotal']),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                  // Cuadro de Cantidad
+                  Container(
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      "${item['cantidad']}",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
-                  Text(
-                    "Unit: ${currency.format(item['precio_unitario'])}",
-                    style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                  const SizedBox(width: 12),
+
+                  // Descripción
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item['nombre'],
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          item['sku'],
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey[400],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Totales
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        currency.format(item['subtotal']),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      Text(
+                        "Costo Unitario: ${currency.format(item['precio_compra'] ?? item['precio_unitario'])}",
+                        style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                      ),
+                    ],
                   ),
                 ],
               ),
+              if (variaciones.isNotEmpty) ...[
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Divider(height: 1),
+                ),
+                ...variaciones.map((v) {
+                  final String tallaStr = v['talla']?.toString() ?? "General";
+                  final num qty = v['cantidad'] ?? 0;
+                  final num? precioEsp = v['precio'];
+                  final String precioStr = precioEsp != null
+                      ? currency.format(precioEsp)
+                      : (item['precio_compra'] != null
+                            ? "${currency.format(item['precio_compra'])} (Est)"
+                            : "-");
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 4,
+                      horizontal: 4,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.check_circle_outline,
+                          size: 14,
+                          color: Colors.blue[300],
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            "Talla: $tallaStr",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[800],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          "${qty}x",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          precioStr,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
             ],
           ),
         );

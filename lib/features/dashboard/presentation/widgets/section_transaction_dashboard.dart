@@ -1,48 +1,40 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:inventario_v2/features/dashboard/presentation/widgets/transaction_item.dart';
+import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
 
 class SectionTransactionDashboard extends StatelessWidget {
-  const SectionTransactionDashboard({super.key});
+  final List<TransactionItemModel> transactions;
+
+  const SectionTransactionDashboard({super.key, required this.transactions});
 
   @override
   Widget build(BuildContext context) {
+    if (transactions.isEmpty) return const SizedBox.shrink();
+
+    final currencyFormat = NumberFormat.simpleCurrency();
+    final dateFormat = DateFormat('dd MMM - hh:mm a');
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 22),
-        Text(
-          "Ultimas transacciones",
+        const Text(
+          "Últimas transacciones",
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        TransactionItem(
-          title: "Venta de producto",
-          subtitle: "Ronald Perez - 07:20 AM",
-          amount: "NIO 100",
-          isIncome: true,
-          icon: Icons.shopping_bag_outlined,
-        ),
-        TransactionItem(
-          title: "Venta de producto",
-          subtitle: "Carlos Espinoza - 07:20 AM",
-          amount: "NIO 100",
-          isIncome: true,
-          icon: Icons.shopping_bag_outlined,
-        ),
-        TransactionItem(
-          title: "Venta de producto",
-          subtitle: "Pablo Espinoza - 07:20 AM",
-          amount: "NIO 100",
-          isIncome: true,
-          icon: Icons.shopping_bag_outlined,
-        ),
-        TransactionItem(
-          title: "Venta de producto",
-          subtitle: "Pablo Espinoza - 07:20 AM",
-          amount: "NIO 100",
-          isIncome: true,
-          icon: Icons.shopping_bag_outlined,
-        ),
+        ...transactions.map((tx) {
+          final subtitleDate = "${tx.subtitle} - ${dateFormat.format(tx.date)}";
+          return TransactionItem(
+            title: tx.title,
+            subtitle: subtitleDate,
+            amount: currencyFormat.format(tx.amount),
+            isIncome: tx.isIncome,
+            // Podríamos calcular el icono basado en isIncome o en título
+            icon: tx.isIncome ? Icons.trending_up : Icons.trending_down,
+          );
+        }).toList(),
       ],
     );
   }

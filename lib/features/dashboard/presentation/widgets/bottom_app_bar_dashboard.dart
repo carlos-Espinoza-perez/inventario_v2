@@ -72,7 +72,7 @@ class BottomAppBarDashboard extends StatelessWidget {
               icon: Icons.inventory_2_outlined,
               text: 'Inventario',
               onTap: () {
-                print("Inventario");
+                debugPrint("Inventario");
                 context.push('/warehouse');
               },
             ),

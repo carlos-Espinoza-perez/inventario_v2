@@ -53,23 +53,28 @@ const InventarioCollectionSchema = CollectionSchema(
       name: r'pendienteSincronizacion',
       type: IsarType.bool,
     ),
-    r'productoId': PropertySchema(
+    r'precioVenta': PropertySchema(
       id: 7,
+      name: r'precioVenta',
+      type: IsarType.double,
+    ),
+    r'productoId': PropertySchema(
+      id: 8,
       name: r'productoId',
       type: IsarType.string,
     ),
     r'serverId': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'serverId',
       type: IsarType.string,
     ),
     r'ubicacionPasillo': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'ubicacionPasillo',
       type: IsarType.string,
     ),
     r'ultimaActualizacion': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'ultimaActualizacion',
       type: IsarType.dateTime,
     )
@@ -178,10 +183,11 @@ void _inventarioCollectionSerialize(
   writer.writeDouble(offsets[4], object.costoPromedio);
   writer.writeDateTime(offsets[5], object.fechaEliminacion);
   writer.writeBool(offsets[6], object.pendienteSincronizacion);
-  writer.writeString(offsets[7], object.productoId);
-  writer.writeString(offsets[8], object.serverId);
-  writer.writeString(offsets[9], object.ubicacionPasillo);
-  writer.writeDateTime(offsets[10], object.ultimaActualizacion);
+  writer.writeDouble(offsets[7], object.precioVenta);
+  writer.writeString(offsets[8], object.productoId);
+  writer.writeString(offsets[9], object.serverId);
+  writer.writeString(offsets[10], object.ubicacionPasillo);
+  writer.writeDateTime(offsets[11], object.ultimaActualizacion);
 }
 
 InventarioCollection _inventarioCollectionDeserialize(
@@ -199,10 +205,11 @@ InventarioCollection _inventarioCollectionDeserialize(
   object.fechaEliminacion = reader.readDateTimeOrNull(offsets[5]);
   object.id = id;
   object.pendienteSincronizacion = reader.readBool(offsets[6]);
-  object.productoId = reader.readString(offsets[7]);
-  object.serverId = reader.readString(offsets[8]);
-  object.ubicacionPasillo = reader.readStringOrNull(offsets[9]);
-  object.ultimaActualizacion = reader.readDateTime(offsets[10]);
+  object.precioVenta = reader.readDoubleOrNull(offsets[7]);
+  object.productoId = reader.readString(offsets[8]);
+  object.serverId = reader.readString(offsets[9]);
+  object.ubicacionPasillo = reader.readStringOrNull(offsets[10]);
+  object.ultimaActualizacion = reader.readDateTime(offsets[11]);
   return object;
 }
 
@@ -228,12 +235,14 @@ P _inventarioCollectionDeserializeProp<P>(
     case 6:
       return (reader.readBool(offset)) as P;
     case 7:
-      return (reader.readString(offset)) as P;
+      return (reader.readDoubleOrNull(offset)) as P;
     case 8:
       return (reader.readString(offset)) as P;
     case 9:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 10:
+      return (reader.readStringOrNull(offset)) as P;
+    case 11:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -1216,6 +1225,90 @@ extension InventarioCollectionQueryFilter on QueryBuilder<InventarioCollection,
   }
 
   QueryBuilder<InventarioCollection, InventarioCollection,
+      QAfterFilterCondition> precioVentaIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'precioVenta',
+      ));
+    });
+  }
+
+  QueryBuilder<InventarioCollection, InventarioCollection,
+      QAfterFilterCondition> precioVentaIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'precioVenta',
+      ));
+    });
+  }
+
+  QueryBuilder<InventarioCollection, InventarioCollection,
+      QAfterFilterCondition> precioVentaEqualTo(
+    double? value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'precioVenta',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<InventarioCollection, InventarioCollection,
+      QAfterFilterCondition> precioVentaGreaterThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'precioVenta',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<InventarioCollection, InventarioCollection,
+      QAfterFilterCondition> precioVentaLessThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'precioVenta',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<InventarioCollection, InventarioCollection,
+      QAfterFilterCondition> precioVentaBetween(
+    double? lower,
+    double? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'precioVenta',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<InventarioCollection, InventarioCollection,
       QAfterFilterCondition> productoIdEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -1811,6 +1904,20 @@ extension InventarioCollectionQuerySortBy
   }
 
   QueryBuilder<InventarioCollection, InventarioCollection, QAfterSortBy>
+      sortByPrecioVenta() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'precioVenta', Sort.asc);
+    });
+  }
+
+  QueryBuilder<InventarioCollection, InventarioCollection, QAfterSortBy>
+      sortByPrecioVentaDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'precioVenta', Sort.desc);
+    });
+  }
+
+  QueryBuilder<InventarioCollection, InventarioCollection, QAfterSortBy>
       sortByProductoId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'productoId', Sort.asc);
@@ -1982,6 +2089,20 @@ extension InventarioCollectionQuerySortThenBy
   }
 
   QueryBuilder<InventarioCollection, InventarioCollection, QAfterSortBy>
+      thenByPrecioVenta() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'precioVenta', Sort.asc);
+    });
+  }
+
+  QueryBuilder<InventarioCollection, InventarioCollection, QAfterSortBy>
+      thenByPrecioVentaDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'precioVenta', Sort.desc);
+    });
+  }
+
+  QueryBuilder<InventarioCollection, InventarioCollection, QAfterSortBy>
       thenByProductoId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'productoId', Sort.asc);
@@ -2091,6 +2212,13 @@ extension InventarioCollectionQueryWhereDistinct
   }
 
   QueryBuilder<InventarioCollection, InventarioCollection, QDistinct>
+      distinctByPrecioVenta() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'precioVenta');
+    });
+  }
+
+  QueryBuilder<InventarioCollection, InventarioCollection, QDistinct>
       distinctByProductoId({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'productoId', caseSensitive: caseSensitive);
@@ -2174,6 +2302,13 @@ extension InventarioCollectionQueryProperty on QueryBuilder<
       pendienteSincronizacionProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'pendienteSincronizacion');
+    });
+  }
+
+  QueryBuilder<InventarioCollection, double?, QQueryOperations>
+      precioVentaProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'precioVenta');
     });
   }
 

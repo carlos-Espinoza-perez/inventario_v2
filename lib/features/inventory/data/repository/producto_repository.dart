@@ -3,6 +3,8 @@ import 'package:inventario_v2/features/inventory/data/domain/models/product_with
 import 'package:isar/isar.dart';
 // Asegúrate de importar tu modelo generado
 import 'package:inventario_v2/features/inventory/data/collections/producto_collection.dart';
+import 'package:inventario_v2/features/inventory/data/collections/codigo_producto_collection.dart';
+import 'package:inventario_v2/features/inventory/data/collections/inventario_codigo_producto_collection.dart';
 
 class ProductoRepository {
   final Isar _isar;
@@ -70,16 +72,24 @@ class ProductoRepository {
         .bodegaIdEqualTo(bodegaId)
         .findAll();
 
-    final Map<String, double> stockMap = {
-      for (var inv in inventarios) inv.productoId: inv.cantidadActual,
+    final Map<String, InventarioCollection> invMap = {
+      for (var inv in inventarios) inv.productoId: inv,
     };
 
     List<ProductWithStock> resultado = [];
 
     for (var prod in productos) {
-      final stock = stockMap[prod.serverId] ?? 0.0;
+      final inv = invMap[prod.serverId];
+      final stock = inv?.cantidadActual ?? 0.0;
+      final avgCost = inv?.costoPromedio ?? 0.0;
 
-      resultado.add(ProductWithStock(producto: prod, cantidad: stock));
+      resultado.add(
+        ProductWithStock(
+          producto: prod,
+          cantidad: stock,
+          costoPromedio: avgCost,
+        ),
+      );
     }
 
     return resultado;
@@ -96,5 +106,48 @@ class ProductoRepository {
     }
 
     return producto;
+  }
+
+  Future<List<Map<String, dynamic>>> getStockPorVariante({
+    required String bodegaId,
+    required String productoId,
+  }) async {
+    // 1. Obtener Inventario Macro
+    final inventario = await _isar.inventarioCollections
+        .filter()
+        .bodegaIdEqualTo(bodegaId)
+        .productoIdEqualTo(productoId)
+        .findFirst();
+
+    if (inventario == null) return [];
+
+    // 2. Obtener stocks por variante (Micro)
+    final microInventarios = await _isar.inventarioCodigoProductoCollections
+        .filter()
+        .inventarioIdEqualTo(inventario.serverId)
+        .findAll();
+
+    List<Map<String, dynamic>> resultados = [];
+
+    for (var micro in microInventarios) {
+      // Opcional: filtrar si cantidad <= 0, pero tal vez quiera ver que no hay stock
+      if (micro.cantidad <= 0) continue;
+
+      final variante = await _isar.codigoProductoCollections
+          .filter()
+          .serverIdEqualTo(micro.codigoProductoId)
+          .findFirst();
+
+      if (variante != null) {
+        resultados.add({
+          'talla': variante.talla,
+          'sku': variante.codigoSku,
+          'cantidad': micro.cantidad,
+          'costoPromedio': inventario.costoPromedio,
+          'precioEspecifico': variante.precioEspecifico,
+        });
+      }
+    }
+    return resultados;
   }
 }

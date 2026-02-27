@@ -4,6 +4,8 @@ import 'package:inventario_v2/features/inventory/data/collections/categoria_coll
 import 'package:inventario_v2/features/inventory/data/collections/detalle_movimiento_producto_collection.dart';
 import 'package:inventario_v2/features/inventory/data/collections/inventario_collection.dart';
 import 'package:inventario_v2/features/inventory/data/collections/movimiento_producto_collection.dart';
+import 'package:inventario_v2/features/inventory/data/collections/codigo_producto_collection.dart';
+import 'package:inventario_v2/features/inventory/data/collections/inventario_codigo_producto_collection.dart';
 import 'package:inventario_v2/features/inventory/data/collections/producto_collection.dart';
 import 'package:inventario_v2/features/inventory/data/collections/regla_costo_collection.dart';
 import 'package:inventario_v2/features/sales/data/collections/caja_collection.dart';
@@ -62,6 +64,8 @@ class IsarService {
         CajaMovimientoExtraCollectionSchema,
         ReglaCostoCollectionSchema,
         CargoAdicionalCollectionSchema,
+        CodigoProductoCollectionSchema,
+        InventarioCodigoProductoCollectionSchema,
       ],
       directory: dir.path,
       inspector: true,

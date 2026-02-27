@@ -2,7 +2,65 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:isar/isar.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
+import 'package:inventario_v2/core/providers/database_provider.dart';
+import 'package:inventario_v2/features/sales/data/collections/venta_collection.dart';
+import 'package:inventario_v2/features/sales/data/collections/cliente_collection.dart';
+import 'package:inventario_v2/features/sales/data/collections/detalle_venta_collection.dart';
+import 'package:inventario_v2/core/constants/app_enums.dart'; // Para EstadoPago
+import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
+
+// PROVIDER DE VENTAS
+final salesListProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
+  final isar = await ref.watch(isarDbProvider.future);
+
+  // Obtener todas las ventas ordenadas por fecha reciente
+  final ventas = await isar.ventaCollections
+      .where()
+      .sortByFechaVentaDesc()
+      .findAll();
+
+  List<Map<String, dynamic>> resultados = [];
+
+  for (var venta in ventas) {
+    // 1. Obtener Cliente
+    final cliente = await isar.clienteCollections
+        .filter()
+        .serverIdEqualTo(venta.clienteId)
+        .findFirst();
+    final nombreCliente = cliente?.nombre ?? 'Cliente Desconocido';
+
+    // 2. Contar Items (Detalles)
+    final itemsCount = await isar.detalleVentaCollections
+        .filter()
+        .ventaIdEqualTo(venta.serverId)
+        .count();
+
+    // 3. Mapear estado
+    String status = 'Pendiente';
+    if (!venta.estado) {
+      status = 'Anulado';
+    } else if (venta.estadoPago == EstadoPago.pagado) {
+      status = 'Pagado';
+    } else {
+      status = 'Pendiente';
+    }
+
+    resultados.add({
+      'id': venta.serverId.substring(0, 8).toUpperCase(), // ID visual corto
+      'fullId': venta.serverId, // ID real para navegación
+      'client': nombreCliente,
+      'date': venta.fechaVenta,
+      'total': venta.totalVenta,
+      'status': status,
+      'itemsCount': itemsCount,
+    });
+  }
+  return resultados;
+});
 
 class SalesDashboardScreen extends ConsumerStatefulWidget {
   const SalesDashboardScreen({super.key});
@@ -15,55 +73,12 @@ class SalesDashboardScreen extends ConsumerStatefulWidget {
 class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
   // Estado de los Filtros
   String _searchQuery = "";
-  String _selectedStatus = "Todos"; // Opciones: Todos, Pagado, Pendiente
+  String _selectedStatus =
+      "Todos"; // Opciones: Todos, Pagado, Pendiente, Anulado
 
-  // DATOS MOCK (Simulación de DB)
-  final List<Map<String, dynamic>> _allSales = [
-    {
-      'id': '#VEN-001',
-      'client': 'Juan Pérez',
-      'date': DateTime.now().subtract(const Duration(hours: 2)),
-      'total': 1500.0,
-      'status': 'Pagado',
-      'itemsCount': 3,
-    },
-    {
-      'id': '#VEN-002',
-      'client': 'Maria Lopez',
-      'date': DateTime.now().subtract(const Duration(days: 1)),
-      'total': 450.50,
-      'status': 'Pagado',
-      'itemsCount': 1,
-    },
-    {
-      'id': '#VEN-003',
-      'client': 'Tienda El Centro',
-      'date': DateTime.now().subtract(const Duration(days: 1, hours: 4)),
-      'total': 8500.0,
-      'status': 'Pendiente', // Fiado / Crédito
-      'itemsCount': 12,
-    },
-    {
-      'id': '#VEN-004',
-      'client': 'Consumidor Final',
-      'date': DateTime.now().subtract(const Duration(days: 2)),
-      'total': 250.0,
-      'status': 'Pagado',
-      'itemsCount': 1,
-    },
-    {
-      'id': '#VEN-005',
-      'client': 'Carlos Rivas',
-      'date': DateTime.now().subtract(const Duration(days: 3)),
-      'total': 1200.0,
-      'status': 'Anulado',
-      'itemsCount': 4,
-    },
-  ];
-
-  // Lógica de Filtrado
-  List<Map<String, dynamic>> get _filteredSales {
-    return _allSales.where((sale) {
+  // Lógica de Filtrado Local (sobre los datos traídos del provider)
+  List<Map<String, dynamic>> _filterSales(List<Map<String, dynamic>> allSales) {
+    return allSales.where((sale) {
       final matchesSearch =
           sale['client'].toString().toLowerCase().contains(
             _searchQuery.toLowerCase(),
@@ -90,10 +105,8 @@ class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
             title: "Gestión de Ventas",
             showBackButton: true,
             actions: [
-              // NUEVO BOTÓN: ACCESO A CORTE DE CAJA
               IconButton(
                 onPressed: () {
-                  // Asegúrate de tener esta ruta en tu router.dart
                   context.push('/cash-register-history');
                 },
                 icon: const Icon(
@@ -104,7 +117,7 @@ class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
               ),
               IconButton(
                 onPressed: () {
-                  print("Generar reporte");
+                  debugPrint("Generar reporte");
                 },
                 icon: const Icon(Icons.bar_chart, color: Colors.black87),
                 tooltip: "Estadísticas",
@@ -116,15 +129,21 @@ class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final dashboardState = ref.watch(dashboardProvider).value;
+    final bool isCajaAbierta = dashboardState?.cajaAbierta != null;
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
 
       // BOTÓN FLOTANTE: NUEVA VENTA
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          // Navegar a la pantalla de POS (Punto de Venta)
-          // Asegúrate de tener esta ruta configurada en tu GoRouter
-          context.push('/pos');
+          if (isCajaAbierta) {
+            context.push('/pos');
+          } else {
+            // Ir directamente a abrir caja para saltar el paso extra
+            context.push('/cash-register');
+          }
         },
         backgroundColor: Colors.blue[700],
         icon: const Icon(Icons.add_shopping_cart, color: Colors.white),
@@ -146,7 +165,7 @@ class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withValues(alpha: 0.04),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -213,33 +232,48 @@ class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
           ),
 
           // 2. LISTA DE VENTAS
+          // 2. LISTA DE VENTAS
           Expanded(
-            child: _filteredSales.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.receipt_long_outlined,
-                          size: 60,
-                          color: Colors.grey[300],
+            child: ref
+                .watch(salesListProvider)
+                .when(
+                  data: (allSales) {
+                    final filteredSales = _filterSales(allSales);
+
+                    if (filteredSales.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.receipt_long_outlined,
+                              size: 60,
+                              color: Colors.grey[300],
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              "No se encontraron ventas",
+                              style: TextStyle(color: Colors.grey[500]),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 10),
-                        Text(
-                          "No se encontraron ventas",
-                          style: TextStyle(color: Colors.grey[500]),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _filteredSales.length,
-                    itemBuilder: (context, index) {
-                      final sale = _filteredSales[index];
-                      return _SaleHistoryCard(sale: sale);
-                    },
-                  ),
+                      );
+                    }
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: filteredSales.length,
+                      itemBuilder: (context, index) {
+                        final sale = filteredSales[index];
+                        return _SaleHistoryCard(sale: sale);
+                      },
+                    );
+                  },
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (err, stack) =>
+                      Center(child: Text("Error al cargar ventas: $err")),
+                ),
           ),
         ],
       ),
@@ -285,7 +319,7 @@ class _SaleHistoryCard extends StatelessWidget {
         border: Border.all(color: Colors.grey.shade100),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -296,7 +330,7 @@ class _SaleHistoryCard extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: () {
-            context.push('/sales-detail');
+            context.push('/sales-detail/${sale['fullId']}');
             // Ver detalle de la venta (Ticket)
             // context.push('/sale-detail/${sale['id']}');
           },
@@ -431,7 +465,7 @@ class _StatusFilterChip extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: isSelected ? color.withOpacity(0.1) : Colors.white,
+            color: isSelected ? color.withValues(alpha: 0.1) : Colors.white,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: isSelected ? color : Colors.grey.shade300,

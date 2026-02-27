@@ -46,10 +46,10 @@ class AppBarNotifier extends StateNotifier<AppBarState> {
     List<Widget>? actions,
     bool showBackButton = true,
   }) {
-    state = state.copyWith(
+    state = AppBarState(
       title: title,
       subtitle: subtitle,
-      actions: actions,
+      actions: actions ?? const [],
       showBackButton: showBackButton,
     );
   }

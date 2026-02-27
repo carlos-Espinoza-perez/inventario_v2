@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:inventario_v2/features/dashboard/presentation/widgets/card_info_dashboard.dart';
 import 'package:inventario_v2/features/dashboard/presentation/widgets/section_caja_dashboard.dart';
 import 'package:inventario_v2/features/dashboard/presentation/widgets/section_transaction_dashboard.dart';
+import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
 
 class ContentViewDashboard extends StatelessWidget {
-  const ContentViewDashboard({super.key});
+  final DashboardState state;
+
+  const ContentViewDashboard({super.key, required this.state});
 
   @override
   Widget build(BuildContext context) {
+    final currencyFormat = NumberFormat.simpleCurrency();
+
     // Animación de entrada suave
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
@@ -21,7 +27,7 @@ class ContentViewDashboard extends StatelessWidget {
           children: [
             CardInfoDashboard(
               title: "Monto total de inventario",
-              amount: "NIO 100",
+              amount: currencyFormat.format(state.montoTotalInventario),
               icon: Icons.inventory_2_outlined,
               color: Colors.cyan.shade800,
             ),
@@ -30,19 +36,20 @@ class ContentViewDashboard extends StatelessWidget {
 
             CardInfoDashboard(
               title: "Monto total de fiados",
-              amount: "NIO 100",
-              icon: Icons.inventory_2_outlined,
+              amount: currencyFormat.format(state.montoTotalFiados),
+              icon: Icons.receipt_long_outlined,
               color: Colors.red,
               isOutlined: true,
               buttonText: "Ver fiados",
               onButtonTap: () {
-                print("Ver fiados");
-                context.go('/fiados');
+                context.go('/sales');
               },
             ),
 
-            const SectionCajaDashboard(),
-            const SectionTransactionDashboard(),
+            SectionCajaDashboard(state: state),
+            SectionTransactionDashboard(
+              transactions: state.ultimasTransacciones,
+            ),
           ],
         ),
       ),

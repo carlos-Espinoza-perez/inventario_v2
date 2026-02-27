@@ -1,0 +1,186 @@
+
+  // --- NUEVO MÉTODO: TRASLADO ENTRE BODEGAS ---
+  Future<void> registrarTrasladoBodegas({
+    required String empresaId,
+    required String usuarioId,
+    required String bodegaOrigenId,
+    required String bodegaDestinoId,
+    required String descripcion,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    await _isar.writeTxn(() async {
+      // 1. CREAR CABECERA (Movimiento)
+      final movimientoId = const Uuid().v4();
+      final nuevoMovimiento = MovimientoProductoCollection()
+        ..serverId = movimientoId
+        ..empresaId = empresaId
+        ..tipoMovimiento = TipoMovimiento.traslado
+        ..bodegaOrigenId = bodegaOrigenId
+        ..bodegaDestinoId = bodegaDestinoId
+        ..fechaRegistro = DateTime.now()
+        ..estadoMovimiento = EstadoMovimiento.aprobado
+        ..descripcion = descripcion
+        ..usuarioRegistroId = usuarioId
+        ..ultimaActualizacion = DateTime.now()
+        ..pendienteSincronizacion = true;
+
+      await _isar.movimientoProductoCollections.put(nuevoMovimiento);
+
+      // 2. PROCESAR ITEMS
+      for (var item in items) {
+        final String productId = item['productId'];
+        final String sku = item['qr']; // Código SKU
+        final String talla = item['size'];
+        final double cantidad = (item['cantidad'] ?? 1).toDouble();
+        final double? nuevoPrecio = item['price'] != null ? (item['price'] as num).toDouble() : null;
+
+        // A. BUSCAR PRODUCTO (Para act precio y datos base)
+        final producto = await _isar.productoCollections
+            .filter()
+            .serverIdEqualTo(productId)
+            .findFirst();
+
+        if (producto != null) {
+          // ACTUALIZAR PRECIO SI SE ESPECIFICÓ Y ES VÁLIDO
+          // Nota: Esto actualiza el precio global del producto (Modelo actual no soporta precio por bodega)
+          if (nuevoPrecio != null && nuevoPrecio > 0) {
+            producto.ultimoPrecioVenta = nuevoPrecio;
+            producto.precioBase = nuevoPrecio; // Sincronizamos ambos para consistencia
+            producto.ultimaActualizacion = DateTime.now();
+            producto.pendienteSincronizacion = true;
+            await _isar.productoCollections.put(producto);
+          }
+        }
+
+        // B. GESTIONAR INVENTARIO ORIGEN (SALIDA)
+        // 1. Macro Origen
+        final invOrigen = await _isar.inventarioCollections
+            .filter()
+            .bodegaIdEqualTo(bodegaOrigenId)
+            .productoIdEqualTo(productId)
+            .findFirst();
+        
+        // Costo promedio actual para registrar en el movimiento
+        final costoUnitario = invOrigen?.costoPromedio ?? 0.0;
+
+        if (invOrigen != null) {
+          invOrigen.cantidadActual -= cantidad;
+          invOrigen.ultimaActualizacion = DateTime.now();
+          invOrigen.pendienteSincronizacion = true;
+          await _isar.inventarioCollections.put(invOrigen);
+
+          // 2. Micro Origen (Por Talla/SKU)
+           // Primero buscamos el "CodigoProducto" (Entidad Identidad de la variante)
+           // Asumimos que ya existe porque estamos sacando stock.
+           final variante = await _isar.codigoProductoCollections
+              .filter()
+              .codigoSkuEqualTo(sku)
+              .findFirst();
+            
+           if (variante != null) {
+             final invMicroOrigen = await _isar.inventarioCodigoProductoCollections
+                .filter()
+                .inventarioIdEqualTo(invOrigen.serverId)
+                .codigoProductoIdEqualTo(variante.serverId)
+                .findFirst();
+             
+             if (invMicroOrigen != null) {
+               invMicroOrigen.cantidad = (invMicroOrigen.cantidad - cantidad).clamp(0, 999999);
+               invMicroOrigen.ultimaActualizacion = DateTime.now();
+               invMicroOrigen.pendienteSincronizacion = true;
+               await _isar.inventarioCodigoProductoCollections.put(invMicroOrigen);
+             }
+           }
+        }
+
+        // C. GESTIONAR INVENTARIO DESTINO (ENTRADA)
+        // 1. Macro Destino
+        InventarioCollection? invDestino = await _isar.inventarioCollections
+            .filter()
+            .bodegaIdEqualTo(bodegaDestinoId)
+            .productoIdEqualTo(productId)
+            .findFirst();
+        
+        if (invDestino == null) {
+             invDestino = InventarioCollection()
+              ..serverId = const Uuid().v4()
+              ..bodegaId = bodegaDestinoId
+              ..productoId = productId
+              ..cantidadActual = 0
+              ..costoPromedio = costoUnitario // Hereda costo de origen
+              ..ultimaActualizacion = DateTime.now()
+              ..pendienteSincronizacion = true;
+        }
+
+        // Recalcular costo promedio destino (Weighted Average)
+        final double costoTotalDest = invDestino.cantidadActual * invDestino.costoPromedio;
+        final double costoTotalEntrante = cantidad * costoUnitario;
+        final double nuevaCantDest = invDestino.cantidadActual + cantidad;
+        
+        if (nuevaCantDest > 0) {
+           invDestino.costoPromedio = (costoTotalDest + costoTotalEntrante) / nuevaCantDest;
+        }
+        
+        invDestino.cantidadActual = nuevaCantDest;
+        invDestino.actualizadoPor = usuarioId;
+        invDestino.ultimaActualizacion = DateTime.now();
+        invDestino.pendienteSincronizacion = true;
+        await _isar.inventarioCollections.put(invDestino!);
+
+        // 2. Micro Destino (Por Talla/SKU)
+        // Aseguramos que existe la variante (CodigoProducto)
+        // Si no existe, la creamos (aunque debería existir ya por el origen)
+        CodigoProductoCollection? variante = await _isar.codigoProductoCollections
+              .filter()
+              .codigoSkuEqualTo(sku)
+              .findFirst();
+        
+        if (variante == null) {
+           variante = CodigoProductoCollection()
+              ..serverId = const Uuid().v4()
+              ..productoId = productId
+              ..codigoSku = sku
+              ..talla = talla
+              ..fechaRegistro = DateTime.now()
+              ..ultimaActualizacion = DateTime.now()
+              ..pendienteSincronizacion = true;
+           await _isar.codigoProductoCollections.put(variante);
+        }
+
+        final invMicroDestino = await _isar.inventarioCodigoProductoCollections
+             .filter()
+             .inventarioIdEqualTo(invDestino.serverId)
+             .codigoProductoIdEqualTo(variante.serverId)
+             .findFirst();
+
+        if (invMicroDestino != null) {
+           invMicroDestino.cantidad += cantidad;
+           invMicroDestino.ultimaActualizacion = DateTime.now();
+           invMicroDestino.pendienteSincronizacion = true;
+           await _isar.inventarioCodigoProductoCollections.put(invMicroDestino);
+        } else {
+           final nuevoMicro = InventarioCodigoProductoCollection()
+              ..serverId = const Uuid().v4()
+              ..inventarioId = invDestino.serverId
+              ..codigoProductoId = variante.serverId
+              ..cantidad = cantidad
+              ..fechaRegistro = DateTime.now()
+              ..ultimaActualizacion = DateTime.now()
+              ..pendienteSincronizacion = true;
+           await _isar.inventarioCodigoProductoCollections.put(nuevoMicro);
+        }
+
+        // D. REGISTRAR DETALLE HISTÓRICO
+        final detalle = DetalleMovimientoProductoCollection()
+          ..serverId = const Uuid().v4()
+          ..movimientoProductoId = movimientoId
+          ..productoId = productId
+          ..cantidad = cantidad
+          ..costoUnitarioFinal = costoUnitario
+          ..costoProveedor = costoUnitario
+          ..ultimaActualizacion = DateTime.now();
+        
+        await _isar.detalleMovimientoProductoCollections.put(detalle);
+      }
+    });
+  }

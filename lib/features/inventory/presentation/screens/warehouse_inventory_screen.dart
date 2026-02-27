@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
-import 'package:inventario_v2/features/inventory/data/providers/categoria_provider.dart';
 import 'package:inventario_v2/features/inventory/presentation/widgets/categoria_filter_list.dart';
+import 'package:inventario_v2/features/inventory/presentation/providers/warehouse_inventory_provider.dart';
 
 class WarehouseInventoryScreen extends ConsumerStatefulWidget {
   final String warehouseId;
@@ -17,74 +17,31 @@ class WarehouseInventoryScreen extends ConsumerStatefulWidget {
 class _WarehouseInventoryScreenState
     extends ConsumerState<WarehouseInventoryScreen> {
   final TextEditingController _searchController = TextEditingController();
-
-  // Simulación de datos (Esto luego vendrá de tu Base de Datos)
-  final List<Map<String, dynamic>> _mockProducts = [
-    {
-      "nombre": "Camisa Manga Larga Formal",
-      "sku": "SKU-1002",
-      "categoria": "Ropa",
-      "stock": 15,
-      "precio": 250.0,
-      "costo": 120.0,
-      "imagen": null,
-    },
-    {
-      "nombre": "Gorra Nike SB",
-      "sku": "SKU-1012",
-      "categoria": "Accesorio",
-      "stock": 15,
-      "precio": 250.0,
-      "costo": 120.0,
-      "imagen": null,
-    },
-    {
-      "nombre": "Pantalón Jeans Jingo",
-      "sku": "SKU-1022",
-      "categoria": "Ropa",
-      "stock": 2, // Bajo Stock
-      "precio": 550.0,
-      "costo": 340.0,
-      "imagen": null,
-    },
-    {
-      "nombre": "Taza de Cerámica",
-      "sku": "SKU-2032",
-      "categoria": "Hogar",
-      "stock": 8,
-      "precio": 80.0,
-      "costo": 40.0,
-      "imagen": null,
-    },
-    {
-      "nombre": "Zapatos Escolares",
-      "sku": "SKU-3045",
-      "categoria": "Calzado",
-      "stock": 1, // Crítico
-      "precio": 450.0,
-      "costo": 200.0,
-      "imagen": null,
-    },
-  ];
+  String _searchQuery = "";
 
   @override
   void initState() {
     super.initState();
+
+    // Escuchar cambios en el buscador para filtrar localmente
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.toLowerCase();
+      });
+    });
+
     // 🔥 CONTROL DEL HEADER DINÁMICO
-    // Usamos microtask para configurar el AppBar global apenas carga la pantalla
     Future.microtask(() {
       ref
           .read(appBarProvider.notifier)
           .setOptions(
-            title:
-                "Bodega Central", // Aquí usarías widget.warehouseId para buscar el nombre real
+            title: "Bodega Central", // Pendiente: obtener nombre real de bodega
             subtitle: "Inventario Actual",
-            showBackButton: true, // Forzamos la flecha de regreso
+            showBackButton: true,
             actions: [
               IconButton(
                 onPressed: () {
-                  context.push('/warehouse-history');
-                  print("Ver historial");
+                  context.push('/warehouse-history/${widget.warehouseId}');
                 },
                 icon: const Icon(Icons.history, color: Colors.black87),
                 tooltip: "Ver Historial",
@@ -94,17 +51,20 @@ class _WarehouseInventoryScreenState
     });
   }
 
-  // Opcional: Si quieres limpiar al salir (aunque Dashboard suele resetearlo al entrar)
   @override
-  void deactivate() {
-    // ref.read(appBarProvider.notifier).reset();
-    super.deactivate();
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Escuchar el provider
+    final inventoryAsync = ref.watch(
+      warehouseInventoryProvider(widget.warehouseId),
+    );
+
     return Scaffold(
-      // El cuerpo principal
       body: Column(
         children: [
           // 1. ZONA DE BÚSQUEDA Y FILTROS
@@ -114,7 +74,7 @@ class _WarehouseInventoryScreenState
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
+                  color: Colors.black.withValues(alpha: 0.03),
                   blurRadius: 10,
                   offset: const Offset(0, 5),
                 ),
@@ -138,7 +98,9 @@ class _WarehouseInventoryScreenState
                         color: Colors.black87,
                       ),
                       onPressed: () {
-                        context.push('/barcode-scanner');
+                        context.push(
+                          '/barcode-scanner?bodegaId=${widget.warehouseId}',
+                        );
                       },
                     ),
                     filled: true,
@@ -153,26 +115,73 @@ class _WarehouseInventoryScreenState
                 const SizedBox(height: 12),
 
                 // Chips de Filtros (Scroll Horizontal)
-                CategoriaFilterList(),
+                const CategoriaFilterList(),
               ],
             ),
           ),
 
-          // 2. LISTA DE PRODUCTOS
+          // 2. LISTA DE PRODUCTOS (CON ESTADOS)
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _mockProducts.length,
-              itemBuilder: (context, index) {
-                final prod = _mockProducts[index];
-                return _ProductCard(
-                  nombre: prod['nombre'],
-                  sku: prod['sku'],
-                  stock: prod['stock'],
-                  precio: prod['precio'],
-                  costo: prod['costo'],
-                  categoria: prod['categoria'],
-                  imageUrl: prod['imagen'],
+            child: inventoryAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (err, stack) => Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: Colors.red,
+                      size: 48,
+                    ),
+                    const SizedBox(height: 16),
+                    Text('Error al cargar inventario: $err'),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () => ref.refresh(
+                        warehouseInventoryProvider(widget.warehouseId),
+                      ),
+                      child: const Text("Reintentar"),
+                    ),
+                  ],
+                ),
+              ),
+              data: (products) {
+                // Filtrado local
+                final filteredProducts = products.where((p) {
+                  final matchesSearch =
+                      p.nombre.toLowerCase().contains(_searchQuery) ||
+                      p.sku.toLowerCase().contains(_searchQuery);
+                  return matchesSearch && p.stock >= 1.0;
+                }).toList();
+
+                if (filteredProducts.isEmpty) {
+                  return Center(
+                    child: Text(
+                      _searchQuery.isEmpty
+                          ? "No hay productos en esta bodega"
+                          : "No se encontraron coincidencias",
+                      style: TextStyle(color: Colors.grey[500]),
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filteredProducts.length,
+                  itemBuilder: (context, index) {
+                    final prod = filteredProducts[index];
+                    return _ProductCard(
+                      productId: prod.productoId, // Pasar ID
+                      nombre: prod.nombre,
+                      sku: prod.sku,
+                      stock: prod.stock.toInt(),
+                      precio: prod.precio,
+                      costo: prod.costo,
+                      categoria: prod.categoria,
+                      imageUrl: prod.imagen,
+                      warehouseId: widget.warehouseId,
+                    );
+                  },
                 );
               },
             ),
@@ -182,7 +191,7 @@ class _WarehouseInventoryScreenState
 
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showActionModal(context),
-        backgroundColor: Colors.blue[600], // Ajusta a tu color de marca
+        backgroundColor: Colors.blue[600],
         elevation: 4,
         icon: const Icon(Icons.bolt_rounded, color: Colors.white),
         label: const Text(
@@ -228,7 +237,7 @@ class _WarehouseInventoryScreenState
                   label: "Salida",
                   onTap: () {
                     context.pop();
-                    context.go('/warehouse-transfer');
+                    context.push('/warehouse-transfer/${widget.warehouseId}');
                   },
                 ),
                 _ActionButton(
@@ -238,7 +247,6 @@ class _WarehouseInventoryScreenState
                   onTap: () {
                     context.pop();
                     context.push('/product-list');
-                    // context.push('/warehouse/${widget.warehouseId}/add-product');
                   },
                 ),
               ],
@@ -256,6 +264,7 @@ class _WarehouseInventoryScreenState
 // ------------------------------------------------------------------
 
 class _ProductCard extends StatelessWidget {
+  final String productId; // ID del producto
   final String nombre;
   final String sku;
   final int stock;
@@ -263,8 +272,10 @@ class _ProductCard extends StatelessWidget {
   final double costo;
   final String categoria;
   final String? imageUrl;
+  final String warehouseId;
 
   const _ProductCard({
+    required this.productId,
     required this.nombre,
     required this.sku,
     required this.stock,
@@ -272,6 +283,7 @@ class _ProductCard extends StatelessWidget {
     required this.costo,
     required this.categoria,
     this.imageUrl,
+    required this.warehouseId,
   });
 
   @override
@@ -285,7 +297,7 @@ class _ProductCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -297,7 +309,7 @@ class _ProductCard extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: () {
-            context.push('/product-detail');
+            context.push('/product-detail/$productId?bodegaId=$warehouseId');
           },
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -449,11 +461,11 @@ class _ProductImage extends StatelessWidget {
         color: Colors.grey[50],
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.grey.shade200),
-        image: imageUrl != null
+        image: imageUrl != null && imageUrl!.isNotEmpty
             ? DecorationImage(image: NetworkImage(imageUrl!), fit: BoxFit.cover)
             : null,
       ),
-      child: imageUrl == null
+      child: (imageUrl == null || imageUrl!.isEmpty)
           ? Center(
               child: Icon(
                 _getCategoryIcon(categoria),
@@ -507,7 +519,7 @@ class _ActionButton extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: color, size: 30),

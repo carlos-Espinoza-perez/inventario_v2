@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:isar/isar.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -123,7 +124,7 @@ class AutoSync extends _$AutoSync {
     if (connectivity.contains(ConnectivityResult.none)) return;
 
     try {
-      print("🔄 [AutoSync] Ejecutando Sincronización Completa (Inicio)...");
+      debugPrint("🔄 [AutoSync] Ejecutando Sincronización Completa (Inicio)...");
       state = AsyncData(
         currentState!.copyWith(isSyncing: true, lastError: null),
       );
@@ -143,9 +144,9 @@ class AutoSync extends _$AutoSync {
           lastSync: DateTime.now(),
         ),
       );
-      print("✅ [AutoSync] Sincronización Completa Finalizada.");
+      debugPrint("✅ [AutoSync] Sincronización Completa Finalizada.");
     } catch (e) {
-      print("❌ [AutoSync] Error en Full Sync: $e");
+      debugPrint("❌ [AutoSync] Error en Full Sync: $e");
       state = AsyncData(
         currentState!.copyWith(isSyncing: false, lastError: e.toString()),
       );
@@ -174,7 +175,7 @@ class AutoSync extends _$AutoSync {
     // LÓGICA DE RECUPERACIÓN:
     // Si hay conexión Y antes estábamos desconectados (o es la primera carga)
     if (hasConnection && wasOffline) {
-      print(
+      debugPrint(
         "📡 [AutoSync] Internet detectado. Iniciando Sincronización Completa...",
       );
 
@@ -184,7 +185,7 @@ class AutoSync extends _$AutoSync {
 
   // --- B. ESCUCHA DE ISAR (VIGILANCIA AUTOMÁTICA) ---
   void _initIsarWatchers(Isar isar) {
-    print("👀 [AutoSync] Iniciando vigilancia de tablas locales...");
+    debugPrint("👀 [AutoSync] Iniciando vigilancia de tablas locales...");
 
     // Lista maestra de colecciones a vigilar
     final streamsToWatch = [
@@ -242,14 +243,14 @@ class AutoSync extends _$AutoSync {
     // Verificar conexión real antes de intentar subir
     final connectivity = await Connectivity().checkConnectivity();
     if (connectivity.contains(ConnectivityResult.none)) {
-      print(
+      debugPrint(
         "💾 [AutoSync] Cambios detectados y guardados localmente (Sin internet).",
       );
       return;
     }
 
     try {
-      print("🚀 [AutoSync] Ejecutando subida automática...");
+      debugPrint("🚀 [AutoSync] Ejecutando subida automática...");
       // 1. Estado: Cargando
       state = AsyncData(
         currentState.copyWith(isSyncing: true, lastError: null),
@@ -267,9 +268,9 @@ class AutoSync extends _$AutoSync {
           lastSync: DateTime.now(),
         ),
       );
-      print("✅ [AutoSync] Sincronización completada.");
+      debugPrint("✅ [AutoSync] Sincronización completada.");
     } catch (e) {
-      print("❌ [AutoSync] Error: $e");
+      debugPrint("❌ [AutoSync] Error: $e");
       // 4. Estado: Error (pero mantenemos isOnline true porque tenemos red, solo falló el proceso)
       state = AsyncData(
         currentState.copyWith(isSyncing: false, lastError: e.toString()),

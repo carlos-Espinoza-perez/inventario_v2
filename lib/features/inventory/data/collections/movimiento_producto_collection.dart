@@ -46,17 +46,20 @@ class MovimientoProductoCollection {
     return MovimientoProductoCollection()
       ..serverId = json['id']
       ..empresaId = json['empresa_id']
-      // Conversión de String (BD) a Enum (Dart)
-      // Buscamos el enum cuyo nombre coincida con el texto de la BD
+      // Conversión robusta (Case Insensitive)
       ..tipoMovimiento = TipoMovimiento.values.firstWhere(
-        (e) => e.name == json['tipo_movimiento'],
-        orElse: () => TipoMovimiento.values.first, // Fallback por seguridad
+        (e) =>
+            e.name.toUpperCase() ==
+            json['tipo_movimiento'].toString().toUpperCase(),
+        orElse: () => TipoMovimiento.values.first,
       )
       ..bodegaOrigenId = json['bodega_origen_id']
       ..bodegaDestinoId = json['bodega_destino_id']
-      // Conversión de String (BD) a Enum (Dart)
+      // Conversión robusta (Case Insensitive)
       ..estadoMovimiento = EstadoMovimiento.values.firstWhere(
-        (e) => e.name == json['estado_movimiento'],
+        (e) =>
+            e.name.toUpperCase() ==
+            json['estado_movimiento'].toString().toUpperCase(),
         orElse: () => EstadoMovimiento.values.first,
       )
       ..descripcion = json['descripcion']
@@ -76,14 +79,14 @@ class MovimientoProductoCollection {
       'id': serverId,
       'empresa_id': empresaId,
 
-      // Enviamos el nombre del Enum (ej: "COMPRA") a Supabase
-      'tipo_movimiento': tipoMovimiento.name,
+      // Enviamos en MAYÚSCULAS porque Postgres suele usar UPPERCASE para Enums
+      'tipo_movimiento': tipoMovimiento.name.toUpperCase(),
 
       'bodega_origen_id': bodegaOrigenId,
       'bodega_destino_id': bodegaDestinoId,
 
-      // Enviamos el nombre del Enum (ej: "APROBADO") a Supabase
-      'estado_movimiento': estadoMovimiento.name,
+      // Enviamos en MAYÚSCULAS
+      'estado_movimiento': estadoMovimiento.name.toUpperCase(),
 
       'descripcion': descripcion,
 

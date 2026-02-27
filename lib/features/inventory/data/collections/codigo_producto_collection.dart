@@ -20,6 +20,9 @@ class CodigoProductoCollection {
   @Index(unique: true)
   late String codigoSku; // Mapea a 'codigo_sku'
 
+  double? precioEspecifico; // Nuevo campo: Mapea a 'precio_especifico'
+  double? costoEspecifico; // Mapea a 'costo_especifico'
+
   // Auditoría
   late DateTime fechaRegistro; // 'fecha_registro'
   bool estado = true; // 'estado'
@@ -41,6 +44,16 @@ class CodigoProductoCollection {
       ..talla = json['talla'] as String? ?? ''
       ..color = json['color'] as String?
       ..codigoSku = json['codigo_sku'] as String? ?? ''
+      ..precioEspecifico = json['precio_especifico'] != null
+          ? (json['precio_especifico'] is int
+                ? (json['precio_especifico'] as int).toDouble()
+                : (json['precio_especifico'] as double))
+          : null
+      ..costoEspecifico = json['costo_especifico'] != null
+          ? (json['costo_especifico'] is int
+                ? (json['costo_especifico'] as int).toDouble()
+                : (json['costo_especifico'] as double))
+          : null
       // Auditoría
       ..usuarioRegistroId = json['usuario_registro_id'] as String? ?? ''
       ..fechaRegistro = json['fecha_registro'] != null
@@ -65,6 +78,8 @@ class CodigoProductoCollection {
       'talla': talla,
       'color': color,
       'codigo_sku': codigoSku,
+      'precio_especifico': precioEspecifico,
+      'costo_especifico': costoEspecifico,
 
       // Auditoría
       'usuario_registro_id': usuarioRegistroId,

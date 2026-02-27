@@ -28,48 +28,58 @@ const CodigoProductoCollectionSchema = CollectionSchema(
       name: r'color',
       type: IsarType.string,
     ),
-    r'estado': PropertySchema(
+    r'costoEspecifico': PropertySchema(
       id: 2,
+      name: r'costoEspecifico',
+      type: IsarType.double,
+    ),
+    r'estado': PropertySchema(
+      id: 3,
       name: r'estado',
       type: IsarType.bool,
     ),
     r'fechaEliminacion': PropertySchema(
-      id: 3,
+      id: 4,
       name: r'fechaEliminacion',
       type: IsarType.dateTime,
     ),
     r'fechaRegistro': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'fechaRegistro',
       type: IsarType.dateTime,
     ),
     r'pendienteSincronizacion': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'pendienteSincronizacion',
       type: IsarType.bool,
     ),
+    r'precioEspecifico': PropertySchema(
+      id: 7,
+      name: r'precioEspecifico',
+      type: IsarType.double,
+    ),
     r'productoId': PropertySchema(
-      id: 6,
+      id: 8,
       name: r'productoId',
       type: IsarType.string,
     ),
     r'serverId': PropertySchema(
-      id: 7,
+      id: 9,
       name: r'serverId',
       type: IsarType.string,
     ),
     r'talla': PropertySchema(
-      id: 8,
+      id: 10,
       name: r'talla',
       type: IsarType.string,
     ),
     r'ultimaActualizacion': PropertySchema(
-      id: 9,
+      id: 11,
       name: r'ultimaActualizacion',
       type: IsarType.dateTime,
     ),
     r'usuarioRegistroId': PropertySchema(
-      id: 10,
+      id: 12,
       name: r'usuarioRegistroId',
       type: IsarType.string,
     )
@@ -182,15 +192,17 @@ void _codigoProductoCollectionSerialize(
 ) {
   writer.writeString(offsets[0], object.codigoSku);
   writer.writeString(offsets[1], object.color);
-  writer.writeBool(offsets[2], object.estado);
-  writer.writeDateTime(offsets[3], object.fechaEliminacion);
-  writer.writeDateTime(offsets[4], object.fechaRegistro);
-  writer.writeBool(offsets[5], object.pendienteSincronizacion);
-  writer.writeString(offsets[6], object.productoId);
-  writer.writeString(offsets[7], object.serverId);
-  writer.writeString(offsets[8], object.talla);
-  writer.writeDateTime(offsets[9], object.ultimaActualizacion);
-  writer.writeString(offsets[10], object.usuarioRegistroId);
+  writer.writeDouble(offsets[2], object.costoEspecifico);
+  writer.writeBool(offsets[3], object.estado);
+  writer.writeDateTime(offsets[4], object.fechaEliminacion);
+  writer.writeDateTime(offsets[5], object.fechaRegistro);
+  writer.writeBool(offsets[6], object.pendienteSincronizacion);
+  writer.writeDouble(offsets[7], object.precioEspecifico);
+  writer.writeString(offsets[8], object.productoId);
+  writer.writeString(offsets[9], object.serverId);
+  writer.writeString(offsets[10], object.talla);
+  writer.writeDateTime(offsets[11], object.ultimaActualizacion);
+  writer.writeString(offsets[12], object.usuarioRegistroId);
 }
 
 CodigoProductoCollection _codigoProductoCollectionDeserialize(
@@ -202,16 +214,18 @@ CodigoProductoCollection _codigoProductoCollectionDeserialize(
   final object = CodigoProductoCollection();
   object.codigoSku = reader.readString(offsets[0]);
   object.color = reader.readStringOrNull(offsets[1]);
-  object.estado = reader.readBool(offsets[2]);
-  object.fechaEliminacion = reader.readDateTimeOrNull(offsets[3]);
-  object.fechaRegistro = reader.readDateTime(offsets[4]);
+  object.costoEspecifico = reader.readDoubleOrNull(offsets[2]);
+  object.estado = reader.readBool(offsets[3]);
+  object.fechaEliminacion = reader.readDateTimeOrNull(offsets[4]);
+  object.fechaRegistro = reader.readDateTime(offsets[5]);
   object.id = id;
-  object.pendienteSincronizacion = reader.readBool(offsets[5]);
-  object.productoId = reader.readString(offsets[6]);
-  object.serverId = reader.readString(offsets[7]);
-  object.talla = reader.readString(offsets[8]);
-  object.ultimaActualizacion = reader.readDateTime(offsets[9]);
-  object.usuarioRegistroId = reader.readString(offsets[10]);
+  object.pendienteSincronizacion = reader.readBool(offsets[6]);
+  object.precioEspecifico = reader.readDoubleOrNull(offsets[7]);
+  object.productoId = reader.readString(offsets[8]);
+  object.serverId = reader.readString(offsets[9]);
+  object.talla = reader.readString(offsets[10]);
+  object.ultimaActualizacion = reader.readDateTime(offsets[11]);
+  object.usuarioRegistroId = reader.readString(offsets[12]);
   return object;
 }
 
@@ -227,22 +241,26 @@ P _codigoProductoCollectionDeserializeProp<P>(
     case 1:
       return (reader.readStringOrNull(offset)) as P;
     case 2:
-      return (reader.readBool(offset)) as P;
+      return (reader.readDoubleOrNull(offset)) as P;
     case 3:
-      return (reader.readDateTimeOrNull(offset)) as P;
-    case 4:
-      return (reader.readDateTime(offset)) as P;
-    case 5:
       return (reader.readBool(offset)) as P;
+    case 4:
+      return (reader.readDateTimeOrNull(offset)) as P;
+    case 5:
+      return (reader.readDateTime(offset)) as P;
     case 6:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 7:
-      return (reader.readString(offset)) as P;
+      return (reader.readDoubleOrNull(offset)) as P;
     case 8:
       return (reader.readString(offset)) as P;
     case 9:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 10:
+      return (reader.readString(offset)) as P;
+    case 11:
+      return (reader.readDateTime(offset)) as P;
+    case 12:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -992,6 +1010,90 @@ extension CodigoProductoCollectionQueryFilter on QueryBuilder<
   }
 
   QueryBuilder<CodigoProductoCollection, CodigoProductoCollection,
+      QAfterFilterCondition> costoEspecificoIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'costoEspecifico',
+      ));
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection,
+      QAfterFilterCondition> costoEspecificoIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'costoEspecifico',
+      ));
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection,
+      QAfterFilterCondition> costoEspecificoEqualTo(
+    double? value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'costoEspecifico',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection,
+      QAfterFilterCondition> costoEspecificoGreaterThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'costoEspecifico',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection,
+      QAfterFilterCondition> costoEspecificoLessThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'costoEspecifico',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection,
+      QAfterFilterCondition> costoEspecificoBetween(
+    double? lower,
+    double? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'costoEspecifico',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection,
       QAfterFilterCondition> estadoEqualTo(bool value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -1193,6 +1295,90 @@ extension CodigoProductoCollectionQueryFilter on QueryBuilder<
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'pendienteSincronizacion',
         value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection,
+      QAfterFilterCondition> precioEspecificoIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'precioEspecifico',
+      ));
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection,
+      QAfterFilterCondition> precioEspecificoIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'precioEspecifico',
+      ));
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection,
+      QAfterFilterCondition> precioEspecificoEqualTo(
+    double? value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'precioEspecifico',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection,
+      QAfterFilterCondition> precioEspecificoGreaterThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'precioEspecifico',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection,
+      QAfterFilterCondition> precioEspecificoLessThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'precioEspecifico',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection,
+      QAfterFilterCondition> precioEspecificoBetween(
+    double? lower,
+    double? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'precioEspecifico',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
       ));
     });
   }
@@ -1843,6 +2029,20 @@ extension CodigoProductoCollectionQuerySortBy on QueryBuilder<
   }
 
   QueryBuilder<CodigoProductoCollection, CodigoProductoCollection, QAfterSortBy>
+      sortByCostoEspecifico() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'costoEspecifico', Sort.asc);
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection, QAfterSortBy>
+      sortByCostoEspecificoDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'costoEspecifico', Sort.desc);
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection, QAfterSortBy>
       sortByEstado() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'estado', Sort.asc);
@@ -1895,6 +2095,20 @@ extension CodigoProductoCollectionQuerySortBy on QueryBuilder<
       sortByPendienteSincronizacionDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection, QAfterSortBy>
+      sortByPrecioEspecifico() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'precioEspecifico', Sort.asc);
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection, QAfterSortBy>
+      sortByPrecioEspecificoDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'precioEspecifico', Sort.desc);
     });
   }
 
@@ -2000,6 +2214,20 @@ extension CodigoProductoCollectionQuerySortThenBy on QueryBuilder<
   }
 
   QueryBuilder<CodigoProductoCollection, CodigoProductoCollection, QAfterSortBy>
+      thenByCostoEspecifico() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'costoEspecifico', Sort.asc);
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection, QAfterSortBy>
+      thenByCostoEspecificoDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'costoEspecifico', Sort.desc);
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection, QAfterSortBy>
       thenByEstado() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'estado', Sort.asc);
@@ -2066,6 +2294,20 @@ extension CodigoProductoCollectionQuerySortThenBy on QueryBuilder<
       thenByPendienteSincronizacionDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'pendienteSincronizacion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection, QAfterSortBy>
+      thenByPrecioEspecifico() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'precioEspecifico', Sort.asc);
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection, QAfterSortBy>
+      thenByPrecioEspecificoDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'precioEspecifico', Sort.desc);
     });
   }
 
@@ -2157,6 +2399,13 @@ extension CodigoProductoCollectionQueryWhereDistinct on QueryBuilder<
   }
 
   QueryBuilder<CodigoProductoCollection, CodigoProductoCollection, QDistinct>
+      distinctByCostoEspecifico() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'costoEspecifico');
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection, QDistinct>
       distinctByEstado() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'estado');
@@ -2181,6 +2430,13 @@ extension CodigoProductoCollectionQueryWhereDistinct on QueryBuilder<
       distinctByPendienteSincronizacion() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'pendienteSincronizacion');
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, CodigoProductoCollection, QDistinct>
+      distinctByPrecioEspecifico() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'precioEspecifico');
     });
   }
 
@@ -2243,6 +2499,13 @@ extension CodigoProductoCollectionQueryProperty on QueryBuilder<
     });
   }
 
+  QueryBuilder<CodigoProductoCollection, double?, QQueryOperations>
+      costoEspecificoProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'costoEspecifico');
+    });
+  }
+
   QueryBuilder<CodigoProductoCollection, bool, QQueryOperations>
       estadoProperty() {
     return QueryBuilder.apply(this, (query) {
@@ -2268,6 +2531,13 @@ extension CodigoProductoCollectionQueryProperty on QueryBuilder<
       pendienteSincronizacionProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'pendienteSincronizacion');
+    });
+  }
+
+  QueryBuilder<CodigoProductoCollection, double?, QQueryOperations>
+      precioEspecificoProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'precioEspecifico');
     });
   }
 

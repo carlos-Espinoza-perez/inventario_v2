@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart'; // Necesario para generar SKU único
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:uuid/uuid.dart';
 import 'package:inventario_v2/core/presentation/widgets/custom_text_field.dart';
 
 import 'package:inventario_v2/features/inventory/data/collections/producto_collection.dart';
@@ -145,6 +146,7 @@ class _ProductDetailEntryScreenState
             'qr': item['qr'],
             'size': item['size'],
             'printed': item['printed'] == 'true',
+            'price': double.tryParse(item['price'] ?? '0') ?? 0.0,
           };
         }),
       );
@@ -220,7 +222,6 @@ class _ProductDetailEntryScreenState
   }
 
   // --- AGRUPACIÓN PARA VISUALIZACIÓN ---
-  // Esta función transforma la lista plana de items en una lista agrupada por SKU
   List<Map<String, dynamic>> _getGroupedItems() {
     final Map<String, Map<String, dynamic>> grouped = {};
 
@@ -232,15 +233,14 @@ class _ProductDetailEntryScreenState
           'qr': sku,
           'size': item['size'],
           'printed': item['printed'],
-          'count': 0, // Contador de unidades en este lote
+          'price': item['price'],
+          'count': 0,
         };
       }
 
-      // Incrementamos la cantidad
       grouped[sku]!['count'] = (grouped[sku]!['count'] as int) + 1;
     }
 
-    // Retornamos la lista invertida para que los nuevos salgan arriba
     return grouped.values.toList().reversed.toList();
   }
 
@@ -252,7 +252,6 @@ class _ProductDetailEntryScreenState
     );
     final asyncData = ref.watch(productEntryDataProvider(args));
 
-    // Obtenemos items agrupados
     final groupedItems = _getGroupedItems();
 
     return Scaffold(
@@ -365,7 +364,7 @@ class _ProductDetailEntryScreenState
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
+                          boxShadow: const [
                             BoxShadow(color: Colors.black12, blurRadius: 10),
                           ],
                         ),
@@ -463,6 +462,8 @@ class _ProductDetailEntryScreenState
       return;
     }
 
+    final double basePrice = double.tryParse(_priceCtrl.text) ?? 0.0;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -472,6 +473,7 @@ class _ProductDetailEntryScreenState
       ),
       builder: (context) => _SizeSelectorModal(
         tallasDisponibles: data.tallasDisponibles,
+        basePrice: basePrice,
         initialPrint: _defaultPrint,
         initialShowPrice: _defaultShowPrice,
         initialOnePerLot: _defaultOnePerLot,
@@ -479,9 +481,11 @@ class _ProductDetailEntryScreenState
             (
               String size,
               int qty,
+              double price,
               bool shouldPrint,
               bool showPrice,
               bool onePerLot,
+              String? qrCode, // null = generar nuevo UUID
             ) {
               setState(() {
                 _defaultPrint = shouldPrint;
@@ -492,9 +496,11 @@ class _ProductDetailEntryScreenState
                 size,
                 qty,
                 data.producto.nombre,
+                price,
                 shouldPrint,
                 showPrice,
                 onePerLot,
+                qrCode, // null = generar automático
               );
               Navigator.pop(context);
             },
@@ -506,27 +512,34 @@ class _ProductDetailEntryScreenState
     String size,
     int qty,
     String productName,
+    double price,
     bool printNow,
     bool showPrice,
     bool onePerLot,
+    String? existingQrCode,
   ) async {
-    final variantUuid = const Uuid().v4().substring(0, 8).toUpperCase();
-    final skuGenerado = "${widget.productId.substring(0, 4)}-$size-$variantUuid"
-        .toUpperCase();
+    // Si viene un código existente lo usamos; si no, generamos uno nuevo
+    final String skuFinal;
+    if (existingQrCode != null && existingQrCode.isNotEmpty) {
+      skuFinal = existingQrCode;
+    } else {
+      final variantUuid = const Uuid().v4().substring(0, 8).toUpperCase();
+      skuFinal = "${widget.productId.substring(0, 4)}-$size-$variantUuid"
+          .toUpperCase();
+    }
 
-    // Agregar a la lista (Datos individuales para DB)
     for (int i = 0; i < qty; i++) {
       setState(() {
         _generatedItems.add({
-          'qr': skuGenerado,
+          'qr': skuFinal,
           'size': size,
           'printed': printNow,
+          'price': price,
         });
       });
     }
 
     if (printNow) {
-      final double price = double.tryParse(_priceCtrl.text) ?? 0;
       if (!onePerLot) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -542,7 +555,7 @@ class _ProductDetailEntryScreenState
           ),
         );
       }
-      _showLabelPreviewDialog(productName, skuGenerado, size, price, showPrice);
+      _showLabelPreviewDialog(productName, skuFinal, size, price, showPrice);
     }
   }
 
@@ -593,6 +606,10 @@ class _ProductDetailEntryScreenState
     final bool isPrinted = group['printed'] == true;
     final int count = group['count'];
     final String sku = group['qr'];
+    final double itemPrice = group['price'] ?? 0.0;
+    final double basePrice = double.tryParse(_priceCtrl.text) ?? 0.0;
+
+    final bool hasCustomPrice = (itemPrice != basePrice);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -603,7 +620,6 @@ class _ProductDetailEntryScreenState
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        // Círculo de Talla
         leading: CircleAvatar(
           backgroundColor: Colors.cyan.shade50,
           child: Text(
@@ -614,8 +630,6 @@ class _ProductDetailEntryScreenState
             ),
           ),
         ),
-
-        // Título: SKU y Badge de Cantidad
         title: Row(
           children: [
             Expanded(
@@ -647,23 +661,36 @@ class _ProductDetailEntryScreenState
             ),
           ],
         ),
-
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(
-            isPrinted ? "Etiquetas Generadas" : "No impreso",
-            style: TextStyle(
-              fontSize: 11,
-              color: isPrinted ? Colors.green : Colors.orange,
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                isPrinted ? "Etiquetas Generadas" : "No impreso",
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isPrinted ? Colors.green : Colors.orange,
+                ),
+              ),
             ),
-          ),
+            if (hasCustomPrice)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  "Precio Talla: \$${itemPrice.toStringAsFixed(2)}",
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Colors.blueAccent,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+          ],
         ),
-
-        // Botón Borrar Lote Completo
         trailing: IconButton(
           icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
           onPressed: () {
-            // Lógica de borrado en bloque
             setState(() {
               _generatedItems.removeWhere((item) => item['qr'] == sku);
             });
@@ -674,15 +701,12 @@ class _ProductDetailEntryScreenState
             );
           },
         ),
-
-        // Tap para reimprimir
         onTap: () {
-          double p = double.tryParse(_priceCtrl.text) ?? 0;
           _showLabelPreviewDialog(
             prodName,
             sku,
             group['size'],
-            p,
+            itemPrice,
             _defaultShowPrice,
           );
         },
@@ -702,6 +726,7 @@ class _ProductDetailEntryScreenState
             'qr': e['qr'].toString(),
             'size': e['size'].toString(),
             'printed': (e['printed'] ?? false).toString(),
+            'price': (e['price'] ?? 0.0).toString(),
           },
         )
         .toList();
@@ -764,23 +789,35 @@ class _ProductDetailEntryScreenState
   }
 }
 
+// ═══════════════════════════════════════════════════════════
+// ENUM: Modo de asignación del código QR/barras
+// ═══════════════════════════════════════════════════════════
+enum QrMode { generate, scan }
+
+// ═══════════════════════════════════════════════════════════
+// MODAL: Selector de talla + modo QR
+// ═══════════════════════════════════════════════════════════
 class _SizeSelectorModal extends StatefulWidget {
   final List<String> tallasDisponibles;
+  final double basePrice;
   final bool initialPrint;
   final bool initialShowPrice;
   final bool initialOnePerLot;
 
-  final Function(
+  final void Function(
     String size,
     int qty,
+    double price,
     bool shouldPrint,
     bool showPrice,
     bool onePerLot,
+    String? qrCode, // null = generar nuevo; valor = código escaneado
   )
   onAdd;
 
   const _SizeSelectorModal({
     required this.tallasDisponibles,
+    required this.basePrice,
     required this.onAdd,
     this.initialPrint = true,
     this.initialShowPrice = true,
@@ -794,9 +831,14 @@ class _SizeSelectorModal extends StatefulWidget {
 class _SizeSelectorModalState extends State<_SizeSelectorModal> {
   String? _selectedSize;
   final TextEditingController _qtyCtrl = TextEditingController();
+  final TextEditingController _priceCtrl = TextEditingController();
   late bool _shouldPrint;
   late bool _showPrice;
   late bool _onePerLot;
+
+  // --- QR MODE ---
+  QrMode _qrMode = QrMode.generate;
+  String? _scannedCode;
 
   @override
   void initState() {
@@ -804,20 +846,34 @@ class _SizeSelectorModalState extends State<_SizeSelectorModal> {
     _shouldPrint = widget.initialPrint;
     _showPrice = widget.initialShowPrice;
     _onePerLot = widget.initialOnePerLot;
-    _qtyCtrl.addListener(() {
-      setState(() {});
-    });
+
+    _priceCtrl.text = widget.basePrice % 1 == 0
+        ? widget.basePrice.toInt().toString()
+        : widget.basePrice.toStringAsFixed(2);
+
+    _qtyCtrl.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
     _qtyCtrl.dispose();
+    _priceCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _openScanner() async {
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const _BarcodeScannerPage()),
+    );
+    if (result != null && result.isNotEmpty) {
+      setState(() => _scannedCode = result);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    int qty = int.tryParse(_qtyCtrl.text) ?? 0;
+    final int qty = int.tryParse(_qtyCtrl.text) ?? 0;
     String confirmationText = "";
     Color confirmationColor = Colors.grey.shade100;
     IconData confirmationIcon = Icons.print_disabled;
@@ -827,13 +883,9 @@ class _SizeSelectorModalState extends State<_SizeSelectorModal> {
       confirmationColor = Colors.green.shade50;
       confirmationTextColor = Colors.green.shade800;
       confirmationIcon = Icons.print;
-
-      if (_onePerLot) {
-        confirmationText = "Se imprimirá 1 etiqueta para todo el lote.";
-      } else {
-        confirmationText = "Se imprimirán $qty etiquetas individuales.";
-      }
-
+      confirmationText = _onePerLot
+          ? "Se imprimirá 1 etiqueta para todo el lote."
+          : "Se imprimirán $qty etiquetas individuales.";
       if (_showPrice) confirmationText += " (Con Precio)";
     } else if (!_shouldPrint) {
       confirmationText = "No se imprimirán etiquetas. Solo carga stock.";
@@ -848,181 +900,473 @@ class _SizeSelectorModalState extends State<_SizeSelectorModal> {
         right: 20,
         top: 20,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Center(
-            child: Text(
-              "Agregar al Lote",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Center(
+              child: Text(
+                "Agregar al Lote",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
+            const SizedBox(height: 20),
 
-          const Text(
-            "1. Selecciona Talla",
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 50,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: widget.tallasDisponibles.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final talla = widget.tallasDisponibles[index];
-                return ChoiceChip(
-                  label: Text(talla),
-                  selected: _selectedSize == talla,
-                  selectedColor: Colors.orange.shade100,
-                  onSelected: (val) => setState(() => _selectedSize = talla),
-                );
-              },
+            // 1. Selector de Talla
+            const Text(
+              "1. Selecciona Talla",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
-          ),
-          const SizedBox(height: 20),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 50,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: widget.tallasDisponibles.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final talla = widget.tallasDisponibles[index];
+                  return ChoiceChip(
+                    label: Text(talla),
+                    selected: _selectedSize == talla,
+                    selectedColor: Colors.orange.shade100,
+                    onSelected: (_) => setState(() => _selectedSize = talla),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 20),
 
-          const Text(
-            "2. Cantidad a ingresar",
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _qtyCtrl,
-            keyboardType: TextInputType.number,
-            autofocus: true,
-            decoration: const InputDecoration(
-              hintText: "Ej: 12",
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.numbers),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade300),
-            ),
-            child: Column(
+            // 2. Fila: Cantidad y Precio
+            Row(
               children: [
-                SwitchListTile(
-                  title: const Text(
-                    "Imprimir Etiquetas",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  value: _shouldPrint,
-                  activeThumbColor: Colors.orange.shade800,
-                  onChanged: (val) => setState(() => _shouldPrint = val),
-                ),
-                if (_shouldPrint) ...[
-                  const Divider(height: 1),
-                  Row(
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: CheckboxListTile(
-                          title: const Text(
-                            "Con Precio",
-                            style: TextStyle(fontSize: 13),
-                          ),
-                          value: _showPrice,
-                          activeColor: Colors.cyan.shade800,
-                          controlAffinity: ListTileControlAffinity.leading,
-                          contentPadding: EdgeInsets.zero,
-                          onChanged: (val) =>
-                              setState(() => _showPrice = val ?? true),
+                      const Text(
+                        "2. Cantidad",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
                         ),
                       ),
-                      Expanded(
-                        child: CheckboxListTile(
-                          title: const Text(
-                            "1 x Lote",
-                            style: TextStyle(fontSize: 13),
-                          ),
-                          subtitle: const Text(
-                            "Solo una",
-                            style: TextStyle(fontSize: 10),
-                          ),
-                          value: _onePerLot,
-                          activeColor: Colors.purple.shade700,
-                          controlAffinity: ListTileControlAffinity.leading,
-                          contentPadding: EdgeInsets.zero,
-                          onChanged: (val) =>
-                              setState(() => _onePerLot = val ?? false),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _qtyCtrl,
+                        keyboardType: TextInputType.number,
+                        autofocus: true,
+                        decoration: const InputDecoration(
+                          hintText: "Ej: 12",
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.numbers),
                         ),
                       ),
                     ],
                   ),
-                ],
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: confirmationColor,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: confirmationColor == Colors.grey.shade100
-                    ? Colors.grey.shade300
-                    : Colors.green.shade200,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(confirmationIcon, color: confirmationTextColor),
-                const SizedBox(width: 12),
+                ),
+                const SizedBox(width: 16),
                 Expanded(
-                  child: Text(
-                    confirmationText,
-                    style: TextStyle(
-                      color: confirmationTextColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Precio (Talla)",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _priceCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          hintText: "0.00",
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.attach_money),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 20),
+
+            // 3. MODO QR
+            const Text(
+              "3. Código de barras / QR",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _QrModeButton(
+                          label: "Generar nuevo",
+                          icon: Icons.auto_awesome,
+                          isSelected: _qrMode == QrMode.generate,
+                          color: Colors.cyan.shade800,
+                          onTap: () => setState(() {
+                            _qrMode = QrMode.generate;
+                            _scannedCode = null;
+                          }),
+                        ),
+                      ),
+                      Expanded(
+                        child: _QrModeButton(
+                          label: "Escanear producto",
+                          icon: Icons.qr_code_scanner,
+                          isSelected: _qrMode == QrMode.scan,
+                          color: Colors.deepPurple,
+                          onTap: () async {
+                            setState(() => _qrMode = QrMode.scan);
+                            await _openScanner();
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_qrMode == QrMode.scan) ...[
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: _scannedCode != null
+                          ? Row(
+                              children: [
+                                Icon(
+                                  Icons.check_circle,
+                                  color: Colors.green.shade700,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _scannedCode!,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.qr_code_scanner,
+                                    color: Colors.deepPurple,
+                                    size: 20,
+                                  ),
+                                  tooltip: "Volver a escanear",
+                                  onPressed: _openScanner,
+                                ),
+                              ],
+                            )
+                          : InkWell(
+                              onTap: _openScanner,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.camera_alt_outlined,
+                                    color: Colors.deepPurple.shade300,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    "Toca para escanear el código",
+                                    style: TextStyle(
+                                      color: Colors.deepPurple.shade400,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // 4. Opciones de etiqueta
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    title: const Text(
+                      "Imprimir Etiquetas",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    value: _shouldPrint,
+                    activeThumbColor: Colors.orange.shade800,
+                    onChanged: (val) => setState(() => _shouldPrint = val),
+                  ),
+                  if (_shouldPrint) ...[
+                    const Divider(height: 1),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: CheckboxListTile(
+                            title: const Text(
+                              "Con Precio",
+                              style: TextStyle(fontSize: 13),
+                            ),
+                            value: _showPrice,
+                            activeColor: Colors.cyan.shade800,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            contentPadding: EdgeInsets.zero,
+                            onChanged: (val) =>
+                                setState(() => _showPrice = val ?? true),
+                          ),
+                        ),
+                        Expanded(
+                          child: CheckboxListTile(
+                            title: const Text(
+                              "1 x Lote",
+                              style: TextStyle(fontSize: 13),
+                            ),
+                            subtitle: const Text(
+                              "Solo una",
+                              style: TextStyle(fontSize: 10),
+                            ),
+                            value: _onePerLot,
+                            activeColor: Colors.purple.shade700,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            contentPadding: EdgeInsets.zero,
+                            onChanged: (val) =>
+                                setState(() => _onePerLot = val ?? false),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Banner confirmación
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: confirmationColor,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: confirmationColor == Colors.grey.shade100
+                      ? Colors.grey.shade300
+                      : Colors.green.shade200,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(confirmationIcon, color: confirmationTextColor),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      confirmationText,
+                      style: TextStyle(
+                        color: confirmationTextColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Botón Confirmar
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  if (_selectedSize == null) return;
+                  // Si modo escanear pero sin código → abrir escáner primero
+                  if (_qrMode == QrMode.scan && _scannedCode == null) {
+                    _openScanner();
+                    return;
+                  }
+                  final int qtyLocal = int.tryParse(_qtyCtrl.text) ?? 0;
+                  final double priceLocal =
+                      double.tryParse(_priceCtrl.text) ?? 0.0;
+                  if (qtyLocal > 0) {
+                    widget.onAdd(
+                      _selectedSize!,
+                      qtyLocal,
+                      priceLocal,
+                      _shouldPrint,
+                      _showPrice,
+                      _onePerLot,
+                      _qrMode == QrMode.scan ? _scannedCode : null,
+                    );
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange.shade800,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text(
+                  "CONFIRMAR Y AGREGAR",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// WIDGET: Botón de selección de modo QR
+// ═══════════════════════════════════════════════════════════
+class _QrModeButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isSelected;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QrModeButton({
+    required this.label,
+    required this.icon,
+    required this.isSelected,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withValues(alpha: 0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: isSelected ? Border.all(color: color, width: 1.5) : null,
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: isSelected ? color : Colors.grey, size: 22),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? color : Colors.grey,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// PANTALLA: Escáner de código de barras con MobileScanner
+// ═══════════════════════════════════════════════════════════
+class _BarcodeScannerPage extends StatefulWidget {
+  const _BarcodeScannerPage();
+
+  @override
+  State<_BarcodeScannerPage> createState() => _BarcodeScannerPageState();
+}
+
+class _BarcodeScannerPageState extends State<_BarcodeScannerPage> {
+  bool _hasScanned = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: const Text(
+          "Escanear código",
+          style: TextStyle(color: Colors.white),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.close, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: Stack(
+        children: [
+          MobileScanner(
+            onDetect: (capture) {
+              if (_hasScanned) return;
+              final barcode = capture.barcodes.firstOrNull;
+              final code = barcode?.rawValue;
+              if (code != null && code.isNotEmpty) {
+                _hasScanned = true;
+                Navigator.pop(context, code);
+              }
+            },
           ),
 
-          const SizedBox(height: 16),
-
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                if (_selectedSize == null) return;
-                int qtyLocal = int.tryParse(_qtyCtrl.text) ?? 0;
-                if (qtyLocal > 0) {
-                  widget.onAdd(
-                    _selectedSize!,
-                    qtyLocal,
-                    _shouldPrint,
-                    _showPrice,
-                    _onePerLot,
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange.shade800,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              child: const Text(
-                "CONFIRMAR Y AGREGAR",
-                style: TextStyle(fontWeight: FontWeight.bold),
+          // Visor de alineación
+          Center(
+            child: Container(
+              width: 260,
+              height: 130,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.orange, width: 2.5),
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
           ),
-          const SizedBox(height: 20),
+
+          // Instrucción inferior
+          Positioned(
+            bottom: 60,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  "Apunta al código de barras del producto",
+                  style: TextStyle(color: Colors.white, fontSize: 13),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

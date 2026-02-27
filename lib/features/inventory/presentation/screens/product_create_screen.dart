@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 
 // Core Providers
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
+import 'package:inventario_v2/core/providers/database_provider.dart';
 import 'package:inventario_v2/core/providers/supabase_provider.dart';
 import 'package:inventario_v2/core/services/image_storage_service.dart';
 
@@ -311,7 +312,7 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen> {
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.12),
+                              color: Colors.black.withValues(alpha: 0.12),
                               blurRadius: 15,
                               offset: const Offset(0, 5),
                             ),
@@ -480,26 +481,53 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen> {
     if (mounted) setState(() => _isSaving = true);
 
     try {
-      // 3. Buscar ID de Categoría por nombre
+      // 3. Buscar o crear la categoría por nombre
+      //    Si el texto no coincide con ninguna existente, se crea una nueva
+      //    automáticamente en Isar (pendiente de sync a Supabase).
       final listCategorias = ref.read(listCategoriasAllProvider).value ?? [];
-      final categoriaSeleccionada = listCategorias.firstWhere(
-        (c) => c.nombre.toLowerCase() == _categoryCtrl.text.toLowerCase(),
-        orElse: () => CategoriaCollection(),
-      );
+      CategoriaCollection? categoriaSeleccionada = listCategorias
+          .where(
+            (c) =>
+                c.nombre.toLowerCase() ==
+                _categoryCtrl.text.trim().toLowerCase(),
+          )
+          .firstOrNull;
 
-      if (categoriaSeleccionada.serverId.isEmpty) {
-        throw Exception(
-          "La categoría '${_categoryCtrl.text}' no es válida. Selecciónela de la lista.",
-        );
-      }
-
-      // 4. Obtener Usuario
+      // 4. Obtener Usuario (necesario antes de crear categoría)
       final authController = ref.read(authControllerProvider.notifier);
       final usuario =
           authController.usuarioActual ?? await authController.getUser();
 
       if (usuario == null) {
         throw Exception("Usuario no encontrado, inicie sesión nuevamente.");
+      }
+
+      // Si la categoría no existe → crearla al vuelo
+      if (categoriaSeleccionada == null &&
+          _categoryCtrl.text.trim().isNotEmpty) {
+        final isar = await ref.read(isarDbProvider.future);
+        final nuevaCategoria = CategoriaCollection()
+          ..serverId = const Uuid().v4()
+          ..nombre = _categoryCtrl.text.trim()
+          ..empresaId = usuario.empresaId
+          ..usuarioRegistroId = usuario.serverId
+          ..fechaRegistro = DateTime.now()
+          ..ultimaActualizacion = DateTime.now()
+          ..estado = true
+          ..pendienteSincronizacion = true;
+
+        await isar.writeTxn(() async {
+          await isar.categoriaCollections.put(nuevaCategoria);
+        });
+
+        categoriaSeleccionada = nuevaCategoria;
+        debugPrint(
+          '📦 [Producto] Nueva categoría creada: ${nuevaCategoria.nombre}',
+        );
+      }
+
+      if (categoriaSeleccionada == null) {
+        throw Exception("Por favor ingresa una categoría para el producto.");
       }
 
       // 5. Procesar Imagen
@@ -539,11 +567,15 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen> {
 
       // 6. Preparar Objeto
       final productoAGuardar = widget.productToEdit ?? ProductoCollection();
+      final esNuevo = widget.productToEdit == null;
 
       productoAGuardar
-        ..serverId = widget.productToEdit != null
-            ? productoAGuardar.serverId
-            : const Uuid().v4()
+        ..serverId = esNuevo
+            ? const Uuid()
+                  .v4() // Nuevo: generar UUID
+            : widget
+                  .productToEdit!
+                  .serverId // Edición: conservar el existente
         ..nombre = _nameController.text
         ..categoriaId = categoriaSeleccionada.serverId
         ..empresaId = usuario.empresaId
@@ -553,11 +585,11 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen> {
           'category': _categoryCtrl.text,
           'detail': _detailCtrl.text,
         })
-        ..imagenLocal = localPathFinal ?? productoAGuardar.imagenLocal
-        ..imagenUrl = webUrlFinal ?? productoAGuardar.imagenUrl
-        ..fechaRegistro = widget.productToEdit != null
-            ? productoAGuardar.fechaRegistro
-            : DateTime.now()
+        ..imagenLocal = localPathFinal ?? widget.productToEdit?.imagenLocal
+        ..imagenUrl = webUrlFinal ?? widget.productToEdit?.imagenUrl
+        ..fechaRegistro = esNuevo
+            ? DateTime.now()
+            : widget.productToEdit!.fechaRegistro
         ..ultimaActualizacion = DateTime.now()
         ..pendienteSincronizacion = true
         ..estado = true;

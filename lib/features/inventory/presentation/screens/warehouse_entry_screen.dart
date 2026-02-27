@@ -172,7 +172,7 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
+                        color: Colors.black.withValues(alpha: 0.04),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -287,7 +287,7 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
           // LOADING OVERLAY (Bloquea la pantalla si está guardando)
           if (_isLoading)
             Container(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withValues(alpha: 0.3),
               child: const Center(
                 child: CircularProgressIndicator(color: Colors.white),
               ),
@@ -358,7 +358,7 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -488,7 +488,8 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ProductSelectionScreen(bodegaId: widget.bodegaId),
+        builder: (context) =>
+            const ProductSelectionScreen(mode: ProductSelectionMode.entry),
       ),
     );
 
