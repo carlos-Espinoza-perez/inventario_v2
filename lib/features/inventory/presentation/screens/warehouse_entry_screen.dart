@@ -8,6 +8,12 @@ import 'package:inventario_v2/features/inventory/data/repository/movimiento_repo
 // Importaciones de tus pantallas
 import 'product_selection_screen.dart';
 import 'product_detail_entry_screen.dart';
+import 'barcode_capture_screen.dart';
+
+import 'package:inventario_v2/core/providers/database_provider.dart';
+import 'package:inventario_v2/features/inventory/data/collections/producto_collection.dart';
+import 'package:inventario_v2/features/inventory/data/collections/codigo_producto_collection.dart';
+import 'package:isar/isar.dart';
 
 class WarehouseEntryScreen extends ConsumerStatefulWidget {
   final String bodegaId;
@@ -28,6 +34,10 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
   // Estado de carga para el guardado
   bool _isLoading = false;
 
+  // Escáner
+  bool _isLoadingProduct = false;
+  final TextEditingController _searchController = TextEditingController();
+
   // --- CÁLCULOS ---
   double get _totalInvestment => _orderLines.fold(0, (sum, item) {
     double cost = item['cost'];
@@ -42,6 +52,7 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
   @override
   void dispose() {
     _descriptionCtrl.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -210,7 +221,6 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // 2. TÍTULO Y BOTÓN AGREGAR
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -261,11 +271,79 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
                         ),
                       ),
                       icon: const Icon(Icons.add_circle_outline, size: 18),
-                      label: const Text("Procesar Producto"),
+                      label: const Text("Catálogo"),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
+
+                // BARRA DE BÚSQUEDA Y ESCÁNER
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: "Buscar por código o nombre...",
+                          prefixIcon: const Icon(
+                            Icons.search,
+                            color: Colors.grey,
+                          ),
+                          suffixIcon: _isLoadingProduct
+                              ? Transform.scale(
+                                  scale: 0.5,
+                                  child: const CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : (_searchController.text.isNotEmpty
+                                    ? IconButton(
+                                        icon: const Icon(Icons.clear, size: 20),
+                                        onPressed: () {
+                                          _searchController.clear();
+                                        },
+                                      )
+                                    : null),
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                          ),
+                        ),
+                        onSubmitted: (val) {
+                          _handleScannedProduct(val);
+                          _searchController.clear();
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    IconButton.filled(
+                      onPressed: _isLoading || _isLoadingProduct
+                          ? null
+                          : _openScanner,
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.cyan.shade800,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.all(12),
+                      ),
+                      icon: const Icon(
+                        Icons.qr_code_scanner,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
 
                 // 3. LISTA DE RESUMEN O EMPTY STATE
                 if (_orderLines.isEmpty)
@@ -537,6 +615,107 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("✅ Lote actualizado")));
+    }
+  }
+
+  // --- ESCÁNER Y BÚSQUEDA ---
+
+  void _openScanner() async {
+    final code = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const BarcodeCaptureScreen()),
+    );
+    if (code != null && code is String) {
+      _handleScannedProduct(code);
+    }
+  }
+
+  Future<void> _handleScannedProduct(String rawSku) async {
+    if (rawSku.isEmpty) return;
+
+    final sku = rawSku.trim().replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '');
+    if (sku.isEmpty) return;
+
+    setState(() => _isLoadingProduct = true);
+    try {
+      final isar = await ref.read(isarDbProvider.future);
+
+      // 1. Buscar por codigoPersonalizado (case-insensitive)
+      ProductoCollection? product = await isar.productoCollections
+          .filter()
+          .codigoPersonalizadoEqualTo(sku, caseSensitive: false)
+          .findFirst();
+
+      // 2. Buscar en codigo_producto (case-insensitive)
+      if (product == null) {
+        final codigoProd = await isar.codigoProductoCollections
+            .filter()
+            .codigoSkuEqualTo(sku, caseSensitive: false)
+            .findFirst()
+            .then(
+              (c) async => c == null
+                  ? await isar.codigoProductoCollections
+                        .filter()
+                        .codigoSkuContains(sku, caseSensitive: false)
+                        .findFirst()
+                  : c,
+            );
+        if (codigoProd != null) {
+          product = await isar.productoCollections
+              .filter()
+              .serverIdEqualTo(codigoProd.productoId)
+              .findFirst();
+        }
+      }
+
+      // 3. Buscar por nombre
+      if (product == null) {
+        product = await isar.productoCollections
+            .filter()
+            .nombreContains(sku, caseSensitive: false)
+            .findFirst();
+      }
+
+      if (product != null) {
+        if (!mounted) return;
+        _goToProductDetail(product);
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Producto no encontrado: $sku"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoadingProduct = false);
+    }
+  }
+
+  void _goToProductDetail(ProductoCollection product) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProductDetailEntryScreen(
+          productId: product.serverId,
+          categoriaId: product.categoriaId,
+        ),
+      ),
+    );
+
+    if (result != null && result is Map) {
+      setState(() {
+        _orderLines.add(result as Map<String, dynamic>);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "✅ Se agregaron ${(result['items'] as List).length} unidades",
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 }

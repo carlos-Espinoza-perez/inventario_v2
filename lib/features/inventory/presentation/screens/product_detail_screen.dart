@@ -557,7 +557,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
                               const SizedBox(width: 12),
                               if (precio != null)
                                 Text(
-                                  "C\$ ${(precio as num).toStringAsFixed(2)}",
+                                  "C\$ ${(num.tryParse(precio.toString()) ?? 0).toStringAsFixed(2)}",
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: Colors.grey[600],
@@ -575,7 +575,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
                         horizontal: 16,
                       ),
                       child: Text(
-                        "Costo Ref: C\$ ${(mov['costo'] as num).toStringAsFixed(2)}",
+                        "Costo Ref: C\$ ${(num.tryParse(mov['costo']?.toString() ?? '0') ?? 0).toStringAsFixed(2)}",
                         style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       ),
                     ),
