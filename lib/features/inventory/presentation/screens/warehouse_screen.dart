@@ -1,15 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/features/auth/data/collections/bodega_collection.dart';
 import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
 import 'package:inventario_v2/features/inventory/presentation/widgets/warehouse_item.dart';
 
-class WarehouseScreen extends ConsumerWidget {
+class WarehouseScreen extends ConsumerStatefulWidget {
   const WarehouseScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<WarehouseScreen> createState() => _WarehouseScreenState();
+}
+
+class _WarehouseScreenState extends ConsumerState<WarehouseScreen> {
+  @override
+  Widget build(BuildContext context) {
+    // Configurar el título del AppBar cada vez que se renderiza
+    Future.microtask(() {
+      ref
+          .read(appBarProvider.notifier)
+          .setOptions(
+            title: "Bodegas",
+            subtitle: "Gestión de Almacenes",
+            showBackButton: true,
+            actions: [],
+          );
+    });
+
     // 1. Escuchamos la lista de bodegas
     final bodegasAsync = ref.watch(bodegaListProvider);
 

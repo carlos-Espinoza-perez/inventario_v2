@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
+import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
 import 'package:inventario_v2/features/inventory/presentation/widgets/categoria_filter_list.dart';
 import 'package:inventario_v2/features/inventory/presentation/providers/warehouse_inventory_provider.dart';
 
@@ -29,26 +30,6 @@ class _WarehouseInventoryScreenState
         _searchQuery = _searchController.text.toLowerCase();
       });
     });
-
-    // 🔥 CONTROL DEL HEADER DINÁMICO
-    Future.microtask(() {
-      ref
-          .read(appBarProvider.notifier)
-          .setOptions(
-            title: "Bodega Central", // Pendiente: obtener nombre real de bodega
-            subtitle: "Inventario Actual",
-            showBackButton: true,
-            actions: [
-              IconButton(
-                onPressed: () {
-                  context.push('/warehouse-history/${widget.warehouseId}');
-                },
-                icon: const Icon(Icons.history, color: Colors.black87),
-                tooltip: "Ver Historial",
-              ),
-            ],
-          );
-    });
   }
 
   @override
@@ -57,8 +38,79 @@ class _WarehouseInventoryScreenState
     super.dispose();
   }
 
+  // Método para actualizar el título del AppBar reactivamente
+  void _updateAppBarTitle() {
+    final bodegaAsync = ref.watch(bodegaByIdProvider(widget.warehouseId));
+
+    bodegaAsync.when(
+      data: (bodega) {
+        Future.microtask(() {
+          ref
+              .read(appBarProvider.notifier)
+              .setOptions(
+                title: bodega?.nombre ?? "Bodega",
+                subtitle: "Inventario Actual",
+                showBackButton: true,
+                actions: [
+                  IconButton(
+                    onPressed: () {
+                      context.push('/warehouse-history/${widget.warehouseId}');
+                    },
+                    icon: const Icon(Icons.history, color: Colors.black87),
+                    tooltip: "Ver Historial",
+                  ),
+                ],
+              );
+        });
+      },
+      loading: () {
+        Future.microtask(() {
+          ref
+              .read(appBarProvider.notifier)
+              .setOptions(
+                title: "Cargando...",
+                subtitle: "Inventario Actual",
+                showBackButton: true,
+                actions: [
+                  IconButton(
+                    onPressed: () {
+                      context.push('/warehouse-history/${widget.warehouseId}');
+                    },
+                    icon: const Icon(Icons.history, color: Colors.black87),
+                    tooltip: "Ver Historial",
+                  ),
+                ],
+              );
+        });
+      },
+      error: (error, stack) {
+        Future.microtask(() {
+          ref
+              .read(appBarProvider.notifier)
+              .setOptions(
+                title: "Bodega",
+                subtitle: "Inventario Actual",
+                showBackButton: true,
+                actions: [
+                  IconButton(
+                    onPressed: () {
+                      context.push('/warehouse-history/${widget.warehouseId}');
+                    },
+                    icon: const Icon(Icons.history, color: Colors.black87),
+                    tooltip: "Ver Historial",
+                  ),
+                ],
+              );
+        });
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Actualizar el AppBar con el nombre de la bodega
+    _updateAppBarTitle();
+
     // Escuchar el provider
     final inventoryAsync = ref.watch(
       warehouseInventoryProvider(widget.warehouseId),

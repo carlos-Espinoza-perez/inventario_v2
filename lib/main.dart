@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:inventario_v2/core/constants/app_constants.dart';
 import 'package:inventario_v2/core/providers/isar_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -7,6 +8,9 @@ import 'core/router/app_router.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Cargar variables de entorno
+  await dotenv.load(fileName: ".env");
 
   await Supabase.initialize(
     url: AppConstants.supabaseUrl,

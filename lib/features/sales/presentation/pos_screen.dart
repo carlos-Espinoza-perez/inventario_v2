@@ -520,13 +520,13 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           product: product,
           maxStock: maxStock,
           variants: variants,
-          onAddToCart: (qty, size, price) {
+          onAddToCart: (qty, size, price, maxStockForSize) {
             _addToCart(
               product,
               qty: qty,
               size: size,
               price: price,
-              maxStock: maxStock,
+              maxStock: maxStockForSize,
             );
             Navigator.pop(context);
             ScaffoldMessenger.of(context).showSnackBar(
@@ -922,7 +922,7 @@ class _ProductDetailModal extends StatefulWidget {
   final ProductoCollection product;
   final double maxStock;
   final List<Map<String, dynamic>> variants;
-  final Function(int qty, String size, double price) onAddToCart;
+  final Function(int qty, String size, double price, double maxStockForSize) onAddToCart;
 
   const _ProductDetailModal({
     required this.product,
@@ -940,10 +940,12 @@ class _ProductDetailModalState extends State<_ProductDetailModal> {
   late String _selectedSize;
   List<String> _sizes = [];
   late TextEditingController _priceController;
+  late double _currentMaxStock;
 
   @override
   void initState() {
     super.initState();
+    _currentMaxStock = widget.maxStock;
     _priceController = TextEditingController(
       text: (widget.product.precioBase ?? 0.0).toStringAsFixed(2),
     );
@@ -970,25 +972,52 @@ class _ProductDetailModalState extends State<_ProductDetailModal> {
 
     _selectedSize = _sizes.contains("Única") ? "Única" : _sizes.first;
 
-    // Si la talla seleccionada tiene un precio específico, lo cargamos
-    _updatePriceForSelectedSize();
+    // Actualizamos precio y stock para la talla seleccionada
+    _updateDynamicValuesForSize();
   }
 
-  void _updatePriceForSelectedSize() {
+  void _updateDynamicValuesForSize() {
+    debugPrint("DEBUG _updateDynamicValuesForSize: Evaluando talla '$_selectedSize'");
+    debugPrint("DEBUG _updateDynamicValuesForSize: Variantes totales: ${widget.variants}");
+
     if (widget.variants.isNotEmpty) {
       final variant = widget.variants.firstWhere(
         (v) => v['talla'] == _selectedSize,
         orElse: () => <String, dynamic>{},
       );
-      if (variant.isNotEmpty && variant['precio'] != null) {
-        _priceController.text = (variant['precio'] as num)
-            .toDouble()
-            .toStringAsFixed(2);
+      
+      debugPrint("DEBUG _updateDynamicValuesForSize: Talla encontrada: $variant");
+
+      if (variant.isNotEmpty) {
+        if (variant['precio'] != null) {
+          _priceController.text = (variant['precio'] as num).toDouble().toStringAsFixed(2);
+        } else {
+          _priceController.text = (widget.product.precioBase ?? 0.0).toStringAsFixed(2);
+        }
+
+        if (variant['cantidad'] != null) {
+          _currentMaxStock = (variant['cantidad'] as num).toDouble();
+          debugPrint("DEBUG _updateDynamicValuesForSize: Usando cantidad variante: $_currentMaxStock");
+        } else {
+          _currentMaxStock = widget.maxStock;
+          debugPrint("DEBUG _updateDynamicValuesForSize: Fallback a maxStock porque la variante no tiene cantidad: $_currentMaxStock");
+        }
       } else {
-        _priceController.text = (widget.product.precioBase ?? 0.0)
-            .toStringAsFixed(2);
+         _priceController.text = (widget.product.precioBase ?? 0.0).toStringAsFixed(2);
+         _currentMaxStock = widget.maxStock;
+         debugPrint("DEBUG _updateDynamicValuesForSize: Variante NO encontrada. Fallback a maxStock: $_currentMaxStock");
       }
+    } else {
+      _currentMaxStock = widget.maxStock;
+      _priceController.text = (widget.product.precioBase ?? 0.0).toStringAsFixed(2);
+      debugPrint("DEBUG _updateDynamicValuesForSize: Lista de variantes Vacia! Fallback a maxStock: $_currentMaxStock");
     }
+
+    if (_qty > _currentMaxStock) {
+      _qty = _currentMaxStock > 0 ? 1 : (_currentMaxStock.toInt() == 0 ? 0 : 0);
+    }
+    
+    debugPrint("DEBUG _updateDynamicValuesForSize: STOCK LIMITE ESTABLECIDO EN $_currentMaxStock, para talla $_selectedSize");
   }
 
   @override
@@ -1088,7 +1117,7 @@ class _ProductDetailModalState extends State<_ProductDetailModal> {
                 onSelected: (val) {
                   setState(() {
                     _selectedSize = size;
-                    _updatePriceForSelectedSize();
+                    _updateDynamicValuesForSize();
                   });
                 },
                 selectedColor: Colors.blue[100],
@@ -1175,7 +1204,7 @@ class _ProductDetailModalState extends State<_ProductDetailModal> {
                       ),
                       IconButton.filledTonal(
                         onPressed: () {
-                          if (_qty < widget.maxStock) {
+                          if (_qty < _currentMaxStock) {
                             setState(() => _qty++);
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -1191,10 +1220,10 @@ class _ProductDetailModalState extends State<_ProductDetailModal> {
                     ],
                   ),
                   Text(
-                    "Disponible: ${widget.maxStock.toInt()}",
+                    "Disponible: ${_currentMaxStock.toInt()}",
                     style: TextStyle(
                       fontSize: 11,
-                      color: widget.maxStock > 0 ? Colors.green : Colors.red,
+                      color: _currentMaxStock > 0 ? Colors.green : Colors.red,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -1208,13 +1237,13 @@ class _ProductDetailModalState extends State<_ProductDetailModal> {
             width: double.infinity,
             height: 55,
             child: ElevatedButton(
-              onPressed: widget.maxStock <= 0
+              onPressed: _currentMaxStock <= 0
                   ? null
                   : () {
                       final price =
                           double.tryParse(_priceController.text) ??
                           (widget.product.precioBase ?? 0.0);
-                      widget.onAddToCart(_qty, _selectedSize, price);
+                      widget.onAddToCart(_qty, _selectedSize, price, _currentMaxStock);
                     },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue[800],

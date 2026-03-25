@@ -29,6 +29,18 @@ final bodegaListProvider = StreamProvider.autoDispose<List<BodegaCollection>>((
 
 final selectedBodegaProvider = StateProvider<BodegaCollection?>((ref) => null);
 
+// Provider para obtener una bodega por ID
+final bodegaByIdProvider = FutureProvider.family<BodegaCollection?, String>((
+  ref,
+  bodegaId,
+) async {
+  final isar = await ref.watch(isarDbProvider.future);
+  return await isar.bodegaCollections
+      .filter()
+      .serverIdEqualTo(bodegaId)
+      .findFirst();
+});
+
 final validBodegasIdsProvider = FutureProvider.autoDispose<Set<String>>((
   ref,
 ) async {

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:inventario_v2/core/services/image_sync_service.dart';
+import 'package:inventario_v2/core/utils/uuid_validator.dart';
 import 'package:isar/isar.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -299,8 +300,8 @@ class SyncRepository {
           })
           .where((json) {
             // ID PRINCIPAL
-            final id = json['id'].toString();
-            if (id == '1' || id.isEmpty || id.length < 32) {
+            final id = json['id']?.toString();
+            if (!UuidValidator.isValidUUID(id)) {
               debugPrint(
                 "⚠️ [Sync] Descartando $tableName por ID inválido: $id",
               );
@@ -308,11 +309,11 @@ class SyncRepository {
             }
 
             // VALIDACIÓN DE FOREIGN KEYS (Campos que terminan en _id)
-            // Si una FK tiene un valor corto (ej: "7"), es un ID local corrupto y romperá Postgres.
             for (var key in json.keys) {
               if (key.endsWith('_id')) {
                 final val = json[key]?.toString();
-                if (val != null && val.isNotEmpty && val.length < 32) {
+                // FK puede ser null (opcional) pero si tiene valor debe ser UUID válido
+                if (val != null && val.isNotEmpty && !UuidValidator.isValidUUID(val)) {
                   debugPrint(
                     "⚠️ [Sync] Descartando $tableName por FK inválida ($key: $val)",
                   );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
+import 'package:uuid/uuid.dart';
 import 'package:inventario_v2/core/providers/database_provider.dart';
 import 'package:inventario_v2/features/sales/data/collections/venta_collection.dart';
 import 'package:inventario_v2/features/sales/data/collections/detalle_venta_collection.dart';
@@ -355,10 +356,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             .findFirst();
         if (cliente == null) {
           cliente = ClienteCollection()
-            ..serverId = DateTime.now().millisecondsSinceEpoch
-                .toString() // ID temporal
-            ..empresaId =
-                empresaId // ID de la empresa real
+            ..serverId = const Uuid().v4()
+            ..empresaId = empresaId // ID de la empresa real
             ..nombre = _clientCtrl.text
             ..celular =
                 '' // Opcional
@@ -374,7 +373,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       await isar.writeTxn(() async {
         // 1. CREAR VENTA
         final nuevaVenta = VentaCollection()
-          ..serverId = DateTime.now().millisecondsSinceEpoch.toString()
+          ..serverId = const Uuid().v4()
           ..empresaId = empresaId
           ..clienteId = cliente?.serverId ?? 'final_consumer'
           ..fechaVenta = DateTime.now()
@@ -487,7 +486,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             : _depositAmount;
         if (montoInicial > 0) {
           final pago = HistorialPagoCollection()
-            ..serverId = "pay-${DateTime.now().millisecondsSinceEpoch}"
+            ..serverId = const Uuid().v4()
             ..ventaId = nuevaVenta.serverId
             ..cajaSesionId = cajaSesionId
             ..montoPagado = montoInicial

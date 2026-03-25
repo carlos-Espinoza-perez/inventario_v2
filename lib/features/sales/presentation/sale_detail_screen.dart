@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
+import 'package:uuid/uuid.dart';
 import 'package:inventario_v2/core/providers/database_provider.dart';
 import 'package:inventario_v2/features/sales/data/collections/venta_collection.dart';
 import 'package:inventario_v2/features/sales/data/collections/detalle_venta_collection.dart';
@@ -565,13 +566,27 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
 
                     if (venta == null) return;
 
+                    // VALIDACIÓN: El abono no puede ser mayor al saldo pendiente
+                    if (amount > venta.saldoPendiente) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            "⚠️ El abono (\$${amount.toStringAsFixed(2)}) no puede ser mayor "
+                            "al saldo pendiente (\$${venta.saldoPendiente.toStringAsFixed(2)})",
+                          ),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+
                     // Se debe usar la CAJA ACTIVA ACTUAL, no la vieja de cuando se vendió (ya podría estar cerrada).
                     final dashboardState = ref.read(dashboardProvider).value;
                     final sesionActual = dashboardState?.cajaAbierta;
 
                     final nuevoPago = HistorialPagoCollection()
-                      ..serverId =
-                          "pay-${DateTime.now().millisecondsSinceEpoch}"
+                      ..serverId = const Uuid().v4()
                       ..ventaId = widget.saleId
                       ..cajaSesionId =
                           sesionActual?.serverId ?? venta.cajaSesionId

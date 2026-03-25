@@ -254,6 +254,61 @@ class MovimientoRepository {
       "Repo: Iniciando traslado. Items: ${items.length}, Usuario: $usuarioId",
     );
     try {
+      // VALIDACIÓN PREVIA: Verificar stock suficiente antes de iniciar transacción
+      for (var item in items) {
+        final String productId = item['productId'];
+        final String sku = item['qr'];
+        final double cantidad = (item['cantidad'] ?? 1).toDouble();
+
+        // Validar inventario macro
+        final invOrigen = await _isar.inventarioCollections
+            .filter()
+            .bodegaIdEqualTo(bodegaOrigenId)
+            .productoIdEqualTo(productId)
+            .findFirst();
+
+        if (invOrigen == null) {
+          throw Exception(
+            'Producto no encontrado en bodega origen. SKU: $sku',
+          );
+        }
+
+        if (invOrigen.cantidadActual < cantidad) {
+          final producto = await _isar.productoCollections
+              .filter()
+              .serverIdEqualTo(productId)
+              .findFirst();
+          throw Exception(
+            'Stock insuficiente para ${producto?.nombre ?? "producto"}. '
+            'Disponible: ${invOrigen.cantidadActual}, Solicitado: $cantidad',
+          );
+        }
+
+        // Validar inventario micro (por talla/SKU)
+        final variante = await _isar.codigoProductoCollections
+            .filter()
+            .productoIdEqualTo(productId)
+            .and()
+            .codigoSkuEqualTo(sku)
+            .findFirst();
+
+        if (variante != null) {
+          final invMicroOrigen = await _isar
+              .inventarioCodigoProductoCollections
+              .filter()
+              .inventarioIdEqualTo(invOrigen.serverId)
+              .codigoProductoIdEqualTo(variante.serverId)
+              .findFirst();
+
+          if (invMicroOrigen != null && invMicroOrigen.cantidad < cantidad) {
+            throw Exception(
+              'Stock insuficiente para talla/SKU: $sku. '
+              'Disponible: ${invMicroOrigen.cantidad}, Solicitado: $cantidad',
+            );
+          }
+        }
+      }
+
       await _isar.writeTxn(() async {
         // 1. CREAR CABECERA (Movimiento)
         final movimientoId = const Uuid().v4();
@@ -326,6 +381,8 @@ class MovimientoRepository {
             // 2. Micro Origen (Por Talla/SKU)
             final variante = await _isar.codigoProductoCollections
                 .filter()
+                .productoIdEqualTo(productId)
+                .and()
                 .codigoSkuEqualTo(sku)
                 .findFirst();
 
@@ -395,6 +452,8 @@ class MovimientoRepository {
           CodigoProductoCollection? variante = await _isar
               .codigoProductoCollections
               .filter()
+              .productoIdEqualTo(productId)
+              .and()
               .codigoSkuEqualTo(sku)
               .findFirst();
 
