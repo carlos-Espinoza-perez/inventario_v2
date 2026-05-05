@@ -1,48 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
-import 'package:isar/isar.dart';
-import 'package:inventario_v2/core/providers/app_bar_provider.dart';
-import 'package:inventario_v2/core/providers/database_provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:inventario_v2/features/sales/data/collections/detalle_venta_collection.dart';
-import 'package:inventario_v2/features/sales/data/collections/venta_collection.dart';
+import 'package:intl/intl.dart';
+import 'package:inventario_v2/core/db/models/report_models.dart';
+import 'package:inventario_v2/core/providers/app_bar_provider.dart';
+import 'package:inventario_v2/core/providers/drift_provider.dart';
+import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
 
-// ------------------------------------------------------------------
-// PROVIDER: Ventas y ganancia del día actual
-// ------------------------------------------------------------------
-final todayStatsProvider = FutureProvider.autoDispose<Map<String, double>>((
+final todayStatsProvider = FutureProvider.autoDispose<ReportDashboardStatsDrift>((
   ref,
 ) async {
-  final isar = await ref.watch(isarDbProvider.future);
-  final now = DateTime.now();
-  final startOfDay = DateTime(now.year, now.month, now.day);
-  final endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59);
-
-  final ventas = await isar.ventaCollections
-      .filter()
-      .fechaVentaGreaterThan(startOfDay)
-      .fechaVentaLessThan(endOfDay)
-      .estadoEqualTo(true)
-      .findAll();
-
-  double ventasHoy = 0;
-  double utilidadHoy = 0;
-
-  for (final v in ventas) {
-    ventasHoy += v.totalVenta;
-    final detalles = await isar.detalleVentaCollections
-        .filter()
-        .ventaIdEqualTo(v.serverId)
-        .findAll();
-    for (final d in detalles) {
-      final ingreso = d.subTotal - d.descuento;
-      final costo = d.costoHistoricoCompra * d.cantidad;
-      utilidadHoy += ingreso - costo;
-    }
-  }
-
-  return {'ventas': ventasHoy, 'utilidad': utilidadHoy};
+  final db = ref.watch(driftDatabaseProvider);
+  final validBodegaIds = await ref.watch(validBodegasIdsProvider.future);
+  return db.salesDao.getTodayStats(bodegaIds: validBodegaIds);
 });
 
 class ReportsDashboardScreen extends ConsumerStatefulWidget {
@@ -55,60 +25,56 @@ class ReportsDashboardScreen extends ConsumerStatefulWidget {
 
 class _ReportsDashboardScreenState
     extends ConsumerState<ReportsDashboardScreen> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref
-          .read(appBarProvider.notifier)
-          .setOptions(
-            title: "Centro de Reportes",
-            subtitle: "Estadísticas y Análisis",
-            showBackButton: false,
-            actions: [],
-          );
-    });
-  }
-
-  // LISTA DE REPORTES DISPONIBLES
-  final List<Map<String, dynamic>> _reportMenu = [
+  final List<Map<String, dynamic>> _reportMenu = const [
     {
       'title': 'Ventas',
       'subtitle': 'Historial, tendencias y productos top',
       'icon': Icons.bar_chart,
       'color': Colors.blue,
-      'route': '/reports/sales', // Ruta a definir
+      'route': '/reports/sales',
     },
     {
       'title': 'Inventario',
-      'subtitle': 'Valoración, stock bajo y movimientos',
+      'subtitle': 'Valoracion, stock bajo y movimientos',
       'icon': Icons.inventory_2,
       'color': Colors.orange,
       'route': '/reports/inventory',
     },
     {
       'title': 'Finanzas',
-      'subtitle': 'Ganancias, gastos y márgenes',
+      'subtitle': 'Ganancias, gastos y margenes',
       'icon': Icons.pie_chart,
       'color': Colors.green,
       'route': '/reports/financial',
     },
     {
       'title': 'Cuentas x Cobrar',
-      'subtitle': 'Estado de clientes y créditos',
+      'subtitle': 'Estado de clientes y creditos',
       'icon': Icons.account_balance_wallet,
       'color': Colors.purple,
       'route': '/reports/receivables',
     },
     {
       'title': 'Cierres de Caja',
-      'subtitle': 'Auditoría de turnos pasados',
+      'subtitle': 'Auditoria de turnos pasados',
       'icon': Icons.receipt_long,
       'color': Colors.teal,
-      'route':
-          '/reports/cash-history', // Podrías reutilizar CashRegisterHistoryScreen aquí
+      'route': '/reports/cash-history',
     },
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(appBarProvider.notifier).setOptions(
+        title: 'Centro de Reportes',
+        subtitle: 'Estadisticas y Analisis',
+        showBackButton: false,
+        actions: [],
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -119,9 +85,8 @@ class _ReportsDashboardScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. RESUMEN RÁPIDO (FLASH DE HOY)
             const Text(
-              "Resumen del Día",
+              'Resumen del Dia',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 18,
@@ -130,11 +95,11 @@ class _ReportsDashboardScreenState
             ),
             const SizedBox(height: 12),
             Consumer(
-              builder: (ctx, ref, _) {
+              builder: (_, ref, _) {
                 final statsAsync = ref.watch(todayStatsProvider);
                 return statsAsync.when(
                   loading: () => Row(
-                    children: [
+                    children: const [
                       Expanded(
                         child: _FlashCard(
                           title: 'Ventas Hoy',
@@ -144,7 +109,7 @@ class _ReportsDashboardScreenState
                           isLoading: true,
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      SizedBox(width: 12),
                       Expanded(
                         child: _FlashCard(
                           title: 'Utilidad',
@@ -165,7 +130,7 @@ class _ReportsDashboardScreenState
                       Expanded(
                         child: _FlashCard(
                           title: 'Ventas Hoy',
-                          value: stats['ventas'] ?? 0,
+                          value: stats.ventasHoy,
                           icon: Icons.trending_up,
                           color: Colors.blue,
                         ),
@@ -174,7 +139,7 @@ class _ReportsDashboardScreenState
                       Expanded(
                         child: _FlashCard(
                           title: 'Utilidad',
-                          value: stats['utilidad'] ?? 0,
+                          value: stats.utilidadHoy,
                           icon: Icons.attach_money,
                           color: Colors.green,
                         ),
@@ -184,12 +149,9 @@ class _ReportsDashboardScreenState
                 );
               },
             ),
-
             const SizedBox(height: 30),
-
-            // 2. LISTA DE REPORTES (GRID MENU)
             const Text(
-              "Catálogo de Reportes",
+              'Catalogo de Reportes',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 18,
@@ -197,18 +159,16 @@ class _ReportsDashboardScreenState
               ),
             ),
             const SizedBox(height: 12),
-
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: _reportMenu.length,
-              separatorBuilder: (c, i) => const SizedBox(height: 12),
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final item = _reportMenu[index];
                 return _ReportMenuItem(item: item);
               },
             ),
-
             const SizedBox(height: 40),
           ],
         ),
@@ -216,8 +176,6 @@ class _ReportsDashboardScreenState
     );
   }
 }
-
-// --- WIDGETS COMPONENTES ---
 
 class _FlashCard extends StatelessWidget {
   final String title;
@@ -269,8 +227,10 @@ class _FlashCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            NumberFormat.compactSimpleCurrency().format(value),
-            style: TextStyle(
+            isLoading
+                ? '--'
+                : NumberFormat.compactSimpleCurrency().format(value),
+            style: const TextStyle(
               fontWeight: FontWeight.w900,
               fontSize: 22,
               color: Colors.black87,
@@ -291,42 +251,33 @@ class _ReportMenuItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
-      // borderRadius: BorderRadius.circular(16), <--- ELIMINA ESTA LÍNEA QUE CAUSA EL ERROR
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(
-          16,
-        ), // Ya estamos definiendo el borde aquí
+        borderRadius: BorderRadius.circular(16),
         side: BorderSide(color: Colors.grey.shade200),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          String route = item['route'];
-          context.push(route);
-        },
+        onTap: () => context.push(item['route'] as String),
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Row(
             children: [
-              // Icono con fondo
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: (item['color'] as Color).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(item['icon'], color: item['color'], size: 28),
+                child: Icon(item['icon'] as IconData, color: item['color'] as Color, size: 28),
               ),
               const SizedBox(width: 16),
-
-              // Textos
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      item['title'],
+                      item['title'] as String,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
@@ -334,14 +285,12 @@ class _ReportMenuItem extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      item['subtitle'],
+                      item['subtitle'] as String,
                       style: TextStyle(color: Colors.grey[500], fontSize: 12),
                     ),
                   ],
                 ),
               ),
-
-              // Flecha
               Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[300]),
             ],
           ),

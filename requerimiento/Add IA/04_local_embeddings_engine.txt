@@ -1,0 +1,91 @@
+# ARCHIVO: 04_local_embeddings_engine
+# ROL: Machine Learning Engineer / Flutter Backend Developer
+# PROYECTO: Sistema de Inventario Inteligente Offline
+
+===========================================================================
+🎯 OBJETIVO DE ESTE MÓDULO
+===========================================================================
+Implementar el motor de generación de vectores (Embeddings) que funcione 
+totalmente fuera de línea. Este motor transformará cualquier String de 
+nuestras colecciones en una lista de 384 números (vectores).
+
+===========================================================================
+🧠 EL MODELO: all-MiniLM-L6-v2 (Quantized)
+===========================================================================
+- Tamaño: ~25MB (Diferente al de Gemma de 1.5GB).
+- Función: Mapear conceptos similares en un espacio vectorial.
+- Ejemplo: "Refresco" y "Bebida" tendrán vectores con alta similitud.
+
+===========================================================================
+📦 DEPENDENCIAS REQUERIDAS (pubspec.yaml)
+===========================================================================
+dependencies:
+  onnxruntime: ^0.2.0        # Para ejecutar modelos .onnx localmente.
+  # O alternativamente:
+  tflite_flutter: ^0.10.0    # Si prefieres usar la versión .tflite.
+
+===========================================================================
+🏗️ IMPLEMENTACIÓN DEL MOTOR (DART)
+===========================================================================
+
+class VectorEngine {
+  static final VectorEngine _instance = VectorEngine._internal();
+  factory VectorEngine() => _instance;
+  VectorEngine._internal();
+
+  dynamic _session; // Sesión de ONNX o Interpreter de TFLite
+
+  // 1. Cargar el modelo pequeño (25MB)
+  Future<void> init() async {
+    // Se carga desde los assets o desde el AIModelManager del Paso 01
+    _session = await OnnxRuntime.create(modelPath: 'assets/models/embedder.onnx');
+  }
+
+  // 2. Generar el Vector (Embedding)
+  Future<List<double>> generateEmbedding(String text) async {
+    // Pre-procesamiento: Tokenizar el texto (básico o con vocabulario)
+    final input = _tokenize(text); 
+    
+    // Ejecutar inferencia
+    final output = await _session.run({'input': input});
+    
+    // Normalizar el resultado (importante para Similitud de Coseno)
+    return _normalize(output['embeddings']);
+  }
+
+  List<double> _normalize(List<double> vector) {
+    double norm = sqrt(vector.map((x) => x * x).reduce((a, b) => a + b));
+    return vector.map((x) => x / norm).toList();
+  }
+}
+
+===========================================================================
+🔄 FLUJO DE TRABAJO EN REPOSITORIOS
+===========================================================================
+
+Cada vez que se guarda un registro (Producto, Cliente, etc.):
+1. El repositorio recibe el objeto.
+2. Llama a `VectorEngine().generateEmbedding(objeto.nombre)`.
+3. Guarda el objeto en Drift con el nuevo vector.
+
+
+
+===========================================================================
+⚠️ ANÁLISIS AUTOCRÍTICO (REVISIÓN SENIOR)
+===========================================================================
+
+* COHERENCIA: Es vital que el modelo de embeddings sea el MISMO siempre. 
+  Si cambias el modelo de 25MB, TODOS los vectores guardados en Drift 
+  quedarán obsoletos y habrá que re-indexar la base de datos.
+
+* PERFORMANCE: Generar un vector tarda ~10ms-50ms. No afecta al usuario 
+  en guardados individuales, pero si haces una importación masiva de 
+  1,000 productos, DEBES usar un Isolate para no congelar la UI.
+
+* MEMORIA: A diferencia de Gemma (1.5GB), este modelo puede estar 
+  siempre cargado en RAM ya que solo ocupa 25MB-50MB.
+
+===========================================================================
+🚀 PRÓXIMO PASO: 05_ai_intent_classifier
+Enseñar a Gemma a decidir qué hacer con estos datos (Consultar vs Acción).
+===========================================================================

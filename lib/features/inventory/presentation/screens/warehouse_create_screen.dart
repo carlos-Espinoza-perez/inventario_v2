@@ -3,8 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:inventario_v2/core/presentation/widgets/custom_button.dart';
-import 'package:inventario_v2/features/auth/presentation/providers/auth_provider.dart';
-import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
+import 'package:inventario_v2/core/providers/drift_provider.dart';
 
 class WarehouseCreateScreen extends ConsumerStatefulWidget {
   const WarehouseCreateScreen({super.key});
@@ -16,13 +15,10 @@ class WarehouseCreateScreen extends ConsumerStatefulWidget {
 
 class _WarehouseCreateScreenState extends ConsumerState<WarehouseCreateScreen> {
   final _formKey = GlobalKey<FormState>();
-
-  // Controladores
   final _nameController = TextEditingController();
   final _locationController = TextEditingController();
   final _descriptionController = TextEditingController();
 
-  // Estado
   bool _esPuntoVenta = true;
   bool _isLoading = false;
 
@@ -35,71 +31,47 @@ class _WarehouseCreateScreenState extends ConsumerState<WarehouseCreateScreen> {
   }
 
   Future<void> _guardarBodega() async {
-    // 1. Validar formulario visualmente
     if (!_formKey.currentState!.validate()) return;
 
-    // 2. Ocultar teclado y mostrar carga
     FocusScope.of(context).unfocus();
     setState(() => _isLoading = true);
 
     try {
-      // 3. Obtener el servicio de Bodega (esperando a la DB)
-      final bodegaService = await ref.read(bodegaServiceProvider.future);
-
-      // 4. Obtener el AuthController para sacar los datos del usuario
-      final authController = ref.read(authControllerProvider.notifier);
-
-      // Intentamos obtener el usuario de la memoria, si no está, lo pedimos a la DB
-      final usuario =
-          authController.usuarioActual ?? await authController.getUser();
-
-      // Validación de seguridad
-      if (usuario == null) {
-        throw Exception(
-          "No se encontró la sesión del usuario. Por favor, inicia sesión nuevamente.",
-        );
-      }
-
-      // 5. Llamar al servicio para crear la bodega y la relación
-      await bodegaService.crearBodega(
+      final db = ref.read(driftDatabaseProvider);
+      await db.authDao.createBodegaForCurrentUser(
         nombre: _nameController.text.trim(),
         direccion: _locationController.text.trim(),
         descripcion: _descriptionController.text.trim(),
         esPuntoVenta: _esPuntoVenta,
-        usuarioIdActual: usuario.serverId.toString(),
-        empresaId: usuario.empresaId,
       );
 
-      if (mounted) {
-        setState(() => _isLoading = false);
-        context.pop();
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      context.pop();
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: const [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 10),
-                Text('Bodega creada exitosamente'),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: const [
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 10),
+              Text('Bodega creada exitosamente'),
+            ],
           ),
-        );
-      }
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } catch (e) {
-      // 7. Manejo de errores
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al guardar: $e'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al guardar: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -113,7 +85,6 @@ class _WarehouseCreateScreenState extends ConsumerState<WarehouseCreateScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // TARJETA DE FORMULARIO
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -130,8 +101,8 @@ class _WarehouseCreateScreenState extends ConsumerState<WarehouseCreateScreen> {
                 child: Column(
                   children: [
                     _CustomTextField(
-                      label: "Nombre de la bodega",
-                      hint: "Ej: Bodega Central",
+                      label: 'Nombre de la bodega',
+                      hint: 'Ej: Bodega Central',
                       controller: _nameController,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
@@ -145,28 +116,26 @@ class _WarehouseCreateScreenState extends ConsumerState<WarehouseCreateScreen> {
                     ),
                     const SizedBox(height: 20),
                     _CustomTextField(
-                      label: "Ubicación (Opcional)",
-                      hint: "Ej: Calle Principal, Local 2",
+                      label: 'Ubicacion (Opcional)',
+                      hint: 'Ej: Calle Principal, Local 2',
                       controller: _locationController,
                       icon: Icons.location_on_outlined,
                     ),
                     const SizedBox(height: 20),
                     _CustomTextField(
-                      label: "Descripción / Notas (Opcional)",
-                      hint: "Información adicional relevante...",
+                      label: 'Descripcion / Notas (Opcional)',
+                      hint: 'Informacion adicional relevante...',
                       controller: _descriptionController,
                       maxLines: 3,
                     ),
                     const SizedBox(height: 20),
                     const Divider(height: 1, color: Color(0xFFEEEEEE)),
-
-                    // SWITCH PUNTO DE VENTA
                     Padding(
                       padding: const EdgeInsets.only(top: 15.0, bottom: 5.0),
                       child: SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
                         title: const Text(
-                          "¿Es Punto de Venta?",
+                          'Es Punto de Venta?',
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 14,
@@ -174,14 +143,14 @@ class _WarehouseCreateScreenState extends ConsumerState<WarehouseCreateScreen> {
                           ),
                         ),
                         subtitle: Text(
-                          "Habilita funciones de caja y facturación para esta ubicación",
+                          'Habilita funciones de caja y facturacion para esta ubicacion',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey[500],
                           ),
                         ),
                         value: _esPuntoVenta,
-                        activeColor: Colors.blue,
+                        activeThumbColor: Colors.blue,
                         onChanged: (bool value) {
                           setState(() => _esPuntoVenta = value);
                         },
@@ -190,12 +159,9 @@ class _WarehouseCreateScreenState extends ConsumerState<WarehouseCreateScreen> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 25),
-
-              // BOTÓN GUARDAR
               CustomButton(
-                text: "Guardar bodega",
+                text: 'Guardar bodega',
                 icon: Icons.save_outlined,
                 isLoading: _isLoading,
                 isFullWidth: true,
@@ -211,7 +177,6 @@ class _WarehouseCreateScreenState extends ConsumerState<WarehouseCreateScreen> {
   }
 }
 
-// --- WIDGET LOCAL DE TEXTFIELD (Reutilizable en este archivo) ---
 class _CustomTextField extends StatelessWidget {
   final String label;
   final String hint;
@@ -259,7 +224,7 @@ class _CustomTextField extends StatelessWidget {
               vertical: 14,
             ),
             filled: true,
-            fillColor: Colors.grey[50], // Fondo ligeramente gris
+            fillColor: Colors.grey[50],
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: Colors.grey.shade300),

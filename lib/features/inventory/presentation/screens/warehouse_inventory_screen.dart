@@ -380,30 +380,38 @@ class _ProductCard extends StatelessWidget {
                       // SKU y Categoría
                       Row(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[100],
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              sku,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey[700],
-                                fontWeight: FontWeight.bold,
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[100],
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                sku,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey[700],
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ),
                           const SizedBox(width: 6),
-                          Text(
-                            categoria,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey[500],
+                          Flexible(
+                            child: Text(
+                              categoria,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey[500],
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
@@ -439,11 +447,15 @@ class _ProductCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 10),
                           // Costo (Discreto)
-                          Text(
-                            "Costo: ${costo.toStringAsFixed(0)}",
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey[400],
+                          Flexible(
+                            child: Text(
+                              "Costo: ${costo.toStringAsFixed(0)}",
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey[400],
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],

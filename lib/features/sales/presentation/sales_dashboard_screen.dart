@@ -2,64 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:isar/isar.dart';
+import 'package:inventario_v2/core/db/models/report_models.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
-import 'package:inventario_v2/core/providers/database_provider.dart';
-import 'package:inventario_v2/features/sales/data/collections/venta_collection.dart';
-import 'package:inventario_v2/features/sales/data/collections/cliente_collection.dart';
-import 'package:inventario_v2/features/sales/data/collections/detalle_venta_collection.dart';
-import 'package:inventario_v2/core/constants/app_enums.dart'; // Para EstadoPago
+import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
 
-// PROVIDER DE VENTAS
-final salesListProvider = FutureProvider<List<Map<String, dynamic>>>((
-  ref,
-) async {
-  final isar = await ref.watch(isarDbProvider.future);
-
-  // Obtener todas las ventas ordenadas por fecha reciente
-  final ventas = await isar.ventaCollections
-      .where()
-      .sortByFechaVentaDesc()
-      .findAll();
-
-  List<Map<String, dynamic>> resultados = [];
-
-  for (var venta in ventas) {
-    // 1. Obtener Cliente
-    final cliente = await isar.clienteCollections
-        .filter()
-        .serverIdEqualTo(venta.clienteId)
-        .findFirst();
-    final nombreCliente = cliente?.nombre ?? 'Cliente Desconocido';
-
-    // 2. Contar Items (Detalles)
-    final itemsCount = await isar.detalleVentaCollections
-        .filter()
-        .ventaIdEqualTo(venta.serverId)
-        .count();
-
-    // 3. Mapear estado
-    String status = 'Pendiente';
-    if (!venta.estado) {
-      status = 'Anulado';
-    } else if (venta.estadoPago == EstadoPago.pagado) {
-      status = 'Pagado';
-    } else {
-      status = 'Pendiente';
-    }
-
-    resultados.add({
-      'id': venta.serverId.substring(0, 8).toUpperCase(), // ID visual corto
-      'fullId': venta.serverId, // ID real para navegación
-      'client': nombreCliente,
-      'date': venta.fechaVenta,
-      'total': venta.totalVenta,
-      'status': status,
-      'itemsCount': itemsCount,
-    });
-  }
-  return resultados;
+final salesListProvider = FutureProvider<List<SalesListItemDrift>>((ref) async {
+  final db = ref.watch(driftDatabaseProvider);
+  return db.salesDao.getSalesList();
 });
 
 class SalesDashboardScreen extends ConsumerStatefulWidget {
@@ -71,25 +21,16 @@ class SalesDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
-  // Estado de los Filtros
-  String _searchQuery = "";
-  String _selectedStatus =
-      "Todos"; // Opciones: Todos, Pagado, Pendiente, Anulado
+  String _searchQuery = '';
+  String _selectedStatus = 'Todos';
 
-  // Lógica de Filtrado Local (sobre los datos traídos del provider)
-  List<Map<String, dynamic>> _filterSales(List<Map<String, dynamic>> allSales) {
+  List<SalesListItemDrift> _filterSales(List<SalesListItemDrift> allSales) {
     return allSales.where((sale) {
       final matchesSearch =
-          sale['client'].toString().toLowerCase().contains(
-            _searchQuery.toLowerCase(),
-          ) ||
-          sale['id'].toString().toLowerCase().contains(
-            _searchQuery.toLowerCase(),
-          );
-
+          sale.client.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          sale.id.toLowerCase().contains(_searchQuery.toLowerCase());
       final matchesStatus =
-          _selectedStatus == "Todos" || sale['status'] == _selectedStatus;
-
+          _selectedStatus == 'Todos' || sale.status == _selectedStatus;
       return matchesSearch && matchesStatus;
     }).toList();
   }
@@ -97,65 +38,44 @@ class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    // Configuración del Header Global
     Future.microtask(() {
-      ref
-          .read(appBarProvider.notifier)
-          .setOptions(
-            title: "Gestión de Ventas",
-            showBackButton: true,
-            actions: [
-              IconButton(
-                onPressed: () {
-                  context.push('/cash-register-history');
-                },
-                icon: const Icon(
-                  Icons.point_of_sale_sharp,
-                  color: Colors.blueGrey,
-                ),
-                tooltip: "Corte de Caja / Arqueo",
-              ),
-              IconButton(
-                onPressed: () {
-                  debugPrint("Generar reporte");
-                },
-                icon: const Icon(Icons.bar_chart, color: Colors.black87),
-                tooltip: "Estadísticas",
-              ),
-            ],
-          );
+      ref.read(appBarProvider.notifier).setOptions(
+        title: 'Gestion de Ventas',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            onPressed: () => context.push('/cash-register-history'),
+            icon: const Icon(Icons.point_of_sale_sharp, color: Colors.blueGrey),
+            tooltip: 'Corte de Caja / Arqueo',
+          ),
+          IconButton(
+            onPressed: () => context.push('/reports'),
+            icon: const Icon(Icons.bar_chart, color: Colors.black87),
+            tooltip: 'Estadisticas',
+          ),
+        ],
+      );
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final dashboardState = ref.watch(dashboardProvider).value;
-    final bool isCajaAbierta = dashboardState?.cajaAbierta != null;
+    final isCajaAbierta = dashboardState?.cajaAbierta != null;
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
-
-      // BOTÓN FLOTANTE: NUEVA VENTA
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          if (isCajaAbierta) {
-            context.push('/pos');
-          } else {
-            // Ir directamente a abrir caja para saltar el paso extra
-            context.push('/cash-register');
-          }
-        },
+        onPressed: () => context.push(isCajaAbierta ? '/pos' : '/cash-register'),
         backgroundColor: Colors.blue[700],
         icon: const Icon(Icons.add_shopping_cart, color: Colors.white),
         label: const Text(
-          "NUEVA VENTA",
+          'NUEVA VENTA',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
-
       body: Column(
         children: [
-          // 1. ZONA DE FILTROS Y BÚSQUEDA
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -174,11 +94,10 @@ class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Buscador Texto
                 TextField(
                   onChanged: (val) => setState(() => _searchQuery = val),
                   decoration: InputDecoration(
-                    hintText: "Buscar por cliente o #Ticket...",
+                    hintText: 'Buscar por cliente o #Ticket...',
                     prefixIcon: const Icon(Icons.search, color: Colors.grey),
                     filled: true,
                     fillColor: Colors.grey[100],
@@ -193,36 +112,33 @@ class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // Chips de Estado (Pagado / Pendiente)
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
                       _StatusFilterChip(
-                        label: "Todos",
-                        isSelected: _selectedStatus == "Todos",
-                        onTap: () => setState(() => _selectedStatus = "Todos"),
+                        label: 'Todos',
+                        isSelected: _selectedStatus == 'Todos',
+                        onTap: () => setState(() => _selectedStatus = 'Todos'),
                       ),
                       _StatusFilterChip(
-                        label: "Pagado",
-                        isSelected: _selectedStatus == "Pagado",
+                        label: 'Pagado',
+                        isSelected: _selectedStatus == 'Pagado',
                         color: Colors.green,
-                        onTap: () => setState(() => _selectedStatus = "Pagado"),
+                        onTap: () => setState(() => _selectedStatus = 'Pagado'),
                       ),
                       _StatusFilterChip(
-                        label: "Pendiente",
-                        isSelected: _selectedStatus == "Pendiente",
+                        label: 'Pendiente',
+                        isSelected: _selectedStatus == 'Pendiente',
                         color: Colors.orange,
                         onTap: () =>
-                            setState(() => _selectedStatus = "Pendiente"),
+                            setState(() => _selectedStatus = 'Pendiente'),
                       ),
                       _StatusFilterChip(
-                        label: "Anulado",
-                        isSelected: _selectedStatus == "Anulado",
+                        label: 'Anulado',
+                        isSelected: _selectedStatus == 'Anulado',
                         color: Colors.red,
-                        onTap: () =>
-                            setState(() => _selectedStatus = "Anulado"),
+                        onTap: () => setState(() => _selectedStatus = 'Anulado'),
                       ),
                     ],
                   ),
@@ -230,50 +146,43 @@ class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
               ],
             ),
           ),
-
-          // 2. LISTA DE VENTAS
-          // 2. LISTA DE VENTAS
           Expanded(
-            child: ref
-                .watch(salesListProvider)
-                .when(
-                  data: (allSales) {
-                    final filteredSales = _filterSales(allSales);
-
-                    if (filteredSales.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.receipt_long_outlined,
-                              size: 60,
-                              color: Colors.grey[300],
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              "No se encontraron ventas",
-                              style: TextStyle(color: Colors.grey[500]),
-                            ),
-                          ],
+            child: ref.watch(salesListProvider).when(
+              data: (allSales) {
+                final filteredSales = _filterSales(allSales);
+                if (filteredSales.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.receipt_long_outlined,
+                          size: 60,
+                          color: Colors.grey[300],
                         ),
-                      );
-                    }
+                        const SizedBox(height: 10),
+                        Text(
+                          'No se encontraron ventas',
+                          style: TextStyle(color: Colors.grey[500]),
+                        ),
+                      ],
+                    ),
+                  );
+                }
 
-                    return ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: filteredSales.length,
-                      itemBuilder: (context, index) {
-                        final sale = filteredSales[index];
-                        return _SaleHistoryCard(sale: sale);
-                      },
-                    );
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filteredSales.length,
+                  itemBuilder: (context, index) {
+                    final sale = filteredSales[index];
+                    return _SaleHistoryCard(sale: sale);
                   },
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                  error: (err, stack) =>
-                      Center(child: Text("Error al cargar ventas: $err")),
-                ),
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (err, _) =>
+                  Center(child: Text('Error al cargar ventas: $err')),
+            ),
           ),
         ],
       ),
@@ -281,19 +190,16 @@ class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
   }
 }
 
-// --- WIDGETS COMPONENTES ---
-
 class _SaleHistoryCard extends StatelessWidget {
-  final Map<String, dynamic> sale;
+  final SalesListItemDrift sale;
 
   const _SaleHistoryCard({required this.sale});
 
   @override
   Widget build(BuildContext context) {
-    // Configurar colores según estado
     Color statusColor;
     Color statusBg;
-    switch (sale['status']) {
+    switch (sale.status) {
       case 'Pagado':
         statusColor = Colors.green.shade700;
         statusBg = Colors.green.shade50;
@@ -329,11 +235,7 @@ class _SaleHistoryCard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            context.push('/sales-detail/${sale['fullId']}');
-            // Ver detalle de la venta (Ticket)
-            // context.push('/sale-detail/${sale['id']}');
-          },
+          onTap: () => context.push('/sales-detail/${sale.fullId}'),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -341,19 +243,18 @@ class _SaleHistoryCard extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // ID y Fecha
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          sale['id'],
+                          sale.id,
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
                           ),
                         ),
                         Text(
-                          DateFormat('dd MMM - hh:mm a').format(sale['date']),
+                          DateFormat('dd MMM - hh:mm a').format(sale.date),
                           style: TextStyle(
                             color: Colors.grey[500],
                             fontSize: 11,
@@ -361,7 +262,6 @@ class _SaleHistoryCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                    // Etiqueta de Estado
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 10,
@@ -372,7 +272,7 @@ class _SaleHistoryCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        sale['status'],
+                        sale.status,
                         style: TextStyle(
                           color: statusColor,
                           fontWeight: FontWeight.bold,
@@ -389,7 +289,6 @@ class _SaleHistoryCard extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Cliente e Items
                     Row(
                       children: [
                         CircleAvatar(
@@ -406,14 +305,14 @@ class _SaleHistoryCard extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              sale['client'],
+                              sale.client,
                               style: const TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
                               ),
                             ),
                             Text(
-                              "${sale['itemsCount']} Productos",
+                              '${sale.itemsCount} Productos',
                               style: TextStyle(
                                 color: Colors.grey[500],
                                 fontSize: 12,
@@ -423,9 +322,8 @@ class _SaleHistoryCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                    // Total
                     Text(
-                      NumberFormat.simpleCurrency().format(sale['total']),
+                      NumberFormat.simpleCurrency().format(sale.total),
                       style: const TextStyle(
                         fontWeight: FontWeight.w900,
                         fontSize: 16,
@@ -451,14 +349,14 @@ class _StatusFilterChip extends StatelessWidget {
   const _StatusFilterChip({
     required this.label,
     required this.isSelected,
-    this.color = Colors.blue, // Color base si se selecciona
+    this.color = Colors.blue,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(right: 8.0),
+      padding: const EdgeInsets.only(right: 8),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),

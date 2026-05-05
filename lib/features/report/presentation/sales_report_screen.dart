@@ -2,20 +2,10 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:isar/isar.dart';
-import 'package:inventario_v2/core/providers/database_provider.dart';
-import 'package:inventario_v2/features/sales/data/collections/venta_collection.dart';
-import 'package:inventario_v2/features/sales/data/collections/detalle_venta_collection.dart';
-import 'package:inventario_v2/features/inventory/data/collections/producto_collection.dart';
-import 'package:inventario_v2/features/inventory/data/collections/categoria_collection.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
-import 'package:inventario_v2/core/constants/app_enums.dart';
+import 'package:inventario_v2/core/providers/drift_provider.dart';
 
-// ------------------------------------------------------------------
-// MODEL
-// ------------------------------------------------------------------
 class SalesReportModel {
-  /// Ventas por día de la semana (index 0 = Lunes ... 6 = Domingo)
   final List<double> ventasPorDia;
   final double totalSemana;
   final Map<String, double> ventasPorCategoria;
@@ -29,101 +19,19 @@ class SalesReportModel {
   });
 }
 
-// ------------------------------------------------------------------
-// PROVIDER
-// ------------------------------------------------------------------
 final salesReportProvider = FutureProvider.autoDispose<SalesReportModel>((
   ref,
 ) async {
-  final isar = await ref.watch(isarDbProvider.future);
-
-  // Semana actual: lunes a hoy
-  final now = DateTime.now();
-  final monday = now.subtract(Duration(days: now.weekday - 1));
-  final startOfWeek = DateTime(monday.year, monday.month, monday.day);
-
-  // Ventas de la semana activas
-  final ventas = await isar.ventaCollections
-      .filter()
-      .fechaVentaGreaterThan(startOfWeek)
-      .estadoEqualTo(true)
-      .findAll();
-
-  // Agrupar por día de la semana (weekday: 1=Lun ... 7=Dom)
-  final List<double> ventasDia = List.filled(7, 0.0);
-  double totalSemana = 0;
-
-  for (final v in ventas) {
-    final idx = v.fechaVenta.weekday - 1; // 0-indexed
-    if (idx >= 0 && idx < 7) {
-      ventasDia[idx] += v.totalVenta;
-      totalSemana += v.totalVenta;
-    }
-  }
-
-  // Ventas por categoría y Ganancia por producto
-  final Map<String, double> byCategoria = {};
-  final Map<String, double> gananciasProdMap = {};
-
-  for (final v in ventas) {
-    final detalles = await isar.detalleVentaCollections
-        .filter()
-        .ventaIdEqualTo(v.serverId)
-        .findAll();
-
-    double pctPagado = 1.0;
-    if (v.tipoVenta == TipoVenta.credito) {
-      pctPagado = v.totalVenta > 0 ? (v.totalPagado / v.totalVenta) : 0;
-    }
-
-    for (final d in detalles) {
-      final producto = await isar.productoCollections
-          .filter()
-          .serverIdEqualTo(d.productoId)
-          .findFirst();
-
-      // Resolver nombre de la categoría desde la colección de categorías
-      String catNombre = 'Sin Categoría';
-      if (producto != null && producto.categoriaId.isNotEmpty) {
-        final categoria = await isar.categoriaCollections
-            .filter()
-            .serverIdEqualTo(producto.categoriaId)
-            .findFirst();
-        catNombre = categoria?.nombre ?? 'Sin Categoría';
-      }
-
-      byCategoria[catNombre] = (byCategoria[catNombre] ?? 0) + d.subTotal;
-
-      // Ganancia por producto
-      String prodNombre = producto?.nombre ?? 'Producto Desconocido';
-      double costo = d.cantidad * d.costoHistoricoCompra;
-      double ganancia = (d.subTotal - costo) * pctPagado;
-
-      gananciasProdMap[prodNombre] =
-          (gananciasProdMap[prodNombre] ?? 0) + ganancia;
-    }
-  }
-
-  List<Map<String, dynamic>> gananciaPorProductoList =
-      gananciasProdMap.entries
-          .map((e) => {'nombre': e.key, 'ganancia': e.value})
-          .toList()
-        ..sort(
-          (a, b) =>
-              (b['ganancia'] as double).compareTo(a['ganancia'] as double),
-        );
-
+  final db = ref.watch(driftDatabaseProvider);
+  final report = await db.salesDao.getWeeklySalesReport();
   return SalesReportModel(
-    ventasPorDia: ventasDia,
-    totalSemana: totalSemana,
-    ventasPorCategoria: byCategoria,
-    gananciaPorProducto: gananciaPorProductoList,
+    ventasPorDia: report.ventasPorDia,
+    totalSemana: report.totalSemana,
+    ventasPorCategoria: report.ventasPorCategoria,
+    gananciaPorProducto: report.gananciaPorProducto,
   );
 });
 
-// ------------------------------------------------------------------
-// SCREEN
-// ------------------------------------------------------------------
 class SalesReportScreen extends ConsumerStatefulWidget {
   const SalesReportScreen({super.key});
 
@@ -139,12 +47,11 @@ class _SalesReportScreenState extends ConsumerState<SalesReportScreen> {
       ref
           .read(appBarProvider.notifier)
           .setOptions(
-            title: "Reporte de Ventas",
-            subtitle: "Análisis Semanal",
+            title: 'Reporte de Ventas',
+            subtitle: 'Analisis Semanal',
             showBackButton: true,
             actions: [
               IconButton(
-                // se invoca el invalidate manualmente
                 onPressed: () => ref.invalidate(salesReportProvider),
                 icon: const Icon(Icons.refresh),
               ),
@@ -155,7 +62,7 @@ class _SalesReportScreenState extends ConsumerState<SalesReportScreen> {
 
   int _touchedIndex = -1;
 
-  static const _dayLabels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  static const _dayLabels = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
   static const _chartColors = [
     Colors.blue,
     Colors.orange,
@@ -172,21 +79,20 @@ class _SalesReportScreenState extends ConsumerState<SalesReportScreen> {
     final now = DateTime.now();
     final monday = now.subtract(Duration(days: now.weekday - 1));
     final weekLabel =
-        "Semana del ${DateFormat('dd MMM').format(monday)} al ${DateFormat('dd MMM').format(monday.add(const Duration(days: 6)))}";
+        'Semana del ${DateFormat('dd MMM').format(monday)} al ${DateFormat('dd MMM').format(monday.add(const Duration(days: 6)))}';
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
       body: reportAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text("Error: $e")),
+        error: (e, _) => Center(child: Text('Error: $e')),
         data: (report) => SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. BARRA SEMANAL
               const Text(
-                "Tendencia Semanal",
+                'Tendencia Semanal',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -222,7 +128,7 @@ class _SalesReportScreenState extends ConsumerState<SalesReportScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              "Total Semana",
+                              'Total Semana',
                               style: TextStyle(
                                 color: Colors.grey,
                                 fontSize: 12,
@@ -250,7 +156,7 @@ class _SalesReportScreenState extends ConsumerState<SalesReportScreen> {
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            "Semana Actual",
+                            'Semana Actual',
                             style: TextStyle(
                               color: Colors.blue.shade700,
                               fontWeight: FontWeight.bold,
@@ -272,7 +178,7 @@ class _SalesReportScreenState extends ConsumerState<SalesReportScreen> {
                                   size: 48,
                                 ),
                                 const Text(
-                                  "Sin ventas esta semana",
+                                  'Sin ventas esta semana',
                                   style: TextStyle(color: Colors.grey),
                                 ),
                               ],
@@ -370,13 +276,10 @@ class _SalesReportScreenState extends ConsumerState<SalesReportScreen> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 30),
-
-              // 2. CATEGORÍAS
               if (report.ventasPorCategoria.isNotEmpty) ...[
                 const Text(
-                  "Ventas por Categoría",
+                  'Ventas por Categoria',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -422,12 +325,10 @@ class _SalesReportScreenState extends ConsumerState<SalesReportScreen> {
                   ),
                 ),
               ],
-
-              // 3. GANANCIA POR PRODUCTO
               if (report.gananciaPorProducto.isNotEmpty) ...[
                 const SizedBox(height: 30),
                 const Text(
-                  "Ganancia por Producto",
+                  'Ganancia por Producto',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -484,7 +385,6 @@ class _SalesReportScreenState extends ConsumerState<SalesReportScreen> {
                   ),
                 ),
               ],
-
               const SizedBox(height: 40),
             ],
           ),

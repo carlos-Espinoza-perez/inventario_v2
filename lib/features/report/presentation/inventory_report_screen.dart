@@ -1,22 +1,16 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:isar/isar.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
+import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
-import 'package:inventario_v2/core/providers/database_provider.dart';
-import 'package:inventario_v2/features/inventory/data/collections/inventario_collection.dart';
-import 'package:inventario_v2/features/inventory/data/collections/producto_collection.dart';
 
-// ------------------------------------------------------------------
-// MODEL
-// ------------------------------------------------------------------
 class InventoryReportModel {
   final double valorTotal;
   final int totalItems;
-  final int criticos; // stock <= 5
-  final int medios; // stock 6-20
-  final int saludables; // stock > 20
+  final int criticos;
+  final int medios;
+  final int saludables;
   final List<LowStockItem> lowStock;
 
   InventoryReportModel({
@@ -43,80 +37,33 @@ class LowStockItem {
   });
 }
 
-// ------------------------------------------------------------------
-// PROVIDER
-// ------------------------------------------------------------------
 final inventoryReportProvider =
     FutureProvider.autoDispose<InventoryReportModel>((ref) async {
-      final isar = await ref.watch(isarDbProvider.future);
-
+      final db = ref.watch(driftDatabaseProvider);
       final validBodegaIds = await ref.watch(validBodegasIdsProvider.future);
-
-      // Obtener todos los inventarios
-      final inventariosGlobal = await isar.inventarioCollections
-          .where()
-          .findAll();
-      final inventarios = inventariosGlobal.where(
-        (i) => validBodegaIds.contains(i.bodegaId),
+      final report = await db.inventoryDao.getInventoryReport(
+        bodegaIds: validBodegaIds,
       );
 
-      double valorTotal = 0;
-      int criticos = 0, medios = 0, saludables = 0;
-      final List<LowStockItem> lowStockList = [];
-
-      for (final inv in inventarios) {
-        // Obtener producto para nombre y costo
-        final producto = await isar.productoCollections
-            .filter()
-            .serverIdEqualTo(inv.productoId)
-            .findFirst();
-
-        if (producto == null) continue;
-
-        final cantidad = inv.cantidadActual.toInt();
-        final costo = inv.costoPromedio > 0
-            ? inv.costoPromedio
-            : producto.ultimoCosto;
-
-        valorTotal += inv.cantidadActual * costo;
-
-        // Clasificar estado de stock
-        if (cantidad <= 5) {
-          criticos++;
-          lowStockList.add(
-            LowStockItem(
-              nombre: producto.nombre,
-              sku: producto.codigoPersonalizado ?? 'Sin SKU',
-              cantidadActual: cantidad,
-              stockMinimo:
-                  5, // umbral de alerta: crítico por debajo de 5 unidades
-            ),
-          );
-        } else if (cantidad <= 20) {
-          medios++;
-        } else {
-          saludables++;
-        }
-      }
-
-      // Ordenar stock bajo de menor a mayor
-      lowStockList.sort((a, b) => a.cantidadActual.compareTo(b.cantidadActual));
-
-      final total = criticos + medios + saludables;
-
       return InventoryReportModel(
-        valorTotal: valorTotal,
-        totalItems: total,
-        criticos: criticos,
-        medios: medios,
-        saludables: saludables,
-        lowStock: lowStockList.take(10).toList(),
+        valorTotal: report.valorTotal,
+        totalItems: report.totalItems,
+        criticos: report.criticos,
+        medios: report.medios,
+        saludables: report.saludables,
+        lowStock: report.lowStock
+            .map(
+              (item) => LowStockItem(
+                nombre: item.nombre,
+                sku: item.sku,
+                cantidadActual: item.cantidadActual,
+                stockMinimo: item.stockMinimo,
+              ),
+            )
+            .toList(),
       );
     });
 
-// ------------------------------------------------------------------
-// SCREEN
-// ------------------------------------------------------------------
 class InventoryReportScreen extends ConsumerStatefulWidget {
   const InventoryReportScreen({super.key});
 
@@ -133,8 +80,8 @@ class _InventoryReportScreenState extends ConsumerState<InventoryReportScreen> {
       ref
           .read(appBarProvider.notifier)
           .setOptions(
-            title: "Estado de Inventario",
-            subtitle: "Distribución y valorización",
+            title: 'Estado de Inventario',
+            subtitle: 'Distribucion y valorizacion',
             showBackButton: true,
             actions: [
               IconButton(
@@ -154,13 +101,12 @@ class _InventoryReportScreenState extends ConsumerState<InventoryReportScreen> {
       backgroundColor: Colors.grey[50],
       body: reportAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text("Error: $e")),
+        error: (e, _) => Center(child: Text('Error: $e')),
         data: (report) => SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. KPI: VALOR TOTAL
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -183,7 +129,7 @@ class _InventoryReportScreenState extends ConsumerState<InventoryReportScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          "Valor Total en Bodega",
+                          'Valor Total en Bodega',
                           style: TextStyle(
                             color: Colors.white70,
                             fontWeight: FontWeight.bold,
@@ -191,7 +137,7 @@ class _InventoryReportScreenState extends ConsumerState<InventoryReportScreen> {
                         ),
                         const SizedBox(height: 5),
                         Text(
-                          "\$ ${report.valorTotal.toStringAsFixed(2)}",
+                          '\$ ${report.valorTotal.toStringAsFixed(2)}',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w900,
@@ -199,7 +145,7 @@ class _InventoryReportScreenState extends ConsumerState<InventoryReportScreen> {
                           ),
                         ),
                         Text(
-                          "${report.totalItems} productos en stock",
+                          '${report.totalItems} productos en stock',
                           style: const TextStyle(
                             color: Colors.white60,
                             fontSize: 12,
@@ -222,12 +168,9 @@ class _InventoryReportScreenState extends ConsumerState<InventoryReportScreen> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 30),
-
-              // 2. GRÁFICO DE DONA
               const Text(
-                "Distribución de Stock",
+                'Distribucion de Stock',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -235,9 +178,8 @@ class _InventoryReportScreenState extends ConsumerState<InventoryReportScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-
               if (report.totalItems == 0)
-                const Center(child: Text("No hay productos en inventario."))
+                const Center(child: Text('No hay productos en inventario.'))
               else ...[
                 Container(
                   height: 250,
@@ -281,11 +223,11 @@ class _InventoryReportScreenState extends ConsumerState<InventoryReportScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           const Text(
-                            "Total Items",
+                            'Total Items',
                             style: TextStyle(color: Colors.grey, fontSize: 12),
                           ),
                           Text(
-                            "${report.totalItems}",
+                            '${report.totalItems}',
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 22,
@@ -302,31 +244,28 @@ class _InventoryReportScreenState extends ConsumerState<InventoryReportScreen> {
                   children: [
                     _LegendItem(
                       color: Colors.green,
-                      label: "Saludable (${report.saludables})",
+                      label: 'Saludable (${report.saludables})',
                     ),
                     const SizedBox(width: 15),
                     _LegendItem(
                       color: Colors.orange,
-                      label: "Medio (${report.medios})",
+                      label: 'Medio (${report.medios})',
                     ),
                     const SizedBox(width: 15),
                     _LegendItem(
                       color: Colors.red,
-                      label: "Crítico (${report.criticos})",
+                      label: 'Critico (${report.criticos})',
                     ),
                   ],
                 ),
               ],
-
               const SizedBox(height: 30),
-
-              // 3. LISTA DE STOCK BAJO
               if (report.lowStock.isNotEmpty) ...[
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      "⚠️ Alerta: Stock Bajo",
+                      'Stock Bajo',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -334,7 +273,7 @@ class _InventoryReportScreenState extends ConsumerState<InventoryReportScreen> {
                       ),
                     ),
                     Text(
-                      "${report.lowStock.length} productos",
+                      '${report.lowStock.length} productos',
                       style: TextStyle(color: Colors.grey[500], fontSize: 12),
                     ),
                   ],
@@ -359,7 +298,6 @@ class _InventoryReportScreenState extends ConsumerState<InventoryReportScreen> {
                   },
                 ),
               ],
-
               const SizedBox(height: 40),
             ],
           ),
@@ -448,7 +386,7 @@ class _LowStockItem extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                "$stock / $maxStock",
+                '$stock / $maxStock',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   color: Colors.red.shade800,

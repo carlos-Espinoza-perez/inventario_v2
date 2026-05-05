@@ -1,0 +1,21 @@
+EXPERIENCIA DE USUARIO (UX) - MANOS LIBRES
+
+1. FEEDBACK VISUAL MINIMALISTA:
+   - Pantalla principal con una onda de sonido (Waveform) reactiva.
+   - Resumen visual de la lista temporal que se actualiza en tiempo real.
+
+2. FEEDBACK AUDITIVO (Crucial para Manos Libres):
+   - Sonidos de sistema distintivos:
+     * Tono de inicio: App lista para escuchar.
+     * Tono de éxito: Producto reconocido y agregado.
+     * Tono de advertencia: Necesito aclaración (ej. producto no encontrado).
+
+3. OPTIMIZACIÓN BLUETOOTH:
+   - Soporte para micrófonos de audífonos Bluetooth (HSP/HFP).
+   - El usuario puede dejar el teléfono en una mesa o bolsillo mientras se mueve en el almacén.
+
+4. COMANDOS DE CONTROL POR VOZ:
+   - "Repite la lista": El asistente lee los productos agregados.
+   - "Borra el último": Elimina la última entrada incorrecta.
+   - "Cancela todo": Limpia la lista temporal.
+   - "Guardar entrada": Finaliza y persiste los datos.

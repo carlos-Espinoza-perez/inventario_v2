@@ -1,13 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:inventario_v2/core/providers/database_provider.dart';
+import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/features/inventory/data/repositories/inventario_repository.dart';
 
 // Proveedor del repositorio (Async porque necesita la DB)
 final inventarioRepositoryProvider = FutureProvider<InventarioRepository>((
   ref,
 ) async {
-  final isar = await ref.watch(isarDbProvider.future);
-  return InventarioRepository(isar);
+  final db = ref.watch(driftDatabaseProvider);
+  return InventarioRepository(db);
 });
 
 // Proveedor de la lista de inventario por bodega

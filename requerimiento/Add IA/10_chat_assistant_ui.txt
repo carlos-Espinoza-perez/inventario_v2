@@ -1,0 +1,105 @@
+# ARCHIVO: 10_chat_assistant_ui
+# ROL: Lead UI/UX Engineer / Product Designer
+# PROYECTO: Sistema de Inventario Inteligente Offline
+
+===========================================================================
+🎯 OBJETIVO DE ESTE MÓDULO
+===========================================================================
+Crear el punto de entrada visual para la IA. Implementaremos un Asistente 
+Flotante (Overlay) que se pueda invocar desde cualquier pantalla. Este 
+módulo unifica el Micrófono (Paso 08), el Cerebro (Paso 02/05) y la 
+Confirmación (Paso 09).
+
+===========================================================================
+🎨 COMPONENTES DE LA INTERFAZ
+===========================================================================
+
+1. EL BOTÓN "AREL" (Inspirado en tu proyecto):
+   Un botón flotante con una animación de pulsación sutil (Glow) cuando 
+   la IA está procesando o descargando el modelo.
+
+2. EL PANEL DE CONVERSACIÓN:
+   Un BottomSheet elegante que muestra la transcripción en tiempo real 
+   y las respuestas de texto de Gemma 2B.
+
+3. ESTADOS VISUALES:
+   - IDLE: Esperando comando.
+   - LISTENING: Ondas de audio activas.
+   - THINKING: Indicador de carga (Procesando en GPU local).
+   - SUCCESS/ERROR: Feedback visual tras la acción.
+
+
+
+===========================================================================
+🏗️ IMPLEMENTACIÓN DEL ORQUESTADOR DE UI (DART)
+===========================================================================
+
+class ArelAssistantOverlay extends StatefulWidget {
+  const ArelAssistantOverlay({super.key});
+
+  @override
+  State<ArelAssistantOverlay> createState() => _ArelAssistantOverlayState();
+}
+
+class _ArelAssistantOverlayState extends State<ArelAssistantOverlay> {
+  bool _isProcessing = false;
+  String _lastWords = "Presiona para hablar...";
+
+  void _handleVoiceCommand() async {
+    final voiceService = VoiceAssistantService();
+    
+    await voiceService.startListening(
+      onResult: (text) async {
+        setState(() { 
+          _lastWords = text;
+          _isProcessing = true; 
+        });
+
+        // 1. Clasificar y Procesar con Gemma (Paso 05)
+        final result = await IntentClassifier().analyze(text);
+        
+        // 2. Si es una acción, mostrar diálogo de confirmación (Paso 09)
+        if (result['intent'] == 'ACTION') {
+          _showConfirmation(result);
+        } else {
+          _showAIResponse(result['content']);
+        }
+        
+        setState(() { _isProcessing = false; });
+      },
+      onDone: () => setState(() => _isProcessing = false),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FloatingActionButton(
+      backgroundColor: _isProcessing ? Colors.purple : Colors.blue,
+      onPressed: _handleVoiceCommand,
+      child: _isProcessing 
+        ? const CircularProgressIndicator(color: Colors.white) 
+        : const Icon(Icons.mic_none_rounded),
+    );
+  }
+}
+
+===========================================================================
+⚠️ ANÁLISIS AUTOCRÍTICO (REVISIÓN SENIOR)
+===========================================================================
+
+* ACCESIBILIDAD: El asistente no debe tapar botones críticos de la app 
+  (como el botón de 'Guardar Venta'). Debe ser desplazable (Draggable).
+
+* CONTEXTO DE PANTALLA: Una mejora senior es que la IA sepa en qué pantalla 
+  estás. Si estás en 'Cuentas por Cobrar', el System Prompt debería dar 
+  prioridad a consultas sobre deudas automáticamente.
+
+* OFFLINE FIRST: Si el modelo de 1.5GB no se ha descargado (Paso 01), 
+  el botón debe mostrar un icono de 'Descarga' en lugar del micrófono, 
+  educando al usuario sobre por qué la IA no está lista aún.
+
+===========================================================================
+🏁 CONCLUSIÓN DEL DESARROLLO DE IA OFFLINE
+Con estos 10 archivos, has construido una infraestructura de IA agéntica 
+que no depende de la nube, respeta la privacidad y automatiza el inventario.
+===========================================================================

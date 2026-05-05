@@ -1,89 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:isar/isar.dart';
-import 'package:uuid/uuid.dart';
-import 'package:inventario_v2/core/providers/database_provider.dart';
-import 'package:inventario_v2/features/sales/data/collections/venta_collection.dart';
-import 'package:inventario_v2/features/sales/data/collections/detalle_venta_collection.dart';
-import 'package:inventario_v2/features/sales/data/collections/cliente_collection.dart';
-import 'package:inventario_v2/features/inventory/data/collections/producto_collection.dart';
-import 'package:inventario_v2/features/sales/data/collections/historial_pago_collection.dart';
-import 'package:inventario_v2/core/constants/app_enums.dart';
+import 'package:inventario_v2/core/db/models/report_models.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
-import 'package:inventario_v2/features/sales/presentation/sales_dashboard_screen.dart';
+import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
+import 'package:inventario_v2/features/sales/presentation/sales_dashboard_screen.dart';
 
-final saleDetailProvider = FutureProvider.family<Map<String, dynamic>, String>((
+final saleDetailProvider = FutureProvider.family<SaleDetailDrift, String>((
   ref,
   saleId,
 ) async {
-  final isar = await ref.watch(isarDbProvider.future);
-
-  // 1. Obtener Venta
-  final venta = await isar.ventaCollections
-      .filter()
-      .serverIdEqualTo(saleId)
-      .findFirst();
-  if (venta == null) throw Exception("Venta no encontrada");
-
-  // 2. Obtener Cliente
-  final cliente = await isar.clienteCollections
-      .filter()
-      .serverIdEqualTo(venta.clienteId)
-      .findFirst();
-
-  // 3. Obtener Detalles (Items) y mapear con nombre de producto
-  final detalles = await isar.detalleVentaCollections
-      .filter()
-      .ventaIdEqualTo(venta.serverId)
-      .findAll();
-  List<Map<String, dynamic>> items = [];
-
-  for (var d in detalles) {
-    final producto = await isar.productoCollections
-        .filter()
-        .serverIdEqualTo(d.productoId)
-        .findFirst();
-    items.add({
-      'name': producto?.nombre ?? 'Producto Desconocido',
-      'qty': d.cantidad,
-      'price': d.precioUnitario,
-      'subtotal': d.subTotal,
-    });
-  }
-
-  // 4. Obtener Pagos
-  final pagos = await isar.historialPagoCollections
-      .filter()
-      .ventaIdEqualTo(venta.serverId)
-      .sortByFechaRegistroDesc()
-      .findAll();
-  List<Map<String, dynamic>> paymentsList = pagos
-      .map(
-        (p) => {
-          'date': p.fechaRegistro,
-          'amount': p.montoPagado,
-          'note': p.metodoDePago.name,
-        },
-      )
-      .toList();
-
-  return {
-    'id': venta.serverId.substring(0, 8).toUpperCase(),
-    'fullId': venta.serverId, // Para operaciones
-    'date': venta.fechaVenta,
-    'client': cliente?.nombre ?? 'Cliente Desconocido',
-    'type': venta.tipoVenta == TipoVenta.credito ? 'Fiado' : 'Contado',
-    'total': venta.totalVenta,
-    'subtotal':
-        venta.totalVenta, // Simplificado, si tienes impuestos calcúlalos
-    'tax': 0.0, // Ajustar si guardas impuestos
-    'paidAmount': venta.totalPagado,
-    'status': venta.estadoPago == EstadoPago.pagado ? 'Pagado' : 'Pendiente',
-    'items': items,
-    'payments': paymentsList,
-  };
+  final db = ref.watch(driftDatabaseProvider);
+  return db.salesDao.getSaleDetail(saleId);
 });
 
 class SaleDetailScreen extends ConsumerStatefulWidget {
@@ -100,24 +29,22 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
   void initState() {
     super.initState();
     Future.microtask(() {
-      ref
-          .read(appBarProvider.notifier)
-          .setOptions(
-            title: "Detalle de Venta",
-            showBackButton: true,
-            actions: [
-              IconButton(
-                onPressed: () {},
-                icon: const Icon(Icons.share_outlined),
-                tooltip: "Compartir Ticket",
-              ),
-              IconButton(
-                onPressed: () {},
-                icon: const Icon(Icons.print_outlined),
-                tooltip: "Imprimir",
-              ),
-            ],
-          );
+      ref.read(appBarProvider.notifier).setOptions(
+        title: 'Detalle de Venta',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            onPressed: () {},
+            icon: const Icon(Icons.share_outlined),
+            tooltip: 'Compartir Ticket',
+          ),
+          IconButton(
+            onPressed: () {},
+            icon: const Icon(Icons.print_outlined),
+            tooltip: 'Imprimir',
+          ),
+        ],
+      );
     });
   }
 
@@ -128,17 +55,14 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
     return saleAsync.when(
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (err, stack) => Scaffold(body: Center(child: Text("Error: $err"))),
+      error: (err, _) => Scaffold(body: Center(child: Text('Error: $err'))),
       data: (sale) {
-        final double balance =
-            (sale['total'] as double) - (sale['paidAmount'] as double);
-        final bool isCredit = sale['type'] == 'Fiado';
-        final bool isPaid = balance <= 0.01;
+        final balance = sale.balancePendiente;
+        final isCredit = sale.venta.tipoVenta == 'credito';
+        final isPaid = sale.estaPagada;
 
         return Scaffold(
           backgroundColor: Colors.grey[100],
-
-          // BOTÓN DE ABONAR (SOLO SI HAY DEUDA)
           bottomNavigationBar: (isCredit && !isPaid)
               ? Container(
                   padding: const EdgeInsets.all(20),
@@ -154,10 +78,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                   ),
                   child: SafeArea(
                     child: ElevatedButton.icon(
-                      onPressed: () {
-                        // Abrir modal para registrar nuevo abono
-                        _showAddPaymentModal(context, balance);
-                      },
+                      onPressed: () => _showAddPaymentModal(context, balance),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green[700],
                         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -167,7 +88,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                       ),
                       icon: const Icon(Icons.attach_money, color: Colors.white),
                       label: const Text(
-                        "REGISTRAR ABONO",
+                        'REGISTRAR ABONO',
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -177,13 +98,11 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                   ),
                 )
               : null,
-
           body: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. TARJETA DE ESTADO (ENCABEZADO)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
@@ -217,7 +136,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                           ),
                         ),
                         child: Text(
-                          isPaid ? "COMPLETADO" : "PENDIENTE DE PAGO",
+                          isPaid ? 'COMPLETADO' : 'PENDIENTE DE PAGO',
                           style: TextStyle(
                             color: isPaid
                                 ? Colors.green.shade800
@@ -229,11 +148,11 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        "Valor Total Venta",
+                        'Valor Total Venta',
                         style: TextStyle(color: Colors.grey[500], fontSize: 12),
                       ),
                       Text(
-                        NumberFormat.simpleCurrency().format(sale['total']),
+                        NumberFormat.simpleCurrency().format(sale.venta.totalVenta),
                         style: const TextStyle(
                           fontWeight: FontWeight.w900,
                           fontSize: 32,
@@ -244,17 +163,14 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                       Text(
                         DateFormat(
                           'dd MMMM yyyy, hh:mm a',
-                        ).format(sale['date']),
+                        ).format(sale.venta.fechaVenta),
                         style: TextStyle(color: Colors.grey[400], fontSize: 12),
                       ),
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 20),
-
-                // 2. DATOS DEL CLIENTE
-                _SectionTitle(title: "Información del Cliente"),
+                _SectionTitle(title: 'Informacion del Cliente'),
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -272,14 +188,14 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            sale['client'],
+                            sale.cliente?.nombre ?? 'Cliente Desconocido',
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
                             ),
                           ),
                           Text(
-                            "Ticket: ${sale['id']}",
+                            'Ticket: ${sale.venta.id.substring(0, 8).toUpperCase()}',
                             style: const TextStyle(
                               color: Colors.grey,
                               fontSize: 12,
@@ -288,7 +204,6 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                         ],
                       ),
                       const Spacer(),
-                      // Tipo de Venta Badge
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
@@ -299,7 +214,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          sale['type'].toUpperCase(),
+                          sale.venta.tipoVenta.toUpperCase(),
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 10,
@@ -309,11 +224,8 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 20),
-
-                // 3. LISTA DE PRODUCTOS
-                _SectionTitle(title: "Productos"),
+                _SectionTitle(title: 'Productos'),
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -322,10 +234,10 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                   child: ListView.separated(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    itemCount: (sale['items'] as List).length,
-                    separatorBuilder: (c, i) => const Divider(height: 1),
+                    itemCount: sale.items.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: (context, index) {
-                      final item = sale['items'][index];
+                      final item = sale.items[index];
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
@@ -338,30 +250,33 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            "${item['qty']}x",
+                            '${item.cantidad.toStringAsFixed(item.cantidad % 1 == 0 ? 0 : 2)}x',
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ),
                         title: Text(
-                          item['name'],
+                          item.nombre,
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
+                        subtitle: item.sku.isEmpty
+                            ? null
+                            : Text(
+                                'SKU: ${item.sku}',
+                                style: const TextStyle(fontSize: 11),
+                              ),
                         trailing: Text(
-                          NumberFormat.simpleCurrency().format(item['price']),
+                          NumberFormat.simpleCurrency().format(item.precioUnitario),
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                       );
                     },
                   ),
                 ),
-
                 const SizedBox(height: 20),
-
-                // 4. RESUMEN FINANCIERO (TOTALES Y SALDOS)
-                _SectionTitle(title: "Resumen Financiero"),
+                _SectionTitle(title: 'Resumen Financiero'),
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -371,32 +286,28 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                   child: Column(
                     children: [
                       _SummaryRow(
-                        label: "Subtotal",
+                        label: 'Subtotal',
                         value: NumberFormat.simpleCurrency().format(
-                          sale['subtotal'],
+                          sale.venta.totalVenta,
                         ),
                       ),
                       const SizedBox(height: 8),
                       _SummaryRow(
-                        label: "Impuestos",
-                        value: NumberFormat.simpleCurrency().format(
-                          sale['tax'],
-                        ),
+                        label: 'Impuestos',
+                        value: NumberFormat.simpleCurrency().format(0),
                       ),
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 12),
                         child: Divider(),
                       ),
                       _SummaryRow(
-                        label: "TOTAL A PAGAR",
+                        label: 'TOTAL A PAGAR',
                         value: NumberFormat.simpleCurrency().format(
-                          sale['total'],
+                          sale.venta.totalVenta,
                         ),
                         isBold: true,
                         fontSize: 18,
                       ),
-
-                      // SI ES FIADO, MOSTRAMOS EL DESGLOSE DE DEUDA
                       if (isCredit) ...[
                         const SizedBox(height: 12),
                         Container(
@@ -415,15 +326,15 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                           child: Column(
                             children: [
                               _SummaryRow(
-                                label: "Total Abonado (-)",
+                                label: 'Total Abonado (-)',
                                 value: NumberFormat.simpleCurrency().format(
-                                  sale['paidAmount'],
+                                  sale.venta.totalPagado,
                                 ),
                                 textColor: Colors.green[700],
                               ),
                               const Divider(),
                               _SummaryRow(
-                                label: "SALDO PENDIENTE",
+                                label: 'SALDO PENDIENTE',
                                 value: NumberFormat.simpleCurrency().format(
                                   balance,
                                 ),
@@ -439,11 +350,9 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                     ],
                   ),
                 ),
-
-                // 5. HISTORIAL DE PAGOS (SOLO SI ES FIADO)
                 if (isCredit) ...[
                   const SizedBox(height: 20),
-                  _SectionTitle(title: "Historial de Abonos"),
+                  _SectionTitle(title: 'Historial de Abonos'),
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -452,11 +361,11 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                     child: ListView.separated(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      itemCount: (sale['payments'] as List).length,
-                      separatorBuilder: (c, i) =>
+                      itemCount: sale.pagos.length,
+                      separatorBuilder: (_, _) =>
                           const Divider(height: 1, indent: 50),
                       itemBuilder: (context, index) {
-                        final payment = sale['payments'][index];
+                        final payment = sale.pagos[index];
                         return ListTile(
                           leading: const Icon(
                             Icons.check_circle,
@@ -464,16 +373,14 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                             size: 20,
                           ),
                           title: Text(
-                            NumberFormat.simpleCurrency().format(
-                              payment['amount'],
-                            ),
+                            NumberFormat.simpleCurrency().format(payment.monto),
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           subtitle: Text(
-                            DateFormat('dd/MM/yyyy').format(payment['date']),
+                            DateFormat('dd/MM/yyyy').format(payment.fecha),
                           ),
                           trailing: Text(
-                            payment['note'],
+                            payment.metodoPago,
                             style: const TextStyle(
                               fontSize: 12,
                               color: Colors.grey,
@@ -484,7 +391,6 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                     ),
                   ),
                 ],
-
                 const SizedBox(height: 40),
               ],
             ),
@@ -495,7 +401,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
   }
 
   void _showAddPaymentModal(BuildContext context, double currentBalance) {
-    final TextEditingController amountCtrl = TextEditingController();
+    final amountCtrl = TextEditingController();
 
     showModalBottomSheet(
       context: context,
@@ -515,12 +421,12 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "Registrar Nuevo Abono",
+              'Registrar Nuevo Abono',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
             Text(
-              "Saldo actual: ${NumberFormat.simpleCurrency().format(currentBalance)}",
+              'Saldo actual: ${NumberFormat.simpleCurrency().format(currentBalance)}',
               style: TextStyle(color: Colors.grey[600]),
             ),
             const SizedBox(height: 20),
@@ -529,7 +435,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
               keyboardType: TextInputType.number,
               autofocus: true,
               decoration: const InputDecoration(
-                labelText: "Monto a abonar",
+                labelText: 'Monto a abonar',
                 prefixIcon: Icon(Icons.attach_money),
                 border: OutlineInputBorder(),
               ),
@@ -540,14 +446,15 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
               height: 50,
               child: ElevatedButton(
                 onPressed: () async {
-                  final amountString = amountCtrl.text.replaceAll(',', '.');
-                  final amount = double.tryParse(amountString) ?? 0.0;
-
+                  final amount = double.tryParse(
+                    amountCtrl.text.replaceAll(',', '.'),
+                  ) ??
+                      0.0;
                   if (amount <= 0 || amount > currentBalance) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          "Monto inválido. Debe ser mayor a 0 y menor o igual a ${NumberFormat.simpleCurrency().format(currentBalance)}",
+                          'Monto invalido. Debe ser mayor a 0 y menor o igual a ${NumberFormat.simpleCurrency().format(currentBalance)}',
                         ),
                         backgroundColor: Colors.red,
                       ),
@@ -556,94 +463,31 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                   }
 
                   try {
-                    final isar = await ref.read(isarDbProvider.future);
-                    Navigator.pop(ctx);
-
-                    final venta = await isar.ventaCollections
-                        .filter()
-                        .serverIdEqualTo(widget.saleId)
-                        .findFirst();
-
-                    if (venta == null) return;
-
-                    // VALIDACIÓN: El abono no puede ser mayor al saldo pendiente
-                    if (amount > venta.saldoPendiente) {
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            "⚠️ El abono (\$${amount.toStringAsFixed(2)}) no puede ser mayor "
-                            "al saldo pendiente (\$${venta.saldoPendiente.toStringAsFixed(2)})",
-                          ),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
+                    final db = ref.read(driftDatabaseProvider);
+                    await db.salesDao.registrarAbonoVenta(
+                      ventaId: widget.saleId,
+                      monto: amount,
+                    );
+                    if (!context.mounted) {
                       return;
                     }
-
-                    // Se debe usar la CAJA ACTIVA ACTUAL, no la vieja de cuando se vendió (ya podría estar cerrada).
-                    final dashboardState = ref.read(dashboardProvider).value;
-                    final sesionActual = dashboardState?.cajaAbierta;
-
-                    final nuevoPago = HistorialPagoCollection()
-                      ..serverId = const Uuid().v4()
-                      ..ventaId = widget.saleId
-                      ..cajaSesionId =
-                          sesionActual?.serverId ?? venta.cajaSesionId
-                      ..montoPagado = amount
-                      ..metodoDePago = MetodoPago.efectivo
-                      ..fechaRegistro = DateTime.now()
-                      ..usuarioRegistroId = venta.usuarioRegistroId
-                      ..ultimaActualizacion = DateTime.now();
-
-                    venta.totalPagado += amount;
-                    venta.saldoPendiente =
-                        (venta.totalVenta - venta.totalPagado);
-
-                    if (venta.saldoPendiente <= 0.01) {
-                      venta.estadoPago = EstadoPago.pagado;
-                    }
-
-                    await isar.writeTxn(() async {
-                      await isar.historialPagoCollections.put(nuevoPago);
-                      await isar.ventaCollections.put(venta);
-
-                      // Actualizar saldo del cliente
-                      final cliente = await isar.clienteCollections
-                          .filter()
-                          .serverIdEqualTo(venta.clienteId)
-                          .findFirst();
-                      if (cliente != null) {
-                        cliente.saldoDeudorActual =
-                            (cliente.saldoDeudorActual - amount).clamp(
-                              0,
-                              double.infinity,
-                            );
-                        cliente.pendienteSincronizacion = true;
-                        await isar.clienteCollections.put(cliente);
-                      }
-                    });
-
+                    Navigator.pop(ctx);
                     ref.invalidate(saleDetailProvider(widget.saleId));
                     ref.invalidate(salesListProvider);
-                    ref.invalidate(
-                      dashboardProvider,
-                    ); // Refrescar últimas transacciones
-                    // TODO: ref.invalidate(cashRegisterDetailProvider(sesionActual?.serverId));
-
-                    if (!context.mounted) return;
+                    ref.invalidate(dashboardProvider);
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text("Abono registrado con éxito"),
+                        content: Text('Abono registrado con exito'),
                         backgroundColor: Colors.green,
                       ),
                     );
                   } catch (e) {
-                    debugPrint("Error al registrar abono: $e");
-                    if (!context.mounted) return;
+                    if (!context.mounted) {
+                      return;
+                    }
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text("Error al registrar: $e"),
+                        content: Text('Error al registrar: $e'),
                         backgroundColor: Colors.red,
                       ),
                     );
@@ -653,7 +497,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                   backgroundColor: Colors.green[700],
                 ),
                 child: const Text(
-                  "GUARDAR ABONO",
+                  'GUARDAR ABONO',
                   style: TextStyle(color: Colors.white),
                 ),
               ),
@@ -666,8 +510,6 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
   }
 }
 
-// --- WIDGETS UI PEQUEÑOS ---
-
 class _SectionTitle extends StatelessWidget {
   final String title;
   const _SectionTitle({required this.title});
@@ -675,7 +517,7 @@ class _SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0, left: 4),
+      padding: const EdgeInsets.only(bottom: 8, left: 4),
       child: Text(
         title,
         style: const TextStyle(

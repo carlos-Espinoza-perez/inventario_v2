@@ -43,18 +43,18 @@ class CategoriaFilterList extends ConsumerWidget {
             },
           ),
 
-          // --- CHIPS DINÁMICOS (Desde Isar) ---
+          // --- CHIPS DINÁMICOS ---
           ...categoriasAsync.when(
             data: (categorias) {
               return categorias.map((categoria) {
                 return _FilterChip(
                   label: categoria.nombre,
-                  isSelected: filtroSeleccionado == categoria.serverId,
+                  isSelected: filtroSeleccionado == categoria.id,
                   onTap: () {
                     ref
                             .read(filtroCategoriaSeleccionadoProvider.notifier)
                             .state =
-                        categoria.serverId;
+                        categoria.id;
                   },
                 );
               });

@@ -1,72 +1,32 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:isar/isar.dart';
-import 'package:inventario_v2/core/constants/app_enums.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
-import 'package:inventario_v2/core/providers/database_provider.dart';
-import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
-import 'package:inventario_v2/features/sales/data/collections/caja_movimiento_extra_collection.dart';
-import 'package:inventario_v2/features/sales/data/collections/venta_collection.dart';
-import 'package:inventario_v2/features/sales/data/repositories/caja_repository.dart';
 import 'package:inventario_v2/features/auth/presentation/providers/auth_provider.dart';
-import 'package:inventario_v2/features/sales/data/collections/historial_pago_collection.dart';
+import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
+import 'package:inventario_v2/features/sales/data/repositories/caja_repository.dart';
 
-// ------------------------------------------------------------------
-// Provider: gastos reales de la sesión actual desde Isar
-// ------------------------------------------------------------------
 final gastosActivosProvider = FutureProvider.autoDispose
-    .family<List<CajaMovimientoExtraCollection>, String>((
-      ref,
-      cajaSesionId,
-    ) async {
+    .family<List<CajaMovimientosExtra>, String>((ref, cajaSesionId) async {
       final repo = ref.read(cajaRepositoryProvider);
-      return await repo.obtenerMovimientosExtras(cajaSesionId);
+      return repo.obtenerMovimientosExtras(cajaSesionId);
     });
 
-// ------------------------------------------------------------------
-// Provider: ventas en efectivo de la caja activa (solo contado + abonos)
-// ------------------------------------------------------------------
-final ventasEfectivoProvider = FutureProvider.autoDispose.family<double, String>((
-  ref,
-  cajaSesionId,
-) async {
-  final isar = await ref.watch(isarDbProvider.future);
-  // Todos los pagos o abonos (entradas de dinero) que sucedieron en esta sesión
-  final pagos = await isar.historialPagoCollections
-      .filter()
-      .cajaSesionIdEqualTo(cajaSesionId)
-      .findAll();
+final ventasEfectivoProvider = FutureProvider.autoDispose
+    .family<double, String>((ref, cajaSesionId) async {
+      final repo = ref.read(cajaRepositoryProvider);
+      return repo.obtenerVentasEfectivo(cajaSesionId);
+    });
 
-  double totalEfectivo = 0;
-  for (var p in pagos) {
-    totalEfectivo += p.montoPagado;
-  }
-  return totalEfectivo;
-});
-
-// ------------------------------------------------------------------
-// Provider: ventas a crédito de la sesión (informativo)
-// ------------------------------------------------------------------
 final ventasCreditoProvider = FutureProvider.autoDispose.family<double, String>(
   (ref, cajaSesionId) async {
-    final isar = await ref.watch(isarDbProvider.future);
-    final ventas = await isar.ventaCollections
-        .filter()
-        .cajaSesionIdEqualTo(cajaSesionId)
-        .estadoEqualTo(true)
-        .tipoVentaEqualTo(TipoVenta.credito)
-        .findAll();
-
-    // Sumar el saldo pendiente, esto ya resta los abonos realizados
-    return ventas.fold<double>(0.0, (sum, v) => sum + v.saldoPendiente);
+    final repo = ref.read(cajaRepositoryProvider);
+    return repo.obtenerVentasCredito(cajaSesionId);
   },
 );
 
-// ------------------------------------------------------------------
-// Screen
-// ------------------------------------------------------------------
 class CashRegisterScreen extends ConsumerStatefulWidget {
   const CashRegisterScreen({super.key});
 
@@ -96,7 +56,7 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
       error: (e, st) => Scaffold(body: Center(child: Text('Error: $e'))),
       data: (dashboardState) {
         final isRegisterOpen = dashboardState.cajaAbierta != null;
-        final cajaSesionId = dashboardState.cajaAbierta?.serverId ?? '';
+        final cajaSesionId = dashboardState.cajaAbierta?.id ?? '';
         final openingDate = dashboardState.cajaAbierta?.fechaApertura;
         final initialCash = dashboardState.cajaAbierta?.montoInicial ?? 0.0;
 
@@ -104,7 +64,7 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
           ref
               .read(appBarProvider.notifier)
               .setOptions(
-                title: isRegisterOpen ? "Monitor de Caja" : "Caja Cerrada",
+                title: isRegisterOpen ? 'Monitor de Caja' : 'Caja Cerrada',
                 showBackButton: true,
                 actions: [
                   if (isRegisterOpen)
@@ -132,7 +92,7 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
                           ),
                           SizedBox(width: 4),
                           Text(
-                            "EN CURSO",
+                            'EN CURSO',
                             style: TextStyle(
                               color: Colors.green,
                               fontWeight: FontWeight.bold,
@@ -173,7 +133,7 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
                       ),
                       icon: const Icon(Icons.lock_outline, color: Colors.white),
                       label: const Text(
-                        "REALIZAR CORTE",
+                        'REALIZAR CORTE',
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -192,7 +152,6 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
     );
   }
 
-  // --- VISTA: CAJA CERRADA ---
   Widget _buildClosedRegisterView() {
     return Center(
       child: Column(
@@ -219,7 +178,7 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
           ),
           const SizedBox(height: 30),
           const Text(
-            "Turno Cerrado",
+            'Turno Cerrado',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
@@ -230,7 +189,7 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 40),
             child: Text(
-              "Inicia un nuevo periodo para comenzar a registrar ventas y movimientos.",
+              'Inicia un nuevo periodo para comenzar a registrar ventas y movimientos.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey),
             ),
@@ -249,7 +208,7 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
                 elevation: 5,
               ),
               child: const Text(
-                "ABRIR CAJA AHORA",
+                'ABRIR CAJA AHORA',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
@@ -258,12 +217,24 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
               ),
             ),
           ),
+          const SizedBox(height: 15),
+          TextButton.icon(
+            onPressed: () => context.push('/cash-register-history'),
+            icon: const Icon(Icons.history, color: Colors.blueGrey),
+            label: const Text(
+              'VER HISTORIAL DE CAJAS',
+              style: TextStyle(
+                color: Colors.blueGrey,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  // --- VISTA: CAJA ABIERTA (con datos reales de Isar) ---
   Widget _buildOpenRegisterView(
     String cajaSesionId,
     DateTime? openingDate,
@@ -280,16 +251,15 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. TARJETA DE BALANCE
           gastosAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Text("Error gastos: $e"),
+            error: (e, _) => Text('Error gastos: $e'),
             data: (gastos) {
               final totalGastos = gastos.fold(0.0, (sum, g) => sum + g.monto);
 
               return ventasEfectivoAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Text("Error ventas: $e"),
+                error: (e, _) => Text('Error ventas: $e'),
                 data: (salesCash) {
                   final balance = (initialCash + salesCash) - totalGastos;
 
@@ -315,7 +285,7 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          "EFECTIVO EN CAJA (TEÓRICO)",
+                          'EFECTIVO EN CAJA (TEORICO)',
                           style: TextStyle(
                             color: Colors.white70,
                             fontSize: 11,
@@ -347,13 +317,13 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
                                     MainAxisAlignment.spaceBetween,
                                 children: [
                                   _BalanceDetailItem(
-                                    label: "Ventas Efec. (+)",
+                                    label: 'Ventas Efec. (+)',
                                     value: salesCash,
                                     icon: Icons.arrow_upward,
                                     color: Colors.green.shade200,
                                   ),
                                   _BalanceDetailItem(
-                                    label: "Gastos (-)",
+                                    label: 'Gastos (-)',
                                     value: totalGastos,
                                     icon: Icons.arrow_downward,
                                     color: Colors.orange.shade200,
@@ -373,13 +343,13 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
                                       MainAxisAlignment.spaceBetween,
                                   children: [
                                     _BalanceDetailItem(
-                                      label: "Fiado / Crédito",
+                                      label: 'Fiado / Credito',
                                       value: credit,
                                       icon: Icons.receipt_long,
                                       color: Colors.blue.shade200,
                                     ),
                                     _BalanceDetailItem(
-                                      label: "Ganancia Est.",
+                                      label: 'Ganancia Est.',
                                       value: gananciasEsperadas,
                                       icon: Icons.trending_up,
                                       color: Colors.yellow.shade200,
@@ -399,12 +369,9 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
               );
             },
           ),
-
           const SizedBox(height: 25),
-
-          // 2. REGISTRAR GASTO RÁPIDO
           const Text(
-            "Registrar Salida / Gasto",
+            'Registrar Salida / Gasto',
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 16,
@@ -429,7 +396,7 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
                         controller: _expenseAmountCtrl,
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
-                          labelText: "Monto",
+                          labelText: 'Monto',
                           prefixIcon: const Icon(Icons.attach_money, size: 18),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -447,8 +414,8 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
                       child: TextField(
                         controller: _expenseReasonCtrl,
                         decoration: InputDecoration(
-                          labelText: "Motivo",
-                          hintText: "Ej. Almuerzo",
+                          labelText: 'Motivo',
+                          hintText: 'Ej. Almuerzo',
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -487,7 +454,7 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
                           )
                         : const Icon(Icons.output, size: 20),
                     label: const Text(
-                      "REGISTRAR SALIDA",
+                      'REGISTRAR SALIDA',
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -495,15 +462,12 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
               ],
             ),
           ),
-
           const SizedBox(height: 25),
-
-          // 3. LISTA DE MOVIMIENTOS (desde Isar)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                "Gastos del Turno",
+                'Gastos del Turno',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
@@ -520,7 +484,7 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
           const SizedBox(height: 10),
           gastosAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Text("Error: $e"),
+            error: (e, _) => Text('Error: $e'),
             data: (gastos) {
               if (gastos.isEmpty) {
                 return Container(
@@ -535,7 +499,7 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
                       Icon(Icons.history, color: Colors.grey[300], size: 40),
                       const SizedBox(height: 5),
                       Text(
-                        "Sin gastos registrados",
+                        'Sin gastos registrados',
                         style: TextStyle(color: Colors.grey[400]),
                       ),
                     ],
@@ -581,11 +545,11 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
                         ),
                       ),
                       subtitle: Text(
-                        DateFormat('HH:mm').format(expense.ultimaActualizacion),
+                        DateFormat('HH:mm').format(expense.createdAt),
                         style: TextStyle(fontSize: 11, color: Colors.grey[500]),
                       ),
                       trailing: Text(
-                        "- ${NumberFormat.simpleCurrency().format(expense.monto)}",
+                        '- ${NumberFormat.simpleCurrency().format(expense.monto)}',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: Colors.red.shade700,
@@ -604,20 +568,25 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
     );
   }
 
-  // --- LÓGICA DE NEGOCIO ---
-
   Future<void> _openRegister() async {
-    final user = ref.read(authControllerProvider.notifier).usuarioActual;
-    final repo = ref.read(cajaRepositoryProvider);
-
-    if (user != null) {
-      await repo.abrirCaja(usuarioId: user.serverId, cajaId: 'caja_principal');
+    try {
+      final repo = ref.read(cajaRepositoryProvider);
+      await repo.abrirCaja();
       ref.invalidate(dashboardProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("✅ Turno abierto correctamente"),
+            content: Text('Turno abierto correctamente'),
             backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al abrir caja: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }
@@ -625,18 +594,18 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
   }
 
   Future<void> _addExpense(String cajaSesionId) async {
-    final double? amount = double.tryParse(_expenseAmountCtrl.text);
-    final String reason = _expenseReasonCtrl.text.trim();
+    final amount = double.tryParse(_expenseAmountCtrl.text);
+    final reason = _expenseReasonCtrl.text.trim();
 
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("⚠️ Ingresa un monto válido")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Ingresa un monto valido')));
       return;
     }
     if (reason.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("⚠️ Ingresa el motivo del gasto")),
+        const SnackBar(content: Text('Ingresa el motivo del gasto')),
       );
       return;
     }
@@ -644,28 +613,24 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      final user = ref.read(authControllerProvider.notifier).usuarioActual;
       final repo = ref.read(cajaRepositoryProvider);
-
       await repo.registrarGasto(
         cajaSesionId: cajaSesionId,
         amount: amount,
         reason: reason,
-        usuarioId: user?.serverId ?? 'unknown',
       );
 
       _expenseAmountCtrl.clear();
       _expenseReasonCtrl.clear();
       FocusManager.instance.primaryFocus?.unfocus();
 
-      // Refrescar gastos y dashboard
       ref.invalidate(gastosActivosProvider(cajaSesionId));
       ref.invalidate(dashboardProvider);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("✅ Gasto registrado"),
+            content: Text('Gasto registrado'),
             backgroundColor: Colors.orange,
           ),
         );
@@ -673,7 +638,7 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -685,14 +650,14 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("¿Cerrar Turno?"),
+        title: const Text('Cerrar Turno?'),
         content: const Text(
-          "Se calculará el balance final y la caja quedará inactiva.",
+          'Se calculara el balance final y la caja quedara inactiva.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancelar"),
+            child: const Text('Cancelar'),
           ),
           TextButton(
             onPressed: () async {
@@ -708,7 +673,7 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
 
               if (cajaAbierta != null && user != null) {
                 await repo.cerrarCaja(
-                  cajaSesionId: cajaAbierta.serverId,
+                  cajaSesionId: cajaAbierta.id,
                   usuarioCierreId: user.serverId,
                 );
                 ref.invalidate(dashboardProvider);
@@ -716,14 +681,12 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
 
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("✅ Turno cerrado correctamente"),
-                  ),
+                  const SnackBar(content: Text('Turno cerrado correctamente')),
                 );
               }
             },
             child: const Text(
-              "CONFIRMAR",
+              'CONFIRMAR',
               style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
             ),
           ),
@@ -733,7 +696,6 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
   }
 }
 
-// Widget pequeño para detalles dentro de la tarjeta azul
 class _BalanceDetailItem extends StatelessWidget {
   final String label;
   final double value;

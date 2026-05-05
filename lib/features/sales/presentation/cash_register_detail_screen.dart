@@ -1,112 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:isar/isar.dart';
-import 'package:inventario_v2/core/providers/database_provider.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import 'package:inventario_v2/core/db/models/cash_models.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
-import 'package:inventario_v2/features/sales/data/collections/caja_sesion_collection.dart';
-import 'package:inventario_v2/features/sales/data/collections/venta_collection.dart';
-import 'package:inventario_v2/features/sales/data/collections/caja_movimiento_extra_collection.dart';
-import 'package:inventario_v2/features/sales/data/collections/detalle_venta_collection.dart';
-import 'package:inventario_v2/features/sales/data/collections/historial_pago_collection.dart';
-import 'package:inventario_v2/core/constants/app_enums.dart';
+import 'package:inventario_v2/features/sales/data/repositories/caja_repository.dart';
 
 final cashRegisterDetailProvider = FutureProvider.family
-    .autoDispose<Map<String, dynamic>, String>((ref, sessionId) async {
-      final isar = await ref.watch(isarDbProvider.future);
-
-      // 1. Obtener la sesión de caja
-      final session = await isar.cajaSesionCollections
-          .filter()
-          .serverIdEqualTo(sessionId)
-          .findFirst();
-      if (session == null) throw Exception("Sesión no encontrada");
-
-      // 2. Obtener movimientos extras (gastos/salidas)
-      final movements = await isar.cajaMovimientoExtraCollections
-          .filter()
-          .cajaSesionIdEqualTo(sessionId)
-          .sortByUltimaActualizacionDesc()
-          .findAll();
-
-      double expensesTotal = 0;
-      List<Map<String, dynamic>> expensesList = [];
-      for (var m in movements) {
-        if (m.tipo == TipoMovimientoCaja.egreso) {
-          expensesTotal += m.monto;
-          expensesList.add({
-            'reason': m.motivo ?? 'Desconocido',
-            'amount': m.monto,
-            'time': m.ultimaActualizacion,
-          });
-        }
-      }
-
-      // 2.5 Obtener Pagos (Efectivo real que entró en esta caja)
-      final pagos = await isar.historialPagoCollections
-          .filter()
-          .cajaSesionIdEqualTo(sessionId)
-          .findAll();
-
-      double salesCash = 0;
-      for (var p in pagos) {
-        salesCash += p.montoPagado;
-      }
-
-      // 3. Obtener Ventas de esta sesión para calcular Fiados generados y Ganancia Bruta
-      final sales = await isar.ventaCollections
-          .filter()
-          .cajaSesionIdEqualTo(sessionId)
-          .findAll();
-
-      double salesCredit = 0;
-      double estimatedProfit = 0;
-
-      for (var sale in sales) {
-        if (sale.estado) {
-          if (sale.tipoVenta == TipoVenta.credito) {
-            salesCredit += sale.saldoPendiente;
-          }
-
-          final detalles = await isar.detalleVentaCollections
-              .filter()
-              .ventaIdEqualTo(sale.serverId)
-              .findAll();
-          for (var det in detalles) {
-            // Ganancia bruta de ese producto = (precio venta * cantidad) - (costo compra * cantidad) - descuento
-            double costoTotalProducto = det.costoHistoricoCompra * det.cantidad;
-            double ingresoTotalProducto = det.subTotal - det.descuento;
-            estimatedProfit += (ingresoTotalProducto - costoTotalProducto);
-          }
-        }
-      }
-
-      // 4. Calcular Valores
-      final closeDate = session.fechaCierre ?? session.ultimaActualizacion;
-      double expectedCash = session.montoInicial + salesCash - expensesTotal;
-
-      // Utilizaa base en variables de session
-      return {
-        'id': session.serverId.substring(0, 8).toUpperCase(),
-        'openedAt': session.fechaApertura,
-        'closedAt': closeDate,
-        'user':
-            'Cajero (ID: ${session.usuarioAperturaId.substring(0, 4)})', // Podriamos buscar usuario real
-
-        'initialCash': session.montoInicial,
-        'salesCash': salesCash,
-        'expensesTotal': expensesTotal,
-        'expectedCash': expectedCash,
-        'countedCash': session.totalEfectivoReal,
-        'difference': session.diferencia,
-
-        'salesCredit': salesCredit,
-        'estimatedProfit': estimatedProfit,
-
-        'expensesList': expensesList,
-        'status': session.estadoSesion.name,
-      };
+    .autoDispose<CashSessionDetailDrift, String>((ref, sessionId) async {
+      final repo = ref.read(cajaRepositoryProvider);
+      return repo.obtenerDetalleSesion(sessionId);
     });
 
 class CashRegisterDetailScreen extends ConsumerStatefulWidget {
@@ -127,7 +30,7 @@ class _CashRegisterDetailScreenState
     Future.microtask(() {
       ref
           .read(appBarProvider.notifier)
-          .setOptions(title: "Reporte de Cerrado", showBackButton: true);
+          .setOptions(title: 'Reporte de Cerrado', showBackButton: true);
     });
   }
 
@@ -141,28 +44,28 @@ class _CashRegisterDetailScreenState
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(child: Text('Error: $err')),
         data: (report) {
-          final double diff = report['difference'];
-          Color statusColor;
-          String statusText;
-          IconData statusIcon;
-
-          final bool isAbierta = report['status'] == 'abierta';
+          final sesion = report.sesion;
+          final diff = sesion.diferencia;
+          late Color statusColor;
+          late String statusText;
+          late IconData statusIcon;
+          final isAbierta = sesion.estadoSesion == 'abierta';
 
           if (isAbierta) {
             statusColor = Colors.orange;
-            statusText = "TURNO EN CURSO";
+            statusText = 'TURNO EN CURSO';
             statusIcon = Icons.lock_open;
           } else if (diff == 0) {
             statusColor = Colors.green;
-            statusText = "CUADRE PERFECTO";
+            statusText = 'CUADRE PERFECTO';
             statusIcon = Icons.check_circle_outline;
           } else if (diff > 0) {
             statusColor = Colors.blue;
-            statusText = "SOBRANTE DE CAJA";
+            statusText = 'SOBRANTE DE CAJA';
             statusIcon = Icons.arrow_circle_up;
           } else {
             statusColor = Colors.red;
-            statusText = "FALTANTE DE CAJA";
+            statusText = 'FALTANTE DE CAJA';
             statusIcon = Icons.error_outline;
           }
 
@@ -171,7 +74,6 @@ class _CashRegisterDetailScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. TARJETA DE RESULTADO DEL CIERRE
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
@@ -197,7 +99,7 @@ class _CashRegisterDetailScreenState
                       if (diff != 0) ...[
                         const SizedBox(height: 5),
                         Text(
-                          "${diff > 0 ? '+' : ''}${NumberFormat.simpleCurrency().format(diff)}",
+                          '${diff > 0 ? '+' : ''}${NumberFormat.simpleCurrency().format(diff)}',
                           style: TextStyle(
                             color: statusColor,
                             fontWeight: FontWeight.w900,
@@ -208,11 +110,8 @@ class _CashRegisterDetailScreenState
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 25),
-
-                // 2. INFORMACIÓN GENERAL
-                _SectionHeader(title: "Detalles del Turno"),
+                _SectionHeader(title: 'Detalles del Turno'),
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -221,28 +120,25 @@ class _CashRegisterDetailScreenState
                   ),
                   child: Column(
                     children: [
-                      _InfoRow("Cajero Responsable", report['user']),
+                      _InfoRow('Cajero Responsable', report.cajeroNombre),
                       const Divider(),
                       _InfoRow(
-                        "Apertura",
+                        'Apertura',
                         DateFormat(
                           'dd MMM yyyy - hh:mm a',
-                        ).format(report['openedAt']),
+                        ).format(sesion.fechaApertura),
                       ),
                       _InfoRow(
-                        "Cierre",
+                        'Cierre',
                         DateFormat(
                           'dd MMM yyyy - hh:mm a',
-                        ).format(report['closedAt']),
+                        ).format(sesion.fechaCierre ?? sesion.updatedAt),
                       ),
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 25),
-
-                // 3. BALANCE DE EFECTIVO (LA MATEMÁTICA)
-                _SectionHeader(title: "Balance de Efectivo"),
+                _SectionHeader(title: 'Balance de Efectivo'),
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -252,25 +148,25 @@ class _CashRegisterDetailScreenState
                   child: Column(
                     children: [
                       _MathRow(
-                        label: "Fondo Inicial",
-                        amount: report['initialCash'],
-                        operator: "+",
+                        label: 'Fondo Inicial',
+                        amount: sesion.montoInicial,
+                        operator: '+',
                       ),
                       _MathRow(
-                        label: "Ventas Efectivo",
-                        amount: report['salesCash'],
-                        operator: "+",
+                        label: 'Ventas Efectivo',
+                        amount: report.ventasEfectivo,
+                        operator: '+',
                       ),
                       _MathRow(
-                        label: "Gastos / Salidas",
-                        amount: report['expensesTotal'],
-                        operator: "-",
+                        label: 'Gastos / Salidas',
+                        amount: report.gastosTotales,
+                        operator: '-',
                         isNegative: true,
                       ),
                       const Divider(thickness: 1.5),
                       _MathRow(
-                        label: "Efectivo Esperado",
-                        amount: report['expectedCash'],
+                        label: 'Efectivo Esperado',
+                        amount: report.efectivoEsperado,
                         isResult: true,
                       ),
                       const SizedBox(height: 10),
@@ -281,25 +177,22 @@ class _CashRegisterDetailScreenState
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: _MathRow(
-                          label: "Efectivo Contado (Real)",
-                          amount: report['countedCash'],
+                          label: 'Efectivo Contado (Real)',
+                          amount: sesion.totalEfectivoReal,
                           isBold: true,
                         ),
                       ),
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 25),
-
-                // 4. ESTADÍSTICAS DEL NEGOCIO (LO QUE PEDISTE)
-                _SectionHeader(title: "Métricas del Negocio"),
+                _SectionHeader(title: 'Metricas del Negocio'),
                 Row(
                   children: [
                     Expanded(
                       child: _StatCard(
-                        label: "Ventas a Crédito",
-                        amount: report['salesCredit'],
+                        label: 'Ventas a Credito',
+                        amount: report.ventasCreditoPendiente,
                         icon: Icons.credit_score,
                         color: Colors.orange,
                       ),
@@ -307,22 +200,19 @@ class _CashRegisterDetailScreenState
                     const SizedBox(width: 15),
                     Expanded(
                       child: _StatCard(
-                        label: "Ganancia Neta",
-                        amount: report['estimatedProfit'],
+                        label: 'Ganancia Neta',
+                        amount: report.gananciaEstimada,
                         icon: Icons.trending_up,
                         color: Colors.green,
                       ),
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 25),
-
-                // 5. DETALLE DE GASTOS
-                _SectionHeader(title: "Gastos Registrados"),
-                if ((report['expensesList'] as List).isEmpty)
+                _SectionHeader(title: 'Gastos / Salidas'),
+                if (report.movimientos.isEmpty)
                   const Text(
-                    "No hubo gastos en este turno.",
+                    'No hubo gastos en este turno.',
                     style: TextStyle(color: Colors.grey),
                   )
                 else
@@ -334,10 +224,10 @@ class _CashRegisterDetailScreenState
                     child: ListView.separated(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      itemCount: (report['expensesList'] as List).length,
+                      itemCount: report.movimientos.length,
                       separatorBuilder: (c, i) => const Divider(height: 1),
                       itemBuilder: (context, index) {
-                        final item = report['expensesList'][index];
+                        final item = report.movimientos[index];
                         return ListTile(
                           dense: true,
                           leading: const Icon(
@@ -346,14 +236,14 @@ class _CashRegisterDetailScreenState
                             size: 18,
                           ),
                           title: Text(
-                            item['reason'],
+                            item.motivo ?? 'Desconocido',
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           subtitle: Text(
-                            DateFormat('hh:mm a').format(item['time']),
+                            DateFormat('hh:mm a').format(item.fecha),
                           ),
                           trailing: Text(
-                            "- ${NumberFormat.simpleCurrency().format(item['amount'])}",
+                            '- ${NumberFormat.simpleCurrency().format(item.monto)}',
                             style: const TextStyle(
                               color: Colors.red,
                               fontWeight: FontWeight.bold,
@@ -363,7 +253,56 @@ class _CashRegisterDetailScreenState
                       },
                     ),
                   ),
-
+                const SizedBox(height: 25),
+                _SectionHeader(title: 'Ventas Realizadas'),
+                if (report.ventas.isEmpty)
+                  const Text(
+                    'No hubo ventas en este turno.',
+                    style: TextStyle(color: Colors.grey),
+                  )
+                else
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: report.ventas.length,
+                      separatorBuilder: (c, i) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final item = report.ventas[index];
+                        return ListTile(
+                          onTap: () => context.push('/sales-detail/${item.fullId}'),
+                          dense: true,
+                          leading: CircleAvatar(
+                            backgroundColor: Colors.blue.shade50,
+                            radius: 14,
+                            child: const Icon(
+                              Icons.receipt_long,
+                              color: Colors.blue,
+                              size: 14,
+                            ),
+                          ),
+                          title: Text(
+                            item.client,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Text(
+                            '${item.id} - ${DateFormat('hh:mm a').format(item.date)}',
+                          ),
+                          trailing: Text(
+                            NumberFormat.simpleCurrency().format(item.total),
+                            style: const TextStyle(
+                              color: Colors.green,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                 const SizedBox(height: 40),
               ],
             ),
@@ -373,8 +312,6 @@ class _CashRegisterDetailScreenState
     );
   }
 }
-
-// --- WIDGETS AUXILIARES DE DISEÑO ---
 
 class _SectionHeader extends StatelessWidget {
   final String title;

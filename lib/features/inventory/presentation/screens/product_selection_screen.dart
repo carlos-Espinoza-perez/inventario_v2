@@ -1,15 +1,18 @@
 import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import 'package:inventario_v2/core/db/models/product_catalog_models.dart';
 import 'package:inventario_v2/features/inventory/data/domain/models/product_with_stock.dart';
-import 'package:inventario_v2/features/inventory/data/collections/producto_collection.dart';
 import 'package:inventario_v2/features/inventory/data/providers/categoria_provider.dart';
-import 'package:inventario_v2/features/inventory/data/providers/producto_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/codigo_producto_provider.dart';
+import 'package:inventario_v2/features/inventory/data/providers/inventario_provider.dart';
+import 'package:inventario_v2/features/inventory/data/providers/producto_provider.dart';
 
+import 'product_create_screen.dart';
 import 'product_detail_entry_screen.dart';
 
 enum ProductSelectionMode { entry, transfer }
@@ -22,7 +25,6 @@ class ProductSelectionScreen extends ConsumerStatefulWidget {
     super.key,
     required this.mode,
     this.originWarehouseId,
-    // Compatibilidad temporal (deprecado)
     String? bodegaId,
   }) : assert(
          mode == ProductSelectionMode.entry || originWarehouseId != null,
@@ -36,13 +38,11 @@ class ProductSelectionScreen extends ConsumerStatefulWidget {
 
 class _ProductSelectionScreenState
     extends ConsumerState<ProductSelectionScreen> {
-  String _selectedCategoryId = "Todos";
+  String _selectedCategoryId = 'Todos';
   final TextEditingController _searchCtrl = TextEditingController();
-
-  // ── Escáner ──────────────────────────────────────────────────────────────
   bool _showScanner = false;
   bool _isScannerActive = true;
-  String? _scannedBarcode; // código encontrado, usado para filtrar
+  String? _scannedBarcode;
 
   @override
   void dispose() {
@@ -50,7 +50,6 @@ class _ProductSelectionScreenState
     super.dispose();
   }
 
-  // Abre el panel del escáner
   void _openScanner() {
     setState(() {
       _showScanner = true;
@@ -58,7 +57,6 @@ class _ProductSelectionScreenState
     });
   }
 
-  // Cierra el escáner y limpia
   void _closeScanner() {
     setState(() {
       _showScanner = false;
@@ -67,112 +65,67 @@ class _ProductSelectionScreenState
     });
   }
 
-  // Callback cuando la cámara detecta un código
-  void _onBarcodeDetected(BarcodeCapture capture) async {
+  Future<void> _onBarcodeDetected(BarcodeCapture capture) async {
     if (!_isScannerActive) return;
-
     final raw = capture.barcodes.firstOrNull?.rawValue;
     if (raw == null) return;
-
     final code = raw.trim().replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '');
     if (code.isEmpty) return;
 
-    // Pausar escáner
     setState(() => _isScannerActive = false);
-
-    // Buscar si existe algún producto con ese código
-    final repoCodigo =
-        await ref.read(codigoProductoRepositoryProvider.future);
-    final codigos = await repoCodigo.getCodigosBySkuOBarcode(code);
-
+    final results = await ref.read(barcodeLookupProvider(code).future);
     if (!mounted) return;
 
-    if (codigos.isEmpty) {
-      // No se encontraron productos — mostrar mensaje y permitir re-escanear
-      setState(() {
-        _scannedBarcode = code; // guarda el código para mostrar "sin resultado"
-        _showScanner = false;
-      });
-      _showNoBarcodeSnackbar(code);
-    } else {
-      // Encontrado: filtrar la lista de productos por los productos encontrados
-      final productoIds = codigos.map((c) => c.productoId).toSet();
-
-      // Usamos el nombre del primer producto como filtro de búsqueda si solo hay 1
-      final repoProducto =
-          await ref.read(productoRepositoryProvider.future);
-
-      String filterText = '';
-      if (productoIds.length == 1) {
-        try {
-          final prod =
-              await repoProducto.getProductoPorServerId(productoIds.first);
-          filterText = prod.nombre;
-        } catch (_) {}
-      }
-
-      if (!mounted) return;
+    if (results.isEmpty) {
       setState(() {
         _showScanner = false;
         _scannedBarcode = code;
-        if (filterText.isNotEmpty) {
-          _searchCtrl.text = filterText;
-        }
       });
+      await _handleUnknownBarcode(code);
+      return;
     }
-  }
 
-  void _showNoBarcodeSnackbar(String code) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.search_off, color: Colors.white),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'No se encontró ningún producto con el código: $code',
-                style: const TextStyle(fontSize: 13),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: Colors.red.shade700,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        action: SnackBarAction(
-          label: 'RE-ESCANEAR',
-          textColor: Colors.white,
-          onPressed: _openScanner,
-        ),
-        duration: const Duration(seconds: 4),
-      ),
-    );
+    setState(() {
+      _showScanner = false;
+      _scannedBarcode = code;
+      _searchCtrl.text = results.first.producto.nombre;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    // 1. Cargar Categorías
-    final asyncCategorias = ref.watch(listCategoriasAllProvider);
-    final listaCategorias = asyncCategorias.value ?? [];
-    final categoryNameMap = {
-      for (var cat in listaCategorias) cat.serverId: cat.nombre,
-    };
-
-    // 2. Cargar Productos según MODO
+    final categorias = ref.watch(listCategoriasAllProvider).value ?? [];
+    final categoryNameMap = {for (final cat in categorias) cat.id: cat.nombre};
     final AsyncValue<List<ProductWithStock>> asyncProducts;
 
     if (widget.mode == ProductSelectionMode.entry) {
-      final allProductsAsync = ref.watch(listaProductosProvider);
-      asyncProducts = allProductsAsync.whenData((list) {
-        return list
-            .map((p) => ProductWithStock(producto: p, cantidad: 0))
-            .toList();
-      });
+      asyncProducts = ref
+          .watch(listaProductosProvider)
+          .whenData(
+            (list) => list
+                .map(
+                  (p) => ProductWithStock(
+                    item: p,
+                    cantidad: p.stock,
+                    costoPromedio: p.costoPromedio,
+                  ),
+                )
+                .toList(),
+          );
     } else {
-      asyncProducts = ref.watch(
-        productsWithStockProvider(widget.originWarehouseId!),
-      );
+      asyncProducts = ref
+          .watch(productsWithStockProvider(widget.originWarehouseId!))
+          .whenData(
+            (list) => list
+                .map(
+                  (p) => ProductWithStock(
+                    item: p,
+                    cantidad: p.stock,
+                    costoPromedio: p.costoPromedio,
+                  ),
+                )
+                .toList(),
+          );
     }
 
     return Scaffold(
@@ -180,38 +133,26 @@ class _ProductSelectionScreenState
       body: SafeArea(
         child: Column(
           children: [
-            // ── Barra superior (sin AppBar nativo) ──────────────────────
             _buildHeader(context),
-
-            // ── Filtros de categoría ─────────────────────────────────────
-            _buildCategoryChips(listaCategorias),
-
-            // ── Escáner inline ──────────────────────────────────────────
+            _buildCategoryChips(categorias),
             if (_showScanner) _buildInlineScanner(),
-
-            // ── Grid de productos ────────────────────────────────────────
             Expanded(
               child: asyncProducts.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
-                error: (err, stack) =>
-                    Center(child: Text('Error: $err')),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (err, _) => Center(child: Text('Error: $err')),
                 data: (allProducts) {
                   final filteredProducts = allProducts.where((item) {
                     final matchesCategory =
-                        _selectedCategoryId == "Todos" ||
-                        item.producto.categoriaId == _selectedCategoryId;
-
-                    final matchesSearch = item.producto.nombre
-                        .toLowerCase()
-                        .contains(_searchCtrl.text.toLowerCase());
-
-                    // En modo Traslado, solo productos con stock
+                        _selectedCategoryId == 'Todos' ||
+                        item.item.categoriaId == _selectedCategoryId;
+                    final query = _searchCtrl.text.toLowerCase();
+                    final matchesSearch =
+                        item.item.nombre.toLowerCase().contains(query) ||
+                        item.item.sku.toLowerCase().contains(query);
                     if (widget.mode == ProductSelectionMode.transfer &&
                         item.cantidad < 1.0) {
                       return false;
                     }
-
                     return matchesCategory && matchesSearch;
                   }).toList();
 
@@ -227,22 +168,12 @@ class _ProductSelectionScreenState
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            "No se encontraron productos",
+                            'No se encontraron productos',
                             style: TextStyle(
                               color: Colors.grey[400],
                               fontSize: 15,
                             ),
                           ),
-                          if (_scannedBarcode != null) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              'Código escaneado: $_scannedBarcode',
-                              style: TextStyle(
-                                color: Colors.grey[400],
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
                         ],
                       ),
                     );
@@ -261,8 +192,7 @@ class _ProductSelectionScreenState
                     itemBuilder: (context, index) {
                       final item = filteredProducts[index];
                       final catName =
-                          categoryNameMap[item.producto.categoriaId] ??
-                          'General';
+                          categoryNameMap[item.item.categoriaId] ?? 'General';
                       return _buildProductGridCard(item, catName);
                     },
                   );
@@ -275,7 +205,6 @@ class _ProductSelectionScreenState
     );
   }
 
-  // ── Header: búsqueda + escanear ──────────────────────────────────────────
   Widget _buildHeader(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
@@ -291,12 +220,11 @@ class _ProductSelectionScreenState
       ),
       child: Row(
         children: [
-          // Botón regresar
           InkWell(
             onTap: () => Navigator.of(context).pop(),
             borderRadius: BorderRadius.circular(10),
             child: Padding(
-              padding: const EdgeInsets.all(6.0),
+              padding: const EdgeInsets.all(6),
               child: Icon(
                 Icons.arrow_back_ios_new,
                 size: 20,
@@ -305,8 +233,6 @@ class _ProductSelectionScreenState
             ),
           ),
           const SizedBox(width: 8),
-
-          // Campo de búsqueda
           Expanded(
             child: Container(
               decoration: BoxDecoration(
@@ -315,24 +241,18 @@ class _ProductSelectionScreenState
               ),
               child: TextField(
                 controller: _searchCtrl,
-                onChanged: (_) => setState(() {
-                  _scannedBarcode = null; // limpiar filtro de escáner al escribir
-                }),
+                onChanged: (_) => setState(() => _scannedBarcode = null),
                 decoration: InputDecoration(
                   hintText: widget.mode == ProductSelectionMode.entry
-                      ? "Buscar producto para ingresar..."
-                      : "Buscar producto para trasladar...",
-                  hintStyle: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey[400],
-                  ),
+                      ? 'Buscar producto para ingresar...'
+                      : 'Buscar producto para trasladar...',
                   prefixIcon: Icon(
                     Icons.search,
                     color: Colors.grey[400],
                     size: 20,
                   ),
-                  // Botón limpiar (cuando hay texto o código escaneado)
-                  suffixIcon: _searchCtrl.text.isNotEmpty || _scannedBarcode != null
+                  suffixIcon:
+                      _searchCtrl.text.isNotEmpty || _scannedBarcode != null
                       ? IconButton(
                           icon: Icon(
                             Icons.close,
@@ -354,47 +274,27 @@ class _ProductSelectionScreenState
             ),
           ),
           const SizedBox(width: 8),
-
-          // Botón escáner de código de barras
-          _showScanner
-              ? InkWell(
-                  onTap: _closeScanner,
-                  borderRadius: BorderRadius.circular(10),
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.shade800,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.close,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                )
-              : InkWell(
-                  onTap: _openScanner,
-                  borderRadius: BorderRadius.circular(10),
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.shade800,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.qr_code_scanner,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                ),
+          InkWell(
+            onTap: _showScanner ? _closeScanner : _openScanner,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade800,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                _showScanner ? Icons.close : Icons.qr_code_scanner,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  // ── Chips de categoría ───────────────────────────────────────────────────
   Widget _buildCategoryChips(List<dynamic> categorias) {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
@@ -403,17 +303,14 @@ class _ProductSelectionScreenState
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
-            _buildFilterChip("Todos", "Todos"),
-            ...categorias.map(
-              (cat) => _buildFilterChip(cat.nombre, cat.serverId),
-            ),
+            _buildFilterChip('Todos', 'Todos'),
+            ...categorias.map((cat) => _buildFilterChip(cat.nombre, cat.id)),
           ],
         ),
       ),
     );
   }
 
-  // ── Escáner inline ───────────────────────────────────────────────────────
   Widget _buildInlineScanner() {
     return Container(
       height: 220,
@@ -421,34 +318,16 @@ class _ProductSelectionScreenState
       decoration: BoxDecoration(
         color: Colors.black,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       clipBehavior: Clip.hardEdge,
       child: Stack(
         children: [
-          // Cámara
           if (_isScannerActive)
             MobileScanner(onDetect: _onBarcodeDetected)
           else
             const Center(
               child: CircularProgressIndicator(color: Colors.orange),
             ),
-
-          // Marco de esquinas estilo profesional
-          if (_isScannerActive) ...[
-            _ScanCorner(left: 12, top: 12),
-            _ScanCorner(right: 12, top: 12, flipH: true),
-            _ScanCorner(left: 12, bottom: 12, flipV: true),
-            _ScanCorner(right: 12, bottom: 12, flipH: true, flipV: true),
-          ],
-
-          // Texto guía
           Positioned(
             bottom: 12,
             left: 0,
@@ -464,7 +343,7 @@ class _ProductSelectionScreenState
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: const Text(
-                  "Apunta al código de barras del producto",
+                  'Apunta al codigo de barras del producto',
                   style: TextStyle(color: Colors.white70, fontSize: 11),
                 ),
               ),
@@ -478,13 +357,11 @@ class _ProductSelectionScreenState
   Widget _buildFilterChip(String label, String id) {
     final isSelected = _selectedCategoryId == id;
     return Padding(
-      padding: const EdgeInsets.only(right: 8.0),
+      padding: const EdgeInsets.only(right: 8),
       child: FilterChip(
         label: Text(label),
         selected: isSelected,
-        onSelected: (bool selected) {
-          setState(() => _selectedCategoryId = id);
-        },
+        onSelected: (_) => setState(() => _selectedCategoryId = id),
         backgroundColor: Colors.white,
         selectedColor: Colors.cyan.shade100,
         labelStyle: TextStyle(
@@ -503,138 +380,96 @@ class _ProductSelectionScreenState
   }
 
   Widget _buildProductGridCard(ProductWithStock item, String categoryName) {
-    final product = item.producto;
-    final stock = item.cantidad;
-    final isTransfer = widget.mode == ProductSelectionMode.transfer;
-
-    final bool isDisabled = isTransfer && stock <= 0;
-
+    final product = item.item;
     return GestureDetector(
-      onTap: isDisabled ? null : () => _onProductSelected(item),
-      child: Opacity(
-        opacity: isDisabled ? 0.5 : 1.0,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: isDisabled
-                ? Border.all(color: Colors.red.shade100, width: 2)
-                : null,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Imagen
-              Expanded(
-                flex: 3,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(20),
-                    ),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(20),
-                    ),
-                    child: _buildImageWidget(product),
-                  ),
+      onTap: () => _onProductSelected(item),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              flex: 3,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(18),
                 ),
+                child: _buildImageWidget(product),
               ),
-
-              // Info
-              Expanded(
-                flex: 2,
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+            ),
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      categoryName,
+                      style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      product.nombre,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    const Spacer(),
+                    if (widget.mode == ProductSelectionMode.transfer)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            categoryName,
+                            'Disp: ${item.cantidad.toStringAsFixed(0)}',
                             style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey[600],
+                              fontSize: 12,
+                              color: item.cantidad > 0
+                                  ? Colors.green
+                                  : Colors.red,
                               fontWeight: FontWeight.bold,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            product.nombre,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              height: 1.2,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                          Icon(
+                            Icons.arrow_forward_ios,
+                            size: 12,
+                            color: Colors.grey[400],
                           ),
                         ],
-                      ),
-
-                      if (isTransfer)
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            if (stock <= 0)
-                              const Text(
-                                "SIN STOCK",
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.red,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              )
-                            else
-                              Text(
-                                "Disp: ${stock.toStringAsFixed(0)}",
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.green,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            Icon(
-                              Icons.arrow_forward_ios,
-                              size: 12,
-                              color: Colors.grey[400],
-                            ),
-                          ],
-                        )
-                      else
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Icon(
-                            Icons.add_circle,
-                            color: Colors.orange.shade800,
-                          ),
+                      )
+                    else
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Icon(
+                          Icons.add_circle,
+                          color: Colors.orange.shade800,
                         ),
-                    ],
-                  ),
+                      ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildImageWidget(ProductoCollection product) {
+  Widget _buildImageWidget(ProductCatalogItemDrift product) {
     if (product.imagenLocal != null &&
         File(product.imagenLocal!).existsSync()) {
       return Image.file(
@@ -643,7 +478,6 @@ class _ProductSelectionScreenState
         width: double.infinity,
       );
     }
-
     if (product.imagenUrl != null && product.imagenUrl!.isNotEmpty) {
       return CachedNetworkImage(
         imageUrl: product.imagenUrl!,
@@ -654,7 +488,6 @@ class _ProductSelectionScreenState
         errorWidget: (context, url, error) => _buildPlaceholder(),
       );
     }
-
     return _buildPlaceholder();
   }
 
@@ -666,145 +499,297 @@ class _ProductSelectionScreenState
     );
   }
 
-  void _onProductSelected(ProductWithStock item) async {
-    final product = item.producto;
-
+  Future<void> _onProductSelected(ProductWithStock item) async {
+    final product = item.item;
     if (widget.mode == ProductSelectionMode.entry) {
       final result = await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => ProductDetailEntryScreen(
-            productId: product.serverId,
-            categoriaId: product.categoriaId,
+            productId: product.id,
+            categoriaId: product.categoriaId ?? '',
+            preferredBarcode: _scannedBarcode == product.sku
+                ? _scannedBarcode
+                : null,
           ),
         ),
       );
-
       if (result != null && mounted) {
         Navigator.pop(context, result);
       }
-    } else {
-      final repo = await ref.read(productoRepositoryProvider.future);
-      try {
-        final variantes = await repo.getStockPorVariante(
-          bodegaId: widget.originWarehouseId!,
-          productoId: product.serverId,
-        );
+      return;
+    }
 
-        if (variantes.isNotEmpty) {
-          if (!mounted) return;
-          final List<Map<String, dynamic>>? seleccion =
-              await showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                useSafeArea: true,
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                ),
-                builder: (ctx) => _VariantSelectorSheet(
-                  variantes: variantes,
-                  product: product,
-                ),
-              );
+    final repo = await ref.read(inventarioRepositoryProvider.future);
+    final variantes = await repo.getVariantsWithStock(
+      product.id,
+      widget.originWarehouseId!,
+    );
+    if (!mounted) return;
 
-          if (seleccion != null && seleccion.isNotEmpty && mounted) {
-            Navigator.pop(context, seleccion);
-          }
-          return;
-        }
-      } catch (e) {
-        debugPrint("Error consultando variantes: $e");
+    if (variantes.isNotEmpty) {
+      final seleccion = await showModalBottomSheet<List<Map<String, dynamic>>>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: (ctx) =>
+            _VariantSelectorSheet(variantes: variantes, product: product),
+      );
+
+      if (seleccion != null && seleccion.isNotEmpty && mounted) {
+        Navigator.pop(context, seleccion);
       }
+      return;
+    }
 
-      if (!mounted) return;
-      final result = [
-        {
-          'productId': product.serverId,
-          'name': product.nombre,
-          'qr': "MANUAL-SELECT",
-          'size': "U",
-          'cantidad': 1.0,
-          'price': product.ultimoPrecioVenta,
-          'cost': item.costoPromedio,
-          'availableStock': item.cantidad,
-          'image': product.imagenUrl,
-        },
-      ];
+    Navigator.pop(context, [
+      {
+        'productId': product.id,
+        'productVariantId': product.variante?.id,
+        'name': product.nombre,
+        'qr': product.sku,
+        'size': product.talla ?? 'General',
+        'cantidad': 1.0,
+        'price': product.precioVenta,
+        'cost': item.costoPromedio,
+        'availableStock': item.cantidad,
+        'image': product.imagenUrl,
+      },
+    ]);
+  }
+
+  Future<void> _handleUnknownBarcode(String barcode) async {
+    if (!mounted) return;
+    final action = await showModalBottomSheet<_UnknownBarcodeAction>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => _UnknownBarcodeSheet(barcode: barcode),
+    );
+    if (!mounted || action == null) return;
+
+    switch (action) {
+      case _UnknownBarcodeAction.create:
+        final result = await Navigator.push<Map<String, dynamic>>(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProductCreateScreen(initialBarcode: barcode),
+          ),
+        );
+        if (!mounted || result == null) return;
+        await _openProductEntryFromBarcode(
+          productId: result['productId'] as String,
+          categoriaId: result['categoriaId'] as String?,
+          barcode: barcode,
+        );
+        return;
+      case _UnknownBarcodeAction.assign:
+        final product = await showModalBottomSheet<ProductCatalogItemDrift>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.white,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          builder: (context) => const _ProductPickerSheet(),
+        );
+        if (!mounted || product == null) return;
+        try {
+          final repo = await ref.read(inventarioRepositoryProvider.future);
+          await repo.asignarCodigoAProducto(
+            productId: product.id,
+            barcode: barcode,
+          );
+          await _openProductEntryFromBarcode(
+            productId: product.id,
+            categoriaId: product.categoriaId,
+            barcode: barcode,
+          );
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$e'), backgroundColor: Colors.red.shade700),
+          );
+        }
+        return;
+    }
+  }
+
+  Future<void> _openProductEntryFromBarcode({
+    required String productId,
+    required String? categoriaId,
+    required String barcode,
+  }) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProductDetailEntryScreen(
+          productId: productId,
+          categoriaId: categoriaId ?? '',
+          preferredBarcode: barcode,
+        ),
+      ),
+    );
+    if (result != null && mounted) {
       Navigator.pop(context, result);
     }
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Esquinas decorativas del marco de escaneo
-// ─────────────────────────────────────────────────────────────────────────────
-class _ScanCorner extends StatelessWidget {
-  final double? left;
-  final double? right;
-  final double? top;
-  final double? bottom;
-  final bool flipH;
-  final bool flipV;
+enum _UnknownBarcodeAction { create, assign }
 
-  const _ScanCorner({
-    this.left,
-    this.right,
-    this.top,
-    this.bottom,
-    this.flipH = false,
-    this.flipV = false,
-  });
+class _UnknownBarcodeSheet extends StatelessWidget {
+  final String barcode;
+
+  const _UnknownBarcodeSheet({required this.barcode});
 
   @override
   Widget build(BuildContext context) {
-    const double size = 20.0;
-    const double thickness = 3.0;
-
-    return Positioned(
-      left: left,
-      right: right,
-      top: top,
-      bottom: bottom,
-      child: Transform.scale(
-        scaleX: flipH ? -1 : 1,
-        scaleY: flipV ? -1 : 1,
-        child: SizedBox(
-          width: size,
-          height: size,
-          child: Stack(
-            children: [
-              Positioned(
-                top: 0,
-                left: 0,
-                child: Container(
-                  width: size,
-                  height: thickness,
-                  color: Colors.orange,
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Codigo no registrado',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              barcode,
+              style: TextStyle(
+                color: Colors.cyan.shade800,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 18),
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor: Colors.orange.shade50,
+                child: Icon(
+                  Icons.add_box_outlined,
+                  color: Colors.orange.shade800,
                 ),
               ),
-              Positioned(
-                top: 0,
-                left: 0,
-                child: Container(
-                  width: thickness,
-                  height: size,
-                  color: Colors.orange,
-                ),
+              title: const Text('Crear producto desde cero'),
+              subtitle: const Text('El codigo quedara como SKU inicial'),
+              onTap: () => Navigator.pop(context, _UnknownBarcodeAction.create),
+            ),
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor: Colors.cyan.shade50,
+                child: Icon(Icons.link, color: Colors.cyan.shade800),
               ),
-            ],
-          ),
+              title: const Text('Asignar a producto existente'),
+              subtitle: const Text(
+                'Agrega otro codigo al producto seleccionado',
+              ),
+              onTap: () => Navigator.pop(context, _UnknownBarcodeAction.assign),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Selector de variantes / tallas (sin cambios)
-// ─────────────────────────────────────────────────────────────────────────────
+class _ProductPickerSheet extends ConsumerStatefulWidget {
+  const _ProductPickerSheet();
+
+  @override
+  ConsumerState<_ProductPickerSheet> createState() =>
+      _ProductPickerSheetState();
+}
+
+class _ProductPickerSheetState extends ConsumerState<_ProductPickerSheet> {
+  final TextEditingController _filterCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _filterCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final productsAsync = ref.watch(listaProductosProvider);
+
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.75,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+              child: TextField(
+                controller: _filterCtrl,
+                autofocus: true,
+                onChanged: (value) =>
+                    setState(() => _query = value.toLowerCase()),
+                decoration: InputDecoration(
+                  hintText: 'Buscar producto existente...',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: productsAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (err, _) => Center(child: Text('Error: $err')),
+                data: (products) {
+                  final filtered = products.where((product) {
+                    return product.nombre.toLowerCase().contains(_query) ||
+                        product.sku.toLowerCase().contains(_query);
+                  }).toList();
+
+                  if (filtered.isEmpty) {
+                    return Center(
+                      child: Text(
+                        'No se encontraron productos',
+                        style: TextStyle(color: Colors.grey.shade500),
+                      ),
+                    );
+                  }
+
+                  return ListView.separated(
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final product = filtered[index];
+                      return ListTile(
+                        title: Text(product.nombre),
+                        subtitle: Text(product.sku),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => Navigator.pop(context, product),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _VariantSelectorSheet extends StatefulWidget {
   final List<Map<String, dynamic>> variantes;
-  final ProductoCollection product;
+  final ProductCatalogItemDrift product;
 
   const _VariantSelectorSheet({required this.variantes, required this.product});
 
@@ -819,15 +804,15 @@ class _VariantSelectorSheetState extends State<_VariantSelectorSheet> {
   void initState() {
     super.initState();
     final grouped = _groupVariants();
-    for (var key in grouped.keys) {
-      _quantities[key] = 0.0;
+    for (final key in grouped.keys) {
+      _quantities[key] = 0;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final grouped = _groupVariants();
-    int tiposItems = _quantities.values.where((q) => q > 0).length;
+    final tiposItems = _quantities.values.where((q) => q > 0).length;
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 20),
@@ -841,7 +826,7 @@ class _VariantSelectorSheetState extends State<_VariantSelectorSheet> {
               children: [
                 Expanded(
                   child: Text(
-                    "Tallas: ${widget.product.nombre}",
+                    'Tallas: ${widget.product.nombre}',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
@@ -861,163 +846,59 @@ class _VariantSelectorSheetState extends State<_VariantSelectorSheet> {
             child: ListView.separated(
               padding: const EdgeInsets.only(bottom: 80),
               itemCount: grouped.keys.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final key = grouped.keys.elementAt(index);
                 final items = grouped[key]!;
-
                 final parts = key.split('_#_');
                 final talla = parts[0];
                 final costoGrp = double.tryParse(parts[1]) ?? 0.0;
                 final precioGrp = double.tryParse(parts[2]) ?? 0.0;
-
                 double totalStock = 0;
-                for (var i in items) {
+                for (final i in items) {
                   totalStock += (i['cantidad'] as num).toDouble();
                 }
-
                 final currentQty = _quantities[key] ?? 0.0;
-                final bool hasStock = totalStock > 0;
+                final hasStock = totalStock > 0;
 
-                return Container(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 12,
-                    horizontal: 16,
+                return ListTile(
+                  title: Text(
+                    talla,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  color: currentQty > 0
-                      ? Colors.blue.withValues(alpha: 0.05)
-                      : null,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 4,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  subtitle: Text(
+                    'Costo: ${costoGrp.toStringAsFixed(0)} | Venta: ${precioGrp.toStringAsFixed(0)} | Disp: ${totalStock.toInt()}',
+                  ),
+                  trailing: !hasStock
+                      ? const Text('Agotado')
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[200],
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    talla,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                if (items.length > 1)
-                                  Text(
-                                    "(${items.length} lotes)",
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.grey[500],
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Wrap(
-                              spacing: 8,
-                              children: [
-                                Text(
-                                  "Costo: ${costoGrp.toStringAsFixed(0)}",
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                                Text(
-                                  "Venta: ${precioGrp.toStringAsFixed(0)}",
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.blue[800],
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              "Disp: ${totalStock.toInt()}",
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: hasStock ? Colors.green : Colors.red,
-                                fontWeight: FontWeight.w500,
+                            IconButton(
+                              icon: const Icon(
+                                Icons.remove_circle_outline,
+                                color: Colors.red,
                               ),
+                              onPressed: currentQty > 0
+                                  ? () => setState(
+                                      () => _quantities[key] = currentQty - 1,
+                                    )
+                                  : null,
+                            ),
+                            Text(currentQty.toInt().toString()),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.add_circle,
+                                color: Colors.green,
+                              ),
+                              onPressed: currentQty < totalStock
+                                  ? () => setState(
+                                      () => _quantities[key] = currentQty + 1,
+                                    )
+                                  : null,
                             ),
                           ],
                         ),
-                      ),
-                      Expanded(
-                        flex: 3,
-                        child: !hasStock
-                            ? const Center(
-                                child: Text(
-                                  "Agotado",
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              )
-                            : Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.remove_circle_outline,
-                                      color: Colors.red,
-                                    ),
-                                    onPressed: currentQty > 0
-                                        ? () {
-                                            setState(() {
-                                              _quantities[key] = currentQty - 1;
-                                            });
-                                          }
-                                        : null,
-                                    visualDensity: VisualDensity.compact,
-                                  ),
-                                  SizedBox(
-                                    width: 30,
-                                    child: Center(
-                                      child: Text(
-                                        currentQty.toInt().toString(),
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.add_circle,
-                                      color: Colors.green,
-                                    ),
-                                    onPressed: currentQty < totalStock
-                                        ? () {
-                                            setState(() {
-                                              _quantities[key] = currentQty + 1;
-                                            });
-                                          }
-                                        : null,
-                                    visualDensity: VisualDensity.compact,
-                                  ),
-                                ],
-                              ),
-                      ),
-                    ],
-                  ),
                 );
               },
             ),
@@ -1027,15 +908,14 @@ class _VariantSelectorSheetState extends State<_VariantSelectorSheet> {
             child: SizedBox(
               width: double.infinity,
               child: ElevatedButton(
+                onPressed: tiposItems > 0 ? _confirmSelection : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: tiposItems > 0
                       ? Colors.cyan.shade800
                       : Colors.grey,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-                onPressed: tiposItems > 0 ? _confirmSelection : null,
                 child: const Text(
-                  "AGREGAR SELECCIÓN",
+                  'AGREGAR SELECCION',
                   style: TextStyle(color: Colors.white),
                 ),
               ),
@@ -1047,63 +927,51 @@ class _VariantSelectorSheetState extends State<_VariantSelectorSheet> {
   }
 
   Map<String, List<Map<String, dynamic>>> _groupVariants() {
-    final Map<String, List<Map<String, dynamic>>> grouped = {};
-    for (var v in widget.variantes) {
-      final t = (v['talla'] as String?) ?? "U";
-      final costo = v['costoPromedio'] != null
-          ? (v['costoPromedio'] as num).toDouble()
-          : 0.0;
-      final precio = v['precioEspecifico'] != null
-          ? (v['precioEspecifico'] as num).toDouble()
-          : widget.product.ultimoPrecioVenta;
-
-      final key = "${t}_#_${costo}_#_$precio";
-
-      if (!grouped.containsKey(key)) {
-        grouped[key] = [];
-      }
-      grouped[key]!.add(v);
+    final grouped = <String, List<Map<String, dynamic>>>{};
+    for (final v in widget.variantes) {
+      final talla = (v['talla'] as String?) ?? 'U';
+      final costo =
+          ((v['costoPromedio'] ?? v['costo']) as num?)?.toDouble() ?? 0.0;
+      final precio =
+          ((v['precioEspecifico'] ?? v['precio']) as num?)?.toDouble() ??
+          widget.product.precioVenta;
+      final key = '${talla}_#_${costo}_#_$precio';
+      grouped.putIfAbsent(key, () => []).add(v);
     }
     return grouped;
   }
 
   void _confirmSelection() {
-    List<Map<String, dynamic>> seleccionados = [];
+    final seleccionados = <Map<String, dynamic>>[];
     final grouped = _groupVariants();
-
     grouped.forEach((key, items) {
-      double qtyNeeded = _quantities[key] ?? 0.0;
-      if (qtyNeeded > 0) {
-        for (var item in items) {
-          if (qtyNeeded <= 0) break;
-
-          double stockItem = (item['cantidad'] as num).toDouble();
-          if (stockItem <= 0) continue;
-
-          double toTake = qtyNeeded;
-          if (toTake > stockItem) {
-            toTake = stockItem;
-          }
-
-          seleccionados.add({
-            'productId': widget.product.serverId,
-            'name': widget.product.nombre,
-            'qr': item['sku'],
-            'size': item['talla'],
-            'cantidad': toTake,
-            'availableStock': stockItem,
-            'cost': (item['costoPromedio'] as num).toDouble(),
-            'price':
-                item['precioEspecifico'] ??
-                widget.product.ultimoPrecioVenta,
-            'image': widget.product.imagenUrl,
-          });
-
-          qtyNeeded -= toTake;
-        }
+      var qtyNeeded = _quantities[key] ?? 0.0;
+      if (qtyNeeded <= 0) return;
+      for (final item in items) {
+        if (qtyNeeded <= 0) break;
+        final stockItem = (item['cantidad'] as num).toDouble();
+        if (stockItem <= 0) continue;
+        final toTake = qtyNeeded > stockItem ? stockItem : qtyNeeded;
+        seleccionados.add({
+          'productId': widget.product.id,
+          'productVariantId': item['varianteId'],
+          'name': widget.product.nombre,
+          'qr': item['sku'],
+          'size': item['talla'],
+          'cantidad': toTake,
+          'availableStock': stockItem,
+          'cost':
+              ((item['costoPromedio'] ?? item['costo']) as num?)?.toDouble() ??
+              0.0,
+          'price':
+              ((item['precioEspecifico'] ?? item['precio']) as num?)
+                  ?.toDouble() ??
+              widget.product.precioVenta,
+          'image': widget.product.imagenUrl,
+        });
+        qtyNeeded -= toTake;
       }
     });
-
     Navigator.pop(context, seleccionados);
   }
 }

@@ -1,69 +1,19 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:isar/isar.dart';
-import 'package:inventario_v2/core/providers/database_provider.dart';
-import 'package:inventario_v2/core/constants/app_enums.dart';
-import 'package:inventario_v2/features/sales/data/collections/caja_sesion_collection.dart';
+import 'package:inventario_v2/core/db/models/report_models.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
+import 'package:inventario_v2/core/providers/drift_provider.dart';
 
-// ------------------------------------------------------------------
-// MODEL
-// ------------------------------------------------------------------
-class CashAuditModel {
-  final String sessionId;
-  final DateTime openedAt;
-  final DateTime? closedAt;
-  final double totalVentas;
-  final double totalEfectivo;
-  final double diferencia;
-  final EstadoSesion estado;
-
-  CashAuditModel({
-    required this.sessionId,
-    required this.openedAt,
-    this.closedAt,
-    required this.totalVentas,
-    required this.totalEfectivo,
-    required this.diferencia,
-    required this.estado,
-  });
-}
-
-// ------------------------------------------------------------------
-// PROVIDER
-// ------------------------------------------------------------------
-final cashAuditProvider = FutureProvider.autoDispose<List<CashAuditModel>>((
+final cashAuditProvider = FutureProvider.autoDispose<List<CashAuditDrift>>((
   ref,
 ) async {
-  final isar = await ref.watch(isarDbProvider.future);
-
-  final allSessions = await isar.cajaSesionCollections
-      .where()
-      .sortByFechaAperturaDesc()
-      .findAll();
-
-  final sessions = allSessions.take(20).toList();
-
-  return sessions
-      .map(
-        (s) => CashAuditModel(
-          sessionId: s.serverId,
-          openedAt: s.fechaApertura,
-          closedAt: s.fechaCierre,
-          totalVentas: s.totalVentasSistema,
-          totalEfectivo: s.totalEfectivoReal,
-          diferencia: s.diferencia,
-          estado: s.estadoSesion,
-        ),
-      )
-      .toList();
+  final db = ref.watch(driftDatabaseProvider);
+  return db.salesDao.getCashAuditReport(limit: 20);
 });
 
-// ------------------------------------------------------------------
-// SCREEN
-// ------------------------------------------------------------------
 class CashFlowReportScreen extends ConsumerStatefulWidget {
   const CashFlowReportScreen({super.key});
 
@@ -77,19 +27,17 @@ class _CashFlowReportScreenState extends ConsumerState<CashFlowReportScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref
-          .read(appBarProvider.notifier)
-          .setOptions(
-            title: "Auditoría de Cajas",
-            subtitle: "Historial de faltantes",
-            showBackButton: true,
-            actions: [
-              IconButton(
-                onPressed: () => ref.invalidate(cashAuditProvider),
-                icon: const Icon(Icons.refresh),
-              ),
-            ],
-          );
+      ref.read(appBarProvider.notifier).setOptions(
+        title: 'Auditoria de Cajas',
+        subtitle: 'Historial de faltantes',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            onPressed: () => ref.invalidate(cashAuditProvider),
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      );
     });
   }
 
@@ -101,11 +49,9 @@ class _CashFlowReportScreenState extends ConsumerState<CashFlowReportScreen> {
       backgroundColor: Colors.grey[50],
       body: auditAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text("Error: $e")),
+        error: (e, _) => Center(child: Text('Error: $e')),
         data: (sessions) {
-          final cerradas = sessions
-              .where((s) => s.estado == EstadoSesion.cerrada)
-              .toList();
+          final cerradas = sessions.where((s) => s.estado == 'cerrada').toList();
           final perfectos = cerradas.where((s) => s.diferencia == 0).length;
           final faltanteAcumulado = cerradas
               .where((s) => s.diferencia < 0)
@@ -119,10 +65,9 @@ class _CashFlowReportScreenState extends ConsumerState<CashFlowReportScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. GRÁFICO de diferencias
                 if (cerradas.isNotEmpty) ...[
                   const Text(
-                    "Historial de Faltantes/Sobrantes",
+                    'Historial de Faltantes/Sobrantes',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -130,7 +75,7 @@ class _CashFlowReportScreenState extends ConsumerState<CashFlowReportScreen> {
                     ),
                   ),
                   Text(
-                    "Últimos ${cerradas.take(7).length} cierres",
+                    'Ultimos ${cerradas.take(7).length} cierres',
                     style: const TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                   const SizedBox(height: 20),
@@ -153,16 +98,14 @@ class _CashFlowReportScreenState extends ConsumerState<CashFlowReportScreen> {
                               showTitles: true,
                               getTitlesWidget: (value, meta) {
                                 final idx = value.toInt();
-                                if (idx >= cerradas.length) {
+                                if (idx >= cerradas.take(7).length) {
                                   return const SizedBox.shrink();
                                 }
                                 return SideTitleWidget(
                                   meta: meta,
                                   space: 4,
                                   child: Text(
-                                    DateFormat(
-                                      'dd/MM',
-                                    ).format(cerradas[idx].openedAt),
+                                    DateFormat('dd/MM').format(cerradas[idx].openedAt),
                                     style: const TextStyle(
                                       fontSize: 9,
                                       color: Colors.grey,
@@ -188,7 +131,7 @@ class _CashFlowReportScreenState extends ConsumerState<CashFlowReportScreen> {
                         ),
                         barGroups: List.generate(cerradas.take(7).length, (i) {
                           final diff = cerradas[i].diferencia;
-                          Color color = Colors.green;
+                          var color = Colors.green;
                           if (diff < 0) color = Colors.red;
                           if (diff > 0) color = Colors.blue;
                           return BarChartGroupData(
@@ -208,10 +151,8 @@ class _CashFlowReportScreenState extends ConsumerState<CashFlowReportScreen> {
                   ),
                   const SizedBox(height: 20),
                 ],
-
-                // 2. RESUMEN DE AUDITORÍA
                 const Text(
-                  "Resumen de Auditoría",
+                  'Resumen de Auditoria',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -223,8 +164,8 @@ class _CashFlowReportScreenState extends ConsumerState<CashFlowReportScreen> {
                   children: [
                     Expanded(
                       child: _AuditCard(
-                        label: "Cierres Perfectos",
-                        value: "$pctPerfectos%",
+                        label: 'Cierres Perfectos',
+                        value: '$pctPerfectos%',
                         color: Colors.green,
                         icon: Icons.check_circle,
                       ),
@@ -232,7 +173,7 @@ class _CashFlowReportScreenState extends ConsumerState<CashFlowReportScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: _AuditCard(
-                        label: "Faltante Acumulado",
+                        label: 'Faltante Acumulado',
                         value: NumberFormat.compactSimpleCurrency().format(
                           faltanteAcumulado,
                         ),
@@ -246,12 +187,9 @@ class _CashFlowReportScreenState extends ConsumerState<CashFlowReportScreen> {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 30),
-
-                // 3. LISTA de sesiones
                 const Text(
-                  "Sesiones Recientes",
+                  'Sesiones Recientes',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -260,7 +198,7 @@ class _CashFlowReportScreenState extends ConsumerState<CashFlowReportScreen> {
                 ),
                 const SizedBox(height: 10),
                 if (sessions.isEmpty)
-                  const Center(child: Text("No hay sesiones registradas."))
+                  const Center(child: Text('No hay sesiones registradas.'))
                 else
                   ListView.builder(
                     shrinkWrap: true,
@@ -268,8 +206,8 @@ class _CashFlowReportScreenState extends ConsumerState<CashFlowReportScreen> {
                     itemCount: sessions.length,
                     itemBuilder: (context, index) {
                       final s = sessions[index];
-                      final isAbierta = s.estado == EstadoSesion.abierta;
-                      Color diffColor = Colors.grey;
+                      final isAbierta = s.estado == 'abierta';
+                      Color diffColor;
                       if (isAbierta) {
                         diffColor = Colors.orange;
                       } else if (s.diferencia > 0) {
@@ -280,89 +218,90 @@ class _CashFlowReportScreenState extends ConsumerState<CashFlowReportScreen> {
                         diffColor = Colors.green;
                       }
 
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.shade100),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: diffColor.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
+                      return InkWell(
+                        onTap: () => context.push('/cash-register-detail/${s.sessionId}'),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade100),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: diffColor.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  isAbierta
+                                      ? Icons.lock_open
+                                      : (s.diferencia > 0
+                                            ? Icons.arrow_upward
+                                            : (s.diferencia < 0
+                                                  ? Icons.warning
+                                                  : Icons.check)),
+                                  color: diffColor,
+                                  size: 20,
+                                ),
                               ),
-                              child: Icon(
-                                isAbierta
-                                    ? Icons.lock_open
-                                    : (s.diferencia > 0
-                                          ? Icons.arrow_upward
-                                          : (s.diferencia < 0
-                                                ? Icons.warning
-                                                : Icons.check)),
-                                color: diffColor,
-                                size: 20,
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      DateFormat('dd MMM yyyy').format(s.openedAt),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      isAbierta
+                                          ? 'EN CURSO'
+                                          : 'Cierre: ${s.closedAt != null ? DateFormat('HH:mm').format(s.closedAt!) : '-'}',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: isAbierta
+                                            ? Colors.orange[800]
+                                            : Colors.grey,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
                                   Text(
-                                    DateFormat(
-                                      'dd MMM yyyy',
-                                    ).format(s.openedAt),
+                                    NumberFormat.compactSimpleCurrency().format(
+                                      s.totalVentas,
+                                    ),
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                   Text(
                                     isAbierta
-                                        ? "EN CURSO"
-                                        : "Cierre: ${s.closedAt != null ? DateFormat('HH:mm').format(s.closedAt!) : '-'}",
+                                        ? 'Activo'
+                                        : 'Dif: ${s.diferencia > 0 ? '+' : ''}${NumberFormat.compactSimpleCurrency().format(s.diferencia)}',
                                     style: TextStyle(
                                       fontSize: 11,
-                                      color: isAbierta
-                                          ? Colors.orange[800]
-                                          : Colors.grey,
+                                      color: diffColor,
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  NumberFormat.compactSimpleCurrency().format(
-                                    s.totalVentas,
-                                  ),
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  isAbierta
-                                      ? "Activo"
-                                      : "Dif: ${s.diferencia > 0 ? '+' : ''}${NumberFormat.compactSimpleCurrency().format(s.diferencia)}",
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: diffColor,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       );
                     },
                   ),
-
                 const SizedBox(height: 40),
               ],
             ),
@@ -393,7 +332,7 @@ class _AuditCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         children: [

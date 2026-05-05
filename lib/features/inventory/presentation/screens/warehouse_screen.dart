@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
-import 'package:inventario_v2/features/auth/data/collections/bodega_collection.dart';
+import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
 import 'package:inventario_v2/features/inventory/presentation/widgets/warehouse_item.dart';
 
@@ -149,7 +149,7 @@ class _WarehouseScreenState extends ConsumerState<WarehouseScreen> {
     );
   }
 
-  void _navegarABodega(BuildContext context, BodegaCollection bodega) {
+  void _navegarABodega(BuildContext context, Bodega bodega) {
     // ¡CRÍTICO! Usar serverId (UUID) para sincronización con Supabase.
     // NO usar bodega.id (int local), ya que causará error 22P02 en Postgres.
     context.push('/warehouse-inventory/${bodega.serverId}', extra: bodega);

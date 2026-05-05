@@ -1,15 +1,15 @@
+import 'package:drift/drift.dart';
+import 'package:inventario_v2/core/db/app_database.dart';
+import 'package:inventario_v2/core/db/daos/auth_dao.dart';
 import 'package:inventario_v2/core/utils/password_hasher.dart';
-import 'package:inventario_v2/features/auth/data/collections/empresa_collection.dart';
-import 'package:inventario_v2/features/auth/data/collections/rol_collection.dart';
-import 'package:inventario_v2/features/auth/data/collections/usuario_collection.dart';
-import 'package:isar/isar.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthRepository {
   final SupabaseClient _supabase;
-  final Isar _isar;
+  final AppDatabase _db;
+  final AuthDao _authDao;
 
-  AuthRepository(this._supabase, this._isar);
+  AuthRepository(this._supabase, this._db) : _authDao = _db.authDao;
 
   Future<void> createCompanyAndUser({
     required String nombre,
@@ -35,23 +35,19 @@ class AuthRepository {
       );
 
       if (response == null) {
-        throw Exception("No se pudo crear la empresa");
+        throw Exception('No se pudo crear la empresa');
       }
 
       final data = response as Map<String, dynamic>;
-      final jsonEmpresa = data['empresa'] as Map<String, dynamic>;
-      final jsonUsuario = data['usuario'] as Map<String, dynamic>;
-      final jsonRol = data['rol'] as Map<String, dynamic>;
+      final jsonEmpresa = Map<String, dynamic>.from(data['empresa'] as Map);
+      final jsonUsuario = Map<String, dynamic>.from(data['usuario'] as Map);
+      final jsonRol = Map<String, dynamic>.from(data['rol'] as Map);
 
-      final newCompany = EmpresaCollection.fromJson(jsonEmpresa);
-      final newUser = UsuarioCollection.fromJson(jsonUsuario);
-      final newRol = RolCollection.fromJson(jsonRol);
-
-      await _isar.writeTxn(() async {
-        await _isar.empresaCollections.put(newCompany);
-        await _isar.usuarioCollections.put(newUser);
-        await _isar.rolCollections.put(newRol);
-      });
+      await _authDao.replaceSesionActiva(
+        empresa: _empresaCompanionFromJson(jsonEmpresa),
+        usuario: _usuarioCompanionFromJson(jsonUsuario),
+        rol: _rolCompanionFromJson(jsonRol),
+      );
     } on PostgrestException catch (e) {
       throw Exception('Error de base de datos: ${e.message}');
     } catch (e) {
@@ -68,7 +64,7 @@ class AuthRepository {
 
       final user = response.user;
       if (user == null) {
-        throw Exception("No se pudo iniciar sesión");
+        throw Exception('No se pudo iniciar sesión');
       }
 
       final userData = await _supabase
@@ -77,25 +73,29 @@ class AuthRepository {
           .eq('id', user.id)
           .single();
 
-      final jsonEmpresa = userData['empresa'] as Map<String, dynamic>;
-      final jsonRol = userData['rol'] as Map<String, dynamic>;
-
+      final jsonEmpresa = Map<String, dynamic>.from(userData['empresa'] as Map);
+      final jsonRol = Map<String, dynamic>.from(userData['rol'] as Map);
       final jsonUsuario = Map<String, dynamic>.from(userData);
       jsonUsuario.remove('empresa');
       jsonUsuario.remove('rol');
 
-      final newUser = UsuarioCollection.fromJson(jsonUsuario);
-      final newEmpresa = EmpresaCollection.fromJson(jsonEmpresa);
-      final newRol = RolCollection.fromJson(jsonRol);
-      await _isar.writeTxn(() async {
-        await _isar.empresaCollections.clear();
-        await _isar.usuarioCollections.clear();
-        await _isar.rolCollections.clear();
+      final permissionsRaw = await _supabase
+          .from('acceso_rol')
+          .select()
+          .eq('rol_id', jsonUsuario['rol_id'])
+          .eq('estado', true);
 
-        await _isar.empresaCollections.put(newEmpresa);
-        await _isar.usuarioCollections.put(newUser);
-        await _isar.rolCollections.put(newRol);
-      });
+      final permisos = (permissionsRaw as List)
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .map(_accesoRolCompanionFromJson)
+          .toList();
+
+      await _authDao.replaceSesionActiva(
+        empresa: _empresaCompanionFromJson(jsonEmpresa),
+        usuario: _usuarioCompanionFromJson(jsonUsuario),
+        rol: _rolCompanionFromJson(jsonRol),
+        permisos: permisos,
+      );
     } on AuthException catch (e) {
       throw AuthException(e.message);
     } catch (e) {
@@ -104,19 +104,19 @@ class AuthRepository {
   }
 
   Future<void> signInOffline(String email, String password) async {
-    final user = await _isar.usuarioCollections
-        .filter()
-        .correoEqualTo(email)
-        .findFirst();
+    final user = await (_db.select(_db.usuarios)
+          ..where((tbl) => tbl.correo.equals(email))
+          ..limit(1))
+        .getSingleOrNull();
 
     if (user == null) {
       throw Exception(
-        "No hay datos guardados para este usuario. Conéctate a internet para el primer inicio.",
+        'No hay datos guardados para este usuario. Conéctate a internet para el primer inicio.',
       );
     }
 
     if (user.passwordHash == null) {
-      throw Exception("Seguridad no sincronizada. Inicia sesión con internet.");
+      throw Exception('Seguridad no sincronizada. Inicia sesión con internet.');
     }
 
     final isPasswordValid = PasswordHasher.checkPassword(
@@ -125,7 +125,93 @@ class AuthRepository {
     );
 
     if (!isPasswordValid) {
-      throw Exception("Contraseña incorrecta.");
+      throw Exception('Contraseña incorrecta.');
     }
+  }
+
+  EmpresasCompanion _empresaCompanionFromJson(Map<String, dynamic> json) {
+    return EmpresasCompanion.insert(
+      id: json['id'] as String,
+      nombre: json['nombre'] as String? ?? '',
+      nombreComercial: Value(json['nombre_comercial'] as String?),
+      ruc: Value(json['ruc'] as String?),
+      configuracion: Value(json['configuracion']?.toString()),
+      estado: Value(json['estado'] as bool? ?? true),
+      usuarioRegistroId: Value(json['usuario_registro_id'] as String?),
+      createdAt: Value(
+        _parseDateTime(json['fecha_registro']) ?? DateTime.now(),
+      ),
+      updatedAt: Value(
+        _parseDateTime(json['ultima_actualizacion']) ?? DateTime.now(),
+      ),
+      fechaEliminacion: Value(_parseDateTime(json['fecha_eliminacion'])),
+      syncStatus: const Value('synced'),
+    );
+  }
+
+  UsuariosCompanion _usuarioCompanionFromJson(Map<String, dynamic> json) {
+    return UsuariosCompanion.insert(
+      id: json['id'] as String,
+      empresaId: json['empresa_id'] as String,
+      rolId: json['rol_id'] as String,
+      nombreCompleto: json['nombre_completo'] as String? ?? '',
+      correo: Value(json['correo'] as String?),
+      passwordHash: Value(json['password_hash'] as String?),
+      pinOffline: Value(json['pin_offline'] as String?),
+      usuarioRegistroId: Value(json['usuario_registro_id'] as String?),
+      bodegaDefaultId: Value(json['bodega_default_id'] as String?),
+      estado: Value(json['estado'] as bool? ?? true),
+      createdAt: Value(
+        _parseDateTime(json['fecha_registro']) ?? DateTime.now(),
+      ),
+      updatedAt: Value(
+        _parseDateTime(json['ultima_actualizacion']) ?? DateTime.now(),
+      ),
+      fechaEliminacion: Value(_parseDateTime(json['fecha_eliminacion'])),
+      syncStatus: const Value('synced'),
+    );
+  }
+
+  RolesCompanion _rolCompanionFromJson(Map<String, dynamic> json) {
+    return RolesCompanion.insert(
+      id: json['id'] as String,
+      empresaId: json['empresa_id'] as String,
+      nombre: json['nombre'] as String? ?? '',
+      userAdmin: Value(json['user_admin'] as bool? ?? false),
+      usuarioRegistroId: Value(json['usuario_registro_id'] as String?),
+      estado: Value(json['estado'] as bool? ?? true),
+      createdAt: Value(
+        _parseDateTime(json['fecha_registro']) ?? DateTime.now(),
+      ),
+      updatedAt: Value(
+        _parseDateTime(json['ultima_actualizacion']) ?? DateTime.now(),
+      ),
+      fechaEliminacion: Value(_parseDateTime(json['fecha_eliminacion'])),
+      syncStatus: const Value('synced'),
+    );
+  }
+
+  AccesosRolCompanion _accesoRolCompanionFromJson(Map<String, dynamic> json) {
+    return AccesosRolCompanion.insert(
+      id: json['id'] as String,
+      rolId: json['rol_id'] as String,
+      codigoAcceso: json['codigo_acceso'] as String? ?? '',
+      usuarioRegistroId: Value(json['usuario_registro_id'] as String?),
+      estado: Value(json['estado'] as bool? ?? true),
+      createdAt: Value(
+        _parseDateTime(json['fecha_registro']) ?? DateTime.now(),
+      ),
+      updatedAt: Value(
+        _parseDateTime(json['ultima_actualizacion']) ?? DateTime.now(),
+      ),
+      fechaEliminacion: Value(_parseDateTime(json['fecha_eliminacion'])),
+      syncStatus: const Value('synced'),
+    );
+  }
+
+  DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    return DateTime.tryParse(value.toString());
   }
 }

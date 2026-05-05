@@ -1,0 +1,17 @@
+targets:
+  $default:
+    builders:
+      drift_dev:
+        generate_for:
+          - lib/core/db/**
+      riverpod_generator:
+        generate_for:
+          - lib/core/**
+          - lib/features/auth/**
+          - lib/features/inventory/data/providers/bodega_provider.dart
+      source_gen|combining_builder:
+        generate_for:
+          - lib/core/**
+          - lib/features/auth/**
+          - lib/features/inventory/data/providers/bodega_provider.dart
+          - lib/features/auth/**

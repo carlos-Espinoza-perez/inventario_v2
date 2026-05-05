@@ -1,0 +1,84 @@
+# ARCHIVO: 03_drift_vector_schema
+# ROL: Database Architect / Senior Flutter Developer
+# PROYECTO: Sistema de Inventario Inteligente Offline
+
+===========================================================================
+🎯 OBJETIVO DE ESTE MÓDULO
+===========================================================================
+Estandarizar todas las tablas de Drift para soportar búsqueda vectorial. 
+Esto permitirá que la IA realice consultas semánticas sobre cualquier 
+entidad (Productos, Clientes, Categorías, etc.) de forma local.
+
+===========================================================================
+📏 DEFINICIÓN DEL VECTOR (EMBEDDING)
+===========================================================================
+Para compatibilidad con modelos SLM (Gemma) y futuras migraciones a 
+Supabase pgvector, usaremos:
+- Tipo: TextColumn (almacenado como JSON o String separado por comas)
+- Dimensiones sugeridas: 384 (basado en modelos All-MiniLM-L6-v2).
+- Atributo Drift: Se usa escaneo lineal en memoria o consultas SQL personalizadas.
+
+===========================================================================
+🏗️ IMPLEMENTACIÓN EN TABLAS (DART)
+===========================================================================
+
+Debemos aplicar este patrón a las tablas principales en:
+lib/core/db/tables/*.dart
+
+EJEMPLO EN PRODUCTO:
+class Productos extends Table with SyncTable {
+  // ... campos existentes ...
+  
+  // EL CAMPO CLAVE:
+  // Almacenado como texto para máxima flexibilidad en SQLite
+  TextColumn get embedding => text().nullable()();
+
+  // Marca temporal para saber cuándo regenerar el vector
+  DateTimeColumn get embeddingLastUpdated => dateTime().nullable()();
+}
+
+
+
+===========================================================================
+🔍 LÓGICA DE EXTENSIÓN (BÚSQUEDA SEMÁNTICA)
+===========================================================================
+
+Agregaremos un mixin o una extensión para facilitar el cálculo de 
+Similitud de Coseno en Dart:
+
+extension VectorSearch on List<double> {
+  double computeSimilarity(List<double> other) {
+    double dotProduct = 0.0;
+    double normA = 0.0;
+    double normB = 0.0;
+    for (int i = 0; i < length; i++) {
+      dotProduct += this[i] * other[i];
+      normA += this[i] * this[i];
+      normB += other[i] * other[i];
+    }
+    return dotProduct / (sqrt(normA) * sqrt(normB));
+  }
+}
+
+===========================================================================
+⚠️ ANÁLISIS AUTOCRÍTICO (REVISIÓN SENIOR)
+===========================================================================
+
+* ESCALABILIDAD: SQLite no tiene un índice HNSW nativo sin extensiones. 
+  Con 1,000 productos, un loop de Similitud de Coseno en Dart tarda <5ms. 
+  Con 100,000 registros, necesitaremos sqlite-vss o una Vector DB local separada.
+
+* ALMACENAMIENTO: Un vector de 384 doubles ocupa aprox 3KB por registro en JSON. 
+  Si tienes 10 tablas con 1,000 registros cada una, son ~30MB adicionales 
+  de base de datos. Es un costo aceptable por la potencia que ofrece.
+
+* SINCRONIZACIÓN: Al usar Drift, podemos controlar exactamente qué campos 
+  se envían a Supabase en los repositorios. El embedding solo se sincronizará 
+  si el servidor ya tiene la columna vector(384).
+
+
+
+===========================================================================
+🚀 PRÓXIMO PASO: 04_local_embeddings_engine
+Implementar el motor que transforma texto en estos vectores de forma local.
+===========================================================================

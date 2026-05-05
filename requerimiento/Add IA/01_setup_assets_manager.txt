@@ -1,0 +1,124 @@
+# ARCHIVO: 01_setup_assets_manager
+# ROL: Senior Software Developer / AI Infrastructure Architect
+# PROYECTO: Sistema de Inventario Inteligente Offline
+
+===========================================================================
+🎯 OBJETIVO DE ESTE MÓDULO
+===========================================================================
+Implementar un "Resource Manager" que gestione el archivo del modelo Gemma 2B 
+(aprox. 1.5GB). El objetivo es que la App sea ligera al instalarse y descargue 
+el "cerebro" solo una vez, persistiendo a través de actualizaciones del APK.
+
+===========================================================================
+📦 DEPENDENCIAS REQUERIDAS (pubspec.yaml)
+===========================================================================
+dependencies:
+  path_provider: ^2.1.2  # Acceso a directorios seguros del sistema.
+  dio: ^5.4.1            # Cliente HTTP con soporte para progreso de descarga.
+  crypto: ^3.0.3         # Verificación de integridad SHA-256.
+
+===========================================================================
+🏗️ LÓGICA DEL SERVICIO: AIModelManager
+===========================================================================
+
+1. DIRECTORIO PERSISTENTE:
+   Usaremos 'getApplicationSupportDirectory()'. A diferencia del caché, 
+   Android/iOS no borran estos archivos automáticamente.
+
+2. FLUJO DE VERIFICACIÓN:
+   - ¿Existe el archivo en la ruta de soporte?
+   - Si existe: ¿El hash SHA-256 coincide con el esperado?
+   - Si no: Iniciar descarga.
+
+
+
+===========================================================================
+💻 CÓDIGO DE IMPLEMENTACIÓN (DART)
+===========================================================================
+
+import 'dart:io';
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:crypto/crypto.dart';
+
+class AIModelManager {
+  // Configuración del modelo (Reemplazar con tus valores reales)
+  static const String modelUrl = "https://tu-bucket.supabase.co/storage/v1/object/public/models/gemma-2b-it-int4.bin";
+  static const String fileName = "gemma_v1.bin";
+  static const String expectedHash = "7f82b...tu_hash_aqui"; 
+
+  // 1. Obtener ruta del archivo
+  Future<File> getModelFile() async {
+    final directory = await getApplicationSupportDirectory();
+    return File('${directory.path}/$fileName');
+  }
+
+  // 2. Verificar disponibilidad
+  Future<bool> isModelDownloaded() async {
+    final file = await getModelFile();
+    return await file.exists();
+  }
+
+  // 3. Descarga con flujo de datos
+  Future<void> startDownload({
+    required Function(double) onProgress,
+    required Function(String) onError,
+    required Function() onSuccess,
+  }) async {
+    try {
+      final file = await getModelFile();
+      final dio = Dio();
+
+      await dio.download(
+        modelUrl,
+        file.path,
+        onReceiveProgress: (received, total) {
+          if (total != -1) {
+            double progress = received / total;
+            onProgress(progress);
+          }
+        },
+      );
+
+      // Verificación post-descarga
+      bool isValid = await _verifyIntegrity(file);
+      if (isValid) {
+        onSuccess();
+      } else {
+        await file.delete();
+        onError("Archivo corrupto. Inténtalo de nuevo.");
+      }
+    } catch (e) {
+      onError("Error de conexión: $e");
+    }
+  }
+
+  // 4. Checksum (Seguridad Crítica)
+  Future<bool> _verifyIntegrity(File file) async {
+    final bytes = await file.readAsBytes();
+    final hash = sha256.convert(bytes);
+    return hash.toString() == expectedHash;
+  }
+}
+
+===========================================================================
+⚠️ ANÁLISIS AUTOCRÍTICO (NOTAS DE DISEÑO)
+===========================================================================
+
+* RESILIENCIA: En una descarga de 1.5GB el riesgo de micro-cortes es alto. 
+  Dio maneja esto bien, pero para una versión PRO futura, se recomienda 
+  'background_downloader' para que la descarga siga si la app se minimiza.
+
+* ESPACIO EN DISCO: Antes de iniciar, deberíamos verificar si el dispositivo 
+  tiene al menos 3GB libres (1.5GB para el archivo + 1.5GB para la 
+  descompresión/instanciación en RAM).
+
+* SEGURIDAD: El Hash SHA-256 no es opcional. Un modelo con un solo byte 
+  alterado causará un crash en la GPU al intentar inicializarlo.
+
+
+
+===========================================================================
+🚀 PRÓXIMO PASO: 02_mediapipe_integration
+Cargar este archivo .bin en el motor de inferencia local usando MediaPipe.
+===========================================================================

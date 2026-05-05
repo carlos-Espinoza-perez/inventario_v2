@@ -1,43 +1,26 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:inventario_v2/core/providers/database_provider.dart'; // Tu provider de Isar base
-import 'package:inventario_v2/features/auth/presentation/providers/auth_provider.dart';
-import 'package:inventario_v2/features/inventory/data/collections/producto_collection.dart';
-import 'package:inventario_v2/features/inventory/data/domain/models/product_with_stock.dart';
-import 'package:inventario_v2/features/inventory/data/repository/producto_repository.dart';
+import 'package:inventario_v2/core/db/models/product_catalog_models.dart';
+import 'package:inventario_v2/core/db/models/producto_stock_drift.dart';
+import 'package:inventario_v2/core/providers/drift_provider.dart';
 
-// 1. Provider del Repositorio (FutureProvider porque depende de Isar async)
-final productoRepositoryProvider = FutureProvider<ProductoRepository>((
+final listaProductosProvider = StreamProvider<List<ProductCatalogItemDrift>>((
   ref,
-) async {
-  final isar = await ref.watch(isarDbProvider.future);
-  return ProductoRepository(isar);
-});
-
-final listaProductosProvider = StreamProvider<List<ProductoCollection>>((
-  ref,
-) async* {
-  final repository = await ref.watch(productoRepositoryProvider.future);
-
-  yield* repository.watchProductosPorEmpresa();
+) {
+  final db = ref.watch(driftDatabaseProvider);
+  return db.inventoryDao.watchCatalogItems();
 });
 
 final productsWithStockProvider =
-    FutureProvider.family<List<ProductWithStock>, String>((
+    FutureProvider.family<List<ProductCatalogItemDrift>, String>((
       ref,
       bodegaId,
     ) async {
-      final authController = ref.read(authControllerProvider.notifier);
+      final db = ref.watch(driftDatabaseProvider);
+      return db.inventoryDao.getCatalogItems(bodegaId: bodegaId);
+    });
 
-      final usuario =
-          authController.usuarioActual ?? await authController.getUser();
-      final empresaId = usuario?.empresaId ?? '';
-      if (empresaId.isEmpty) return [];
-
-      final repo = await ref.watch(productoRepositoryProvider.future);
-
-      // Llamamos a la nueva función
-      return repo.getProductsWithStock(
-        empresaId: empresaId,
-        bodegaId: bodegaId,
-      );
+final stockDriftByBodegaProvider =
+    FutureProvider.family<List<ProductoStockDrift>, String>((ref, bodegaId) {
+      final db = ref.watch(driftDatabaseProvider);
+      return db.inventoryDao.getStockRealPorBodega(bodegaId);
     });

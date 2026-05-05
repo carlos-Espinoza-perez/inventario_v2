@@ -1,0 +1,1364 @@
+ANALISIS CRITICO Y RECOMENDACIONES SOBRE LOS REQUERIMIENTOS DE IA
+Proyecto: inventario_v2
+Fecha de analisis: 2026-04-06
+
+===========================================================================
+1. OBJETIVO DEL DOCUMENTO
+===========================================================================
+
+Este documento resume un analisis extenso, tecnico y objetivo de los
+archivos:
+
+- 01_setup_assets_manager.txt
+- 02_mediapipe_integration.txt
+- 03_Drift_vector_schema.txt
+- 04_local_embeddings_engine.txt
+- 05_ai_intent_classifier.txt
+- 06_function_calling_contracts.txt
+- 07_context_retriever_logic.txt
+- 08_voice_to_text_pipeline.txt
+- 09_ai_confirmation_dialogs.txt
+- 10_chat_assistant_ui.txt
+
+El analisis no se hizo en abstracto. Se contrasto cada idea contra:
+
+1. El codigo real del proyecto Flutter.
+2. El modelo de datos actual en Drift.
+3. La logica real de ventas, inventario, reportes, permisos y sincronizacion.
+4. Documentacion oficial relevante de los paquetes sugeridos.
+
+El objetivo no es solo decir si la idea "suena bien", sino evaluar si:
+
+- Es funcionalmente suficiente para lo que deseas.
+- Es tecnicamente viable en este proyecto.
+- Tiene huecos de negocio o de datos.
+- Tiene riesgo de romper consistencia, seguridad o UX.
+- Necesita cambios de alcance antes de empezar a implementarse.
+
+
+===========================================================================
+2. VEREDICTO EJECUTIVO
+===========================================================================
+
+Valoracion general:
+
+- Como vision de producto: 7/10
+- Como especificacion tecnica lista para implementar: 4/10
+
+Conclusion corta:
+
+La propuesta va por una direccion correcta, especialmente en la idea de
+"consultas naturales + confirmacion antes de ejecutar acciones + enfoque
+offline". Sin embargo, los documentos actuales todavia no describen una
+arquitectura suficientemente aterrizada al proyecto real.
+
+La principal debilidad es que tratan a la IA como si operara sobre un
+inventario "simple y global", cuando el sistema actual trabaja con:
+
+- empresa
+- usuario
+- permisos
+- bodega seleccionada
+- relaciones usuario-bodega
+- sesion de caja
+- variantes por talla/SKU
+- precios en multiples niveles
+- sincronizacion local/nube
+
+Si se implementara exactamente como esta escrito hoy, el resultado mas
+probable seria:
+
+1. Una demo llamativa.
+2. Un flujo de accion parcialmente funcional.
+3. Respuestas que fallan en casos reales del negocio.
+4. Duplicacion de logica ya existente.
+5. Riesgo alto de inconsistencias en ventas, stock y reportes.
+
+En otras palabras:
+
+La idea es buena, pero la especificacion aun esta demasiado "modelo IA
+centrica" y poco "dominio y sistema centrico".
+
+
+===========================================================================
+3. LO POSITIVO Y RESCATABLE
+===========================================================================
+
+Antes de entrar a las correcciones, es importante dejar claro que hay varias
+cosas bien planteadas:
+
+3.1. Buena separacion modular
+
+Los 10 archivos tienen un orden logico:
+
+- descarga del modelo
+- carga del motor
+- embeddings
+- clasificacion de intents
+- contratos
+- retrieval
+- voz
+- confirmacion
+- UI
+
+Eso facilita convertirlo en roadmap.
+
+3.2. Buena intuicion de producto
+
+La idea de permitir frases como:
+
+- "cuanto cuesta este producto"
+- "quien me debe"
+- "cuando se vendio por ultima vez"
+- "vende 2 refrescos a Maria"
+
+es muy natural para un sistema de inventario y ventas.
+
+3.3. Acierto en exigir confirmacion antes de ejecutar acciones
+
+Esto es una decision muy buena. En sistemas de inventario, una IA nunca debe
+tener permiso de mutar datos financieros o de stock sin confirmacion humana.
+
+3.4. Enfoque offline-first coherente con el tipo de aplicacion
+
+Para bodegas, puntos de venta o entornos con conectividad irregular, pensar en
+funcionamiento local tiene mucho sentido.
+
+3.5. Hay pensamiento de arquitectura, no solo entusiasmo
+
+Los documentos muestran preocupaciones reales:
+
+- hash del modelo
+- memoria
+- latencia inicial
+- riesgo de alucinaciones
+- necesidad de validacion
+- necesidad de no borrar datos
+
+Eso es una buena base.
+
+
+===========================================================================
+4. HALLAZGOS PRINCIPALES DE ALTA PRIORIDAD
+===========================================================================
+
+4.1. El alcance funcional deseado NO coincide con las funciones definidas
+
+Tu objetivo declarado incluye:
+
+- consultar datos del inventario
+- consultar ventas realizadas
+- consultar quien debe
+- consultar cuanto debe una persona
+- consultar cuanto cuesta un producto
+- consultar cuando se vendio por ultima vez
+- registrar una venta
+- registrar una entrada
+- registrar una salida
+
+Sin embargo, en 06_function_calling_contracts.txt solo se definieron 3
+estructuras:
+
+- registrar_venta
+- consultar_existencia
+- registrar_entrada
+
+Eso deja fuera gran parte de los casos de uso reales.
+
+Problema:
+
+La propuesta no cubre:
+
+- consulta de deuda por cliente
+- consulta agregada de ventas
+- consulta de ultima venta
+- consulta de precio por variante
+- registro de salida
+- registro de abono
+- consulta de historial
+- consulta de cuentas por cobrar
+- consulta por bodega
+
+Impacto:
+
+Aunque el modelo "entienda" la frase del usuario, el sistema no tendra un
+contrato claro para ejecutar o responder.
+
+Correccion recomendada:
+
+Definir un catalogo completo de intents y funciones, por ejemplo:
+
+- consultar_stock_producto
+- consultar_precio_producto
+- consultar_ultima_venta_producto
+- consultar_deuda_cliente
+- consultar_clientes_con_deuda
+- consultar_ventas_periodo
+- registrar_venta
+- registrar_entrada
+- registrar_ajuste_salida
+- registrar_abono_credito
+- consultar_historial_producto
+
+
+4.2. Muchas consultas que quieres NO necesitan embeddings, sino consultas exactas
+
+Los documentos se inclinan mucho por "RAG + embeddings + Gemma", pero varios
+de tus casos de negocio son estructurados y exactos:
+
+- quien me debe
+- cuanto me debe una persona
+- cuanto vendi hoy/ayer/esta semana
+- cuando se vendio por ultima vez un producto
+- cuales son las ultimas ventas
+- cuanto tengo en caja
+
+Esas preguntas no necesitan ser "razonadas" por un LLM. Lo correcto es:
+
+1. Detectar la intencion en lenguaje natural.
+2. Transformarla en una consulta estructurada.
+3. Resolverla con repositorios y providers.
+4. Formatear una respuesta al usuario.
+
+Por que esto es importante:
+
+- es mas preciso
+- es mas rapido
+- consume menos recursos
+- reduce alucinaciones
+- evita errores financieros
+
+Conclusion:
+
+La IA no debe "inventar" respuestas cuando el sistema ya tiene datos exactos.
+Debe ser una capa de interpretacion, no una capa de adivinacion. Con la migración 
+a Drift (SQLite), tenemos la ventaja de poder usar consultas SQL potentes para 
+obtener datos exactos de forma rápida antes de recurrir a embeddings.
+
+
+4.3. La propuesta ignora contexto critico del sistema real
+
+Los requerimientos hablan como si hubiera un solo inventario general, pero en
+tu app real hay contexto obligatorio:
+
+- empresa
+- usuario autenticado
+- permisos del usuario
+- bodega actual o bodegas permitidas
+- sesion de caja abierta para vender
+
+Evidencia en el proyecto:
+
+- selectedBodegaProvider en
+  lib/features/inventory/data/providers/bodega_provider.dart
+- validBodegasIdsProvider en
+  lib/features/inventory/data/providers/bodega_provider.dart
+- PermissionGuard y PermissionCode en
+  lib/core/presentation/widgets/permission_guard.dart
+  lib/core/constants/permission_codes.dart
+- cajaSesion obligatoria en
+  lib/features/sales/presentation/checkout_screen.dart
+
+Problema:
+
+Si el usuario dice:
+
+"vende 2 cocas"
+
+el sistema no puede ejecutar eso correctamente sin saber:
+
+- en que bodega vender
+- si hay caja abierta
+- si el usuario tiene permiso para vender
+- si se permite venta al credito
+- cual variante exacta corresponde
+
+Correccion recomendada:
+
+Todo flujo IA debe inyectar contexto operativo antes de clasificar o ejecutar:
+
+- empresaId actual
+- usuario actual
+- permisos efectivos
+- bodega seleccionada o bodegas validas
+- caja abierta o no
+- pantalla actual
+
+
+4.4. La logica de negocio esta distribuida y la IA la duplicaria
+
+Actualmente la venta no vive en un "caso de uso central" unico.
+
+Parte de la logica de registrar venta esta directamente en:
+
+- lib/features/sales/presentation/checkout_screen.dart
+
+En cambio, la logica de entradas y traslados esta en:
+
+- lib/features/inventory/data/repository/movimiento_repository.dart
+
+Problema:
+
+Si implementas la IA encima de lo escrito en los requerimientos, tendras que:
+
+- duplicar logica
+- reescribir logica en otro servicio
+- o llamar pantallas desde la IA de forma indirecta
+
+Eso es fragil.
+
+Consecuencia:
+
+Vas a terminar con dos formas distintas de vender:
+
+1. la forma manual actual
+2. la forma IA
+
+Y ambas pueden divergir en:
+
+- actualizacion de stock
+- registro de cliente
+- historial de pagos
+- invalidacion de providers
+- consistencia de reportes
+
+Correccion recomendada:
+
+Antes de construir la capa IA, extraer casos de uso unificados:
+
+- SalesUseCase.registrarVenta(...)
+- InventoryUseCase.registrarEntrada(...)
+- InventoryUseCase.registrarSalida(...)
+- ReceivablesUseCase.registrarAbono(...)
+
+La UI manual y la IA deben llamar el mismo caso de uso.
+
+
+4.5. El modelo de datos real es mas complejo de lo que asumen los documentos
+
+Ejemplo: "cuanto cuesta un producto"
+
+En tu proyecto hoy no existe un solo precio universal.
+
+Hay al menos estas fuentes:
+
+- precioBase en Productos
+- ultimoPrecioVenta en Productos
+- precioVenta en Inventarios
+- precioEspecifico en CodigoProductos
+
+Entonces la pregunta:
+
+"cuanto cuesta este producto"
+
+realmente necesita una politica de negocio:
+
+- precio del catalogo?
+- ultimo precio de venta?
+- precio por bodega?
+- precio por talla/SKU?
+- precio al contado o credito?
+
+Lo mismo ocurre con stock:
+
+El retriever propuesto usa prod.cantidadActual, pero el stock real esta en
+Inventarios, no en Productos.
+
+Correccion recomendada:
+
+Definir respuestas de negocio canonicas:
+
+- "precio": regla exacta de que campo sale
+- "stock": por bodega actual, total empresa o por variante
+- "ultima venta": por empresa, por bodega, por cliente o global
+
+
+4.6. "Salida" no esta modelada como funcion ni como flujo claro
+
+Tu necesidad dice explicitamente:
+
+"poder registrar una venta, una entrada y una salida"
+
+Pero los contratos no incluyen salida.
+
+En el modelo actual, los movimientos existentes son:
+
+- compra
+- traslado
+- ajuste
+- solicitud
+
+No hay una funcion IA explicita tipo:
+
+- registrar_salida
+- registrar_ajuste_salida
+
+Ademas, una "salida" puede significar varias cosas:
+
+- merma
+- consumo interno
+- robo
+- ajuste manual
+- salida a cliente no facturada
+- transferencia
+
+Correccion recomendada:
+
+Definir semantica precisa:
+
+- salida por ajuste
+- salida por merma
+- salida por consumo interno
+- salida por traslado
+
+Cada una con motivo obligatorio si afecta reportes o auditoria.
+
+
+===========================================================================
+5. HALLAZGOS TECNICOS SOBRE LOS MODULOS 01 A 10
+===========================================================================
+
+5.1. Archivo 01 - Setup del modelo
+
+Fortalezas:
+
+- Correcto pensar en descarga separada del APK.
+- Correcto persistir en directorio estable.
+- Correcto exigir hash.
+
+Debilidades:
+
+- isModelDownloaded solo verifica existencia del archivo, no integridad.
+- No hay estrategia completa para reanudar descargas grandes.
+- No se define versionado de modelo ni migracion.
+- No se define que pasa si cambia el modelo pero el archivo viejo sigue local.
+- No se define manejo de poco espacio en disco de forma implementable.
+
+Riesgo:
+
+Puedes creer que el modelo esta "listo" cuando existe el archivo, pero este
+puede estar incompleto o desactualizado.
+
+Correcciones:
+
+- verificar hash tanto al finalizar descarga como al iniciar la app
+- guardar metadata local del modelo:
+  - version
+  - hash
+  - tamano
+  - backend requerido
+- permitir invalidador de cache del modelo
+- contemplar cancelacion y reintento
+
+
+5.2. Archivo 02 - Integracion MediaPipe
+
+Este es uno de los puntos mas delicados.
+
+Problemas detectados:
+
+1. La propuesta asume APIs que no coinciden con la referencia actual vista.
+2. El documento menciona mediapipe_genai ^1.0.0, pero la referencia consultada
+   mostraba mediapipe_genai 0.0.1.
+3. El paquete requiere tambien mediapipe_core.
+4. La documentacion consultada indica requisitos especiales:
+   - native-assets
+   - canal master en la referencia publicada
+5. El ejemplo oficial mostrado usa un patron tipo:
+   - LlmInferenceOptions.cpu/gpu(...)
+   - LlmInferenceEngine(...)
+   no el create() del documento.
+6. La documentacion tambien advierte que esto es pesado para el dispositivo y
+   recomienda hardware relativamente moderno.
+
+Impacto:
+
+Existe riesgo alto de planear una arquitectura en torno a un stack cuya
+integracion real en tu proyecto aun no esta validada.
+
+Correccion recomendada:
+
+Hacer primero una prueba tecnica minima aislada:
+
+- descargar modelo real
+- cargarlo en un dispositivo objetivo real
+- medir:
+  - tiempo de carga
+  - RAM usada
+  - temperatura
+  - latencia por prompt
+  - estabilidad al volver de background
+
+Si esa prueba falla, no deberias diseñar toda la solucion alrededor del LLM
+local pesado.
+
+
+5.3. Archivo 03 - Embeddings en Drift
+
+Idea general:
+
+Tiene sentido usar embeddings para resolver ambiguedad lexical:
+
+- "coca" vs "coca cola 500ml"
+- "refresco" vs "bebida"
+
+Problemas:
+
+1. Se propone agregar embedding a TODAS las colecciones principales.
+   Eso es excesivo.
+2. El comentario sobre @ignore mezcla responsabilidades:
+   el sync de este proyecto es manual via toJson()/repositorio, no automatico.
+3. No se define estrategia de reindexacion.
+4. No se define que campos forman el texto semantico:
+   - nombre?
+   - descripcion?
+   - marca?
+   - categoria?
+5. No se define embedding version.
+
+Correccion recomendada:
+
+No tocar todas las colecciones al inicio.
+
+Empezar solo con:
+
+- productos
+- clientes
+
+Y preferiblemente crear una capa o indice local separado:
+
+- SemanticIndexCollection
+  - entityType
+  - entityId
+  - empresaId
+  - embedding
+  - sourceText
+  - embeddingVersion
+  - updatedAt
+
+Ventaja:
+
+- no contaminas todas las entidades de negocio
+- es mas facil reindexar
+- es mas facil eliminar y reconstruir
+- reduces impacto en sync
+- En Drift, puedes usar JOINs para cruzar el índice semántico con datos reales rápidamente.
+
+
+5.4. Archivo 04 - Motor local de embeddings
+
+Problemas:
+
+1. El ejemplo es pseudocodigo, no implementacion alineada a la API oficial
+   consultada de onnxruntime.
+2. No se resuelve la tokenizacion real.
+3. No se define el preprocesamiento exacto.
+4. No se define como empaquetar el modelo.
+5. No se define el lifecycle de la sesion.
+6. No se define cuando regenerar embeddings.
+
+Ademas, el flujo:
+
+"cada vez que se guarda un registro, generar embedding"
+
+es correcto como idea, pero incompleto como estrategia.
+
+Hace falta definir:
+
+- que pasa en importaciones masivas
+- que pasa cuando cambia el modelo
+- que pasa cuando cambia nombre o descripcion
+- que pasa con registros viejos sin embedding
+
+Correccion recomendada:
+
+Agregar:
+
+- embeddingVersion
+- sourceHash o sourceFingerprint
+- cola de reindexacion
+- proceso de bootstrap inicial
+
+
+5.5. Archivo 05 - Clasificador de intents
+
+Problemas:
+
+1. Reducir todo a QUERY / ACTION / CHAT es demasiado poco para tu dominio.
+2. El fallback a CHAT cuando falla el JSON es inseguro.
+3. No hay validacion fuerte del contrato.
+4. No se contempla desambiguacion cuando el usuario pide varias cosas en una
+   misma frase.
+5. No se contempla falta de contexto operativo.
+
+Ejemplos problematicos:
+
+- "vende 2 cocas y dime cuanto debe Maria"
+- "cuanto cuesta la talla 38"
+- "mete 10 cajas en la bodega central"
+- "dame las ventas de ayer"
+- "cuanto debo cobrarle a Jose"
+
+Correccion recomendada:
+
+Cambiar de 3 intenciones maestras a una taxonomia funcional mas cercana al
+dominio.
+
+Por ejemplo:
+
+- query_stock
+- query_price
+- query_receivable_balance
+- query_last_sale
+- query_sales_summary
+- action_register_sale
+- action_register_entry
+- action_register_adjustment_out
+- action_register_payment
+- chat_general
+
+
+5.6. Archivo 06 - Contratos de funciones
+
+Este archivo esta insuficiente para el negocio real.
+
+Problemas puntuales:
+
+- registrar_venta no contempla:
+  - bodega
+  - cajaSesionId
+  - multiple lineas
+  - talla/SKU
+  - descuento
+  - abono inicial
+  - metodo de pago
+  - cliente existente o nuevo
+- consultar_existencia mezcla stock y precio de forma conceptual
+- registrar_entrada no contempla:
+  - bodega destino
+  - lote de items
+  - variante
+  - costo por item
+  - precio de venta
+
+Correccion recomendada:
+
+Separar contratos por casos de uso reales.
+
+Ejemplo de contratos mejores:
+
+consultar_stock_producto
+args:
+- producto_busqueda
+- bodega_id_opcional
+- incluir_variantes
+
+consultar_precio_producto
+args:
+- producto_busqueda
+- bodega_id_opcional
+- talla_opcional
+- sku_opcional
+
+registrar_venta
+args:
+- items[]
+  - producto_busqueda
+  - cantidad
+  - talla_opcional
+  - sku_opcional
+- cliente_nombre_opcional
+- tipo_venta
+- abono_inicial_opcional
+- metodo_pago
+
+registrar_entrada
+args:
+- bodega_id
+- items[]
+  - producto_busqueda
+  - cantidad
+  - costo_unitario
+  - precio_venta_opcional
+  - talla_opcional
+  - sku_opcional
+
+registrar_ajuste_salida
+args:
+- bodega_id
+- items[]
+- motivo
+
+
+5.7. Archivo 07 - Retriever y RAG
+
+Este archivo tiene problemas de alineacion con el modelo real.
+
+Problemas:
+
+1. Usa prod.embedding en Productos, pero esa propiedad aun no existe.
+2. Usa prod.cantidadActual, pero el stock esta en Inventarios.
+3. No filtra por empresa.
+4. No filtra por bodegas validas.
+5. No cruza con permisos del usuario.
+6. Mezcla respuesta para IA con datos reales sin definir formato canonico.
+7. Devuelve "Price" en ingles, rompiendo consistencia del sistema.
+
+Problema de negocio:
+
+El top 3 semantico no necesariamente representa el producto correcto para
+ejecutar una accion.
+
+Ejemplo:
+
+Si el usuario dice "vende 2 cocas", no basta con que semanticamente haya tres
+coincidencias. Debe haber un paso de resolucion exacta:
+
+- si hay 1 match claro -> seguir
+- si hay varios matches cercanos -> pedir confirmacion
+- si no hay match suficiente -> pedir precision
+
+Correccion recomendada:
+
+Separar:
+
+1. Busqueda semantica inicial.
+2. Resolucion de entidad.
+3. Desambiguacion.
+4. Obtencion de datos estructurados exactos.
+
+La IA no debe recibir solo texto suelto. Debe recibir objetos estructurados:
+
+- producto_id
+- nombre
+- stock_total
+- stock_bodega_actual
+- precio_base
+- precio_ultima_venta
+- variantes
+
+
+5.8. Archivo 08 - Voz a texto
+
+Este documento necesita varias correcciones importantes.
+
+Problemas:
+
+1. Asume privacidad totalmente local.
+   Eso no puede afirmarse asi con speech_to_text nativo.
+2. Fija localeId = es_ES sin validar idiomas instalados.
+3. Crea el servicio de manera pensada por interaccion, cuando la documentacion
+   recomienda una sola instancia por sesion.
+4. No define estrategia de fallback si el dispositivo no tiene soporte bueno.
+5. No define timeout, reintento ni UX de error.
+
+Riesgo:
+
+En bodega real, el reconocimiento de voz puede fallar por:
+
+- ruido
+- acentos
+- locale no instalado
+- pausas
+- motor de voz inconsistente del dispositivo
+
+Correccion recomendada:
+
+- usar texto primero y voz despues
+- detectar locales disponibles
+- usar locale del dispositivo si es valido
+- mantener una sola instancia del plugin
+- no prometer privacidad 100 por ciento local si no esta garantizada
+- dejar voz como feature opcional
+
+
+5.9. Archivo 09 - Dialogos de confirmacion
+
+La idea general es correcta.
+
+Problemas:
+
+1. El ejemplo tiene colision conceptual entre el nombre "context" del objeto y
+   BuildContext.
+2. El dialogo propuesto es demasiado simple para la complejidad real.
+3. No contempla:
+   - seleccion de bodega
+   - variante
+   - metodo de pago
+   - cliente existente o nuevo
+   - caja abierta
+   - credito permitido o no
+   - multiples items
+
+Conclusion:
+
+El concepto esta bien, pero la UI real no deberia ser un AlertDialog minimo.
+Deberia ser un "review sheet" mas cercano a una pantalla de aprobacion.
+
+Correccion recomendada:
+
+Crear un componente de confirmacion por tipo de accion real:
+
+- venta IA
+- entrada IA
+- salida/ajuste IA
+
+Cada uno con datos editables antes de confirmar.
+
+
+5.10. Archivo 10 - Overlay y asistente flotante
+
+Este archivo sirve bien como idea de entrada visual, pero todavia esta en nivel
+conceptual.
+
+Problemas:
+
+1. No define integracion con router ni capas globales existentes.
+2. No contempla permisos.
+3. No contempla foco por pantalla.
+4. No contempla conflicto con acciones criticas del POS.
+5. El snippet asume que result['content'] existe, pero eso no esta garantizado.
+6. No contempla texto sin voz.
+
+Recomendacion:
+
+No empezar por un overlay global.
+
+Es mejor:
+
+Fase 1:
+- un chat o caja de comando en una pantalla dedicada
+
+Fase 2:
+- acceso contextual en modulos de ventas, inventario y reportes
+
+Fase 3:
+- overlay global si la experiencia ya demostro valor
+
+
+===========================================================================
+6. HALLAZGOS CRUZADOS CONTRA EL CODIGO REAL DEL PROYECTO
+===========================================================================
+
+6.1. Ventas: la logica central aun vive en la UI
+
+La venta se registra en checkout_screen.dart, incluyendo:
+
+- validacion de caja abierta
+- busqueda/creacion de cliente
+- creacion de VentaCollection
+- creacion de DetalleVentaCollection
+- actualizacion de inventario
+- actualizacion de inventario por talla
+- registro de pago inicial
+- invalidacion de providers
+
+Esto significa que la IA no tiene todavia un punto unico y limpio para
+ejecutar una venta.
+
+Recomendacion:
+
+Extraer esa logica a un servicio o caso de uso compartido.
+
+
+6.2. Entradas y traslados si estan mas encapsulados
+
+movimiento_repository.dart ya contiene logica transaccional mas cercana a lo
+que deberia reutilizar una capa IA.
+
+Esto sugiere una direccion correcta:
+
+- encapsular ventas del mismo modo
+- despues conectar la IA a esos casos de uso
+
+
+6.3. Reportes actuales ya resuelven varias preguntas exactas
+
+Tu sistema ya sabe responder varias cosas sin LLM:
+
+- cuentas por cobrar:
+  receivables_report_screen.dart
+- ventas semanales:
+  sales_report_screen.dart
+- resumen del dia:
+  reports_dashboard_screen.dart
+- transacciones recientes:
+  dashboard_provider.dart
+
+Esto confirma que la capa IA deberia apoyarse en consultas deterministicas ya
+existentes, no reemplazarlas con retrieval semantico.
+
+
+6.4. Permisos y autorizacion ya existen y deben formar parte del diseno IA
+
+El proyecto ya tiene sistema de permisos por modulo y accion:
+
+- dashboard.read
+- warehouse.read / create / update / delete
+- sale.read / create / update / delete / credit
+- report.read
+- staff.*
+- role.*
+
+Esto es clave.
+
+Ejemplo:
+
+Si un usuario no tiene sale.create o sale.credit, la IA no debe sugerirle ni
+mucho menos ejecutar esos flujos.
+
+La capa IA debe heredar la misma politica de permisos del resto del sistema.
+
+
+6.5. El sistema es multi-bodega de verdad
+
+No basta con conocer el producto. Hay que saber:
+
+- en que bodega se consulta stock
+- si el usuario tiene acceso a esa bodega
+- si la venta o entrada se hace en la bodega seleccionada
+
+La IA debe tener esto como contexto obligatorio.
+
+
+6.6. Existe complejidad real por variantes/SKU/talla
+
+Tu sistema maneja:
+
+- codigo_producto
+- inventario_codigo_producto
+- precioEspecifico
+- costoEspecifico
+
+Eso significa que frases como:
+
+- "vende 2 zapatos talla 38"
+- "cuanto vale la talla M"
+- "entra 10 camisas talla L"
+
+no son casos edge. Son parte del negocio real.
+
+La especificacion actual no los cubre de forma suficiente.
+
+
+===========================================================================
+7. HALLAZGOS SOBRE DATOS Y CONSISTENCIA
+===========================================================================
+
+7.1. No hay una definicion canonica de "precio"
+
+Esto es uno de los mayores huecos de negocio.
+
+Necesitas definir:
+
+- precio de respuesta por defecto
+- precio si hay variante
+- precio si hay precio por bodega
+- precio si el ultimo precio difiere del base
+
+Sin esto, la IA no puede responder consistentemente "cuanto cuesta".
+
+
+7.2. No hay una definicion canonica de "stock"
+
+Debes decidir si la respuesta por defecto sera:
+
+- stock total de todas las bodegas
+- stock de la bodega seleccionada
+- stock de bodegas permitidas al usuario
+
+Mi recomendacion:
+
+Por defecto responder stock de la bodega actual.
+Opcionalmente permitir:
+
+- "en total"
+- "en la bodega central"
+
+
+7.3. Cliente "final_consumer" merece tratamiento especial
+
+En checkout_screen.dart existe el fallback:
+
+- clienteId = cliente?.serverId ?? 'final_consumer'
+
+Eso puede afectar consultas de historial, deuda y analitica si no se trata con
+reglas claras.
+
+La IA no deberia listar "final_consumer" como si fuera un cliente real con
+nombre sin resolver bien su representacion.
+
+
+7.4. Deuda por cliente debe salir de la fuente correcta
+
+Hoy Clientes tiene saldoDeudorActual, pero las pantallas de cuentas por
+cobrar calculan deuda a partir de ventas a credito y pagos.
+
+Eso es importante:
+
+Si la IA responde deuda desde un campo stale en cliente, podria mentir.
+Si responde desde ventas pendientes y abonos, sera mas confiable.
+
+Recomendacion:
+
+Definir una sola fuente de verdad para deuda.
+
+
+===========================================================================
+8. RIESGOS DE IMPLEMENTAR ESTO TAL COMO ESTA
+===========================================================================
+
+8.1. Riesgo funcional
+
+La IA puede entender la frase, pero no poder ejecutar correctamente el caso.
+
+8.2. Riesgo financiero
+
+Errores en:
+
+- stock
+- venta a credito
+- abonos
+- costos
+- reportes
+
+8.3. Riesgo de mantenimiento
+
+Tendrias logica repetida en UI manual y flujos IA.
+
+8.4. Riesgo de rendimiento
+
+Cargar un LLM pesado para consultas que podrian resolverse con filtros de Drift
+es sobreingenieria costosa.
+
+8.5. Riesgo de compatibilidad de dispositivos
+
+El camino de MediaPipe local pesado no esta aun validado en tus dispositivos
+objetivo.
+
+8.6. Riesgo de experiencia de usuario
+
+Si la voz falla mucho o el tiempo de respuesta es alto, la funcion puede verse
+"impresionante pero inutil".
+
+
+===========================================================================
+9. RECOMENDACION DE ARQUITECTURA MAS SANA
+===========================================================================
+
+En vez de:
+
+Voz -> LLM pesado -> RAG -> JSON -> accion
+
+recomiendo:
+
+Texto/Voz -> parser/intencion -> consulta estructurada -> caso de uso del
+sistema -> confirmacion -> ejecucion
+
+Mas concretamente:
+
+FASE A. Interprete de lenguaje natural
+
+Responsabilidad:
+
+- detectar intencion
+- extraer entidades
+- detectar faltantes
+- decidir si hace falta desambiguacion
+
+FASE B. Resolver entidades del dominio
+
+Responsabilidad:
+
+- buscar producto real
+- buscar cliente real
+- decidir bodega
+- validar caja
+- validar permisos
+
+FASE C. Casos de uso deterministas
+
+Responsabilidad:
+
+- consultar stock
+- consultar precio
+- consultar deuda
+- registrar venta
+- registrar entrada
+- registrar salida/ajuste
+
+FASE D. Confirmacion
+
+Responsabilidad:
+
+- mostrar lo que se entendio
+- permitir correcciones
+- solo despues ejecutar
+
+FASE E. Formateo de respuesta
+
+Responsabilidad:
+
+- responder claro y corto
+- mostrar cifras exactas
+- mostrar motivo de error o faltante
+
+
+===========================================================================
+10. ROADMAP RECOMENDADO POR FASES
+===========================================================================
+
+Fase 1. Texto, sin voz, sin LLM pesado
+
+Objetivo:
+
+Hacer util la funcion rapido con bajo riesgo.
+
+Capacidades:
+
+- consultar stock
+- consultar precio
+- consultar deudas
+- consultar ultimas ventas
+- consultar ventas del dia/semana
+
+Implementacion:
+
+- input de texto
+- intents basados en reglas + parser simple
+- consultas exactas a Drift
+
+
+Fase 2. Acciones con confirmacion
+
+Capacidades:
+
+- registrar venta
+- registrar entrada
+- registrar ajuste de salida
+
+Condicion:
+
+- los casos de uso deben estar centralizados
+
+
+Fase 3. Desambiguacion semantica ligera
+
+Capacidades:
+
+- resolver nombres ambiguos de producto/cliente
+
+Aqui si tiene sentido introducir embeddings locales, pero solo para matching de
+entidades, no para responder todo el negocio.
+
+
+Fase 4. Voz
+
+Capacidades:
+
+- dictar consultas
+- dictar acciones simples
+
+Solo despues de que texto ya funcione muy bien.
+
+
+Fase 5. LLM local pesado opcional
+
+Capacidades:
+
+- lenguaje mas libre
+- reformulaciones
+- explicaciones mas naturales
+
+Pero solo si una prueba tecnica demuestra que vale la pena.
+
+
+===========================================================================
+11. CORRECCIONES CONCRETAS QUE HARIA A LOS 10 ARCHIVOS
+===========================================================================
+
+11.1. Archivo 01
+
+- agregar versionado del modelo
+- validar hash siempre, no solo post-download
+- definir politica de invalidacion del archivo
+- contemplar descargas interrumpidas
+
+11.2. Archivo 02
+
+- convertirlo en "prueba tecnica" y no en decision cerrada
+- validar API real del paquete
+- medir dispositivos objetivo
+- documentar fallback si el motor no es viable
+
+11.3. Archivo 03
+
+- no agregar embeddings a todas las tablas
+- crear indice semantico separado
+- versionar embeddings
+- definir sourceText exacto
+
+11.4. Archivo 04
+
+- ajustar a API real de onnxruntime
+- definir tokenizacion real
+- definir reindexacion
+- definir lifecycle del modelo
+
+11.5. Archivo 05
+
+- reemplazar QUERY/ACTION/CHAT por intents de dominio
+- no hacer fallback automatico a CHAT ante error de parseo
+- agregar validacion estructural estricta
+
+11.6. Archivo 06
+
+- ampliar catalogo de funciones
+- modelar multiples items
+- modelar contexto operativo
+- modelar salidas y abonos
+
+11.7. Archivo 07
+
+- dejar de depender de campos inexistentes
+- filtrar por empresa y bodega
+- usar retrieval solo para matching, no para respuesta final exacta
+
+11.8. Archivo 08
+
+- bajar la prioridad de voz
+- no prometer offline absoluto con motor nativo
+- usar locale detectado, no fijo
+- mantener una sola instancia del servicio
+
+11.9. Archivo 09
+
+- diseñar review sheet por accion real
+- incluir campos editables necesarios
+- mostrar contexto operativo y validaciones
+
+11.10. Archivo 10
+
+- empezar por pantalla dedicada, no overlay global
+- integrar permisos
+- integrar contexto de pantalla
+- soportar texto antes que voz
+
+
+===========================================================================
+12. PROPUESTA DE CATALOGO REAL DE INTENTS
+===========================================================================
+
+Sugerencia:
+
+CONSULTAS
+
+- query_stock_product
+- query_price_product
+- query_last_sale_product
+- query_sales_summary
+- query_receivable_balance_client
+- query_receivables_summary
+- query_inventory_value
+- query_product_history
+
+ACCIONES
+
+- action_register_sale
+- action_register_entry
+- action_register_output_adjustment
+- action_register_transfer
+- action_register_receivable_payment
+
+UTILIDAD
+
+- clarify_product
+- clarify_client
+- ask_missing_data
+- chat_general
+
+
+===========================================================================
+13. PROPUESTA DE DATOS MINIMOS QUE TODA ACCION IA DEBE RECIBIR
+===========================================================================
+
+Para cualquier accion:
+
+- empresaId
+- usuarioId
+- permisos efectivos
+- bodegaId actual
+- cajaSesionId si aplica
+- fecha/hora actual
+- pantalla actual
+
+Para venta:
+
+- items[]
+- clienteId o cliente_nombre
+- tipoVenta
+- metodoPago
+- abonoInicial
+
+Para entrada:
+
+- bodegaDestinoId
+- items[]
+- costo
+- precio venta opcional
+
+Para salida:
+
+- bodegaId
+- items[]
+- motivo
+
+
+===========================================================================
+14. MI RECOMENDACION FINAL
+===========================================================================
+
+No descartaria la iniciativa.
+Al contrario: vale la pena y puede convertirse en una funcion diferencial muy
+buena del sistema.
+
+Pero NO recomiendo empezar implementando exactamente lo escrito en los archivos
+01 al 10.
+
+Recomiendo:
+
+1. Reescribir los requerimientos a una version v2 aterrizada al proyecto.
+2. Centralizar casos de uso de ventas e inventario.
+3. Resolver primero consultas exactas por texto.
+4. Agregar acciones con confirmacion.
+5. Dejar embeddings solo para resolver ambiguedad de nombres.
+6. Tratar el LLM local pesado como opcion avanzada, no como fundamento
+   obligatorio de toda la solucion.
+
+
+===========================================================================
+15. DICTAMEN FINAL EN UNA FRASE
+===========================================================================
+
+La idea esta bien orientada y tiene valor real, pero hoy los documentos
+describen mejor una vision inspiradora que una especificacion tecnicamente
+lista para construir dentro de este proyecto.
+
+
+===========================================================================
+16. SIGUIENTE PASO RECOMENDADO
+===========================================================================
+
+El siguiente paso mas util seria crear una nueva serie de requerimientos
+"v2" que reemplace estos 10 archivos con una arquitectura mas realista:
+
+- 01_contexto_y_casos_de_uso
+- 02_intents_y_contratos
+- 03_casos_de_uso_deterministas
+- 04_resolucion_semantica_de_entidades
+- 05_confirmacion_y_ejecucion
+- 06_texto_y_voz
+- 07_prueba_tecnica_llm_local
+
+Eso dejaria el proyecto listo para una implementacion mas segura, incremental
+y sostenible.

@@ -1,12 +1,12 @@
-import 'package:inventario_v2/features/inventory/data/collections/producto_collection.dart';
+import 'package:inventario_v2/core/db/models/product_catalog_models.dart';
 
 class ProductWithStock {
-  final ProductoCollection producto;
+  final ProductCatalogItemDrift item;
   final double cantidad;
   final double costoPromedio;
 
-  ProductWithStock({
-    required this.producto,
+  const ProductWithStock({
+    required this.item,
     required this.cantidad,
     this.costoPromedio = 0.0,
   });

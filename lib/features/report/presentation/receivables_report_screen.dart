@@ -1,127 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
-import 'package:isar/isar.dart';
-import 'package:inventario_v2/core/providers/database_provider.dart';
-import 'package:inventario_v2/core/constants/app_enums.dart';
-import 'package:inventario_v2/features/sales/data/collections/venta_collection.dart';
-import 'package:inventario_v2/features/sales/data/collections/cliente_collection.dart';
-import 'package:inventario_v2/features/sales/data/collections/historial_pago_collection.dart';
 import 'package:go_router/go_router.dart';
-import 'package:inventario_v2/features/sales/data/collections/caja_collection.dart';
-import 'package:inventario_v2/features/sales/data/collections/caja_sesion_collection.dart';
-import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
+import 'package:intl/intl.dart';
+import 'package:inventario_v2/core/db/models/report_models.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
+import 'package:inventario_v2/core/providers/drift_provider.dart';
+import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
 
-// ------------------------------------------------------------------
-// MODEL
-// ------------------------------------------------------------------
-class ReceivableClientModel {
-  final String clientId;
-  final String name;
-  final double totalDebt;
-  final DateTime? lastPaymentDate;
-  final int ventasCount;
-
-  ReceivableClientModel({
-    required this.clientId,
-    required this.name,
-    required this.totalDebt,
-    this.lastPaymentDate,
-    required this.ventasCount,
-  });
-}
-
-// ------------------------------------------------------------------
-// PROVIDER
-// ------------------------------------------------------------------
 final receivablesProvider =
-    FutureProvider.autoDispose<List<ReceivableClientModel>>((ref) async {
-      final isar = await ref.watch(isarDbProvider.future);
-
+    FutureProvider.autoDispose<List<ReceivableClientDrift>>((ref) async {
+      final db = ref.watch(driftDatabaseProvider);
       final validBodegaIds = await ref.watch(validBodegasIdsProvider.future);
-
-      final cajas = await isar.cajaCollections.where().findAll();
-      final cajasDeBodegasValidas = cajas
-          .where((c) => validBodegaIds.contains(c.bodegaId))
-          .map((c) => c.serverId)
-          .toSet();
-
-      final sesiones = await isar.cajaSesionCollections.where().findAll();
-      final sesionesValidas = sesiones
-          .where((s) => cajasDeBodegasValidas.contains(s.cajaId))
-          .map((s) => s.serverId)
-          .toSet();
-
-      // Ventas a crédito con saldo pendiente
-      final ventasTodas = await isar.ventaCollections
-          .filter()
-          .tipoVentaEqualTo(TipoVenta.credito)
-          .estadoEqualTo(true)
-          .findAll();
-
-      final ventas = ventasTodas
-          .where((v) => sesionesValidas.contains(v.cajaSesionId))
-          .toList();
-
-      final pendientes = ventas
-          .where(
-            (v) => v.estadoPago != EstadoPago.pagado && v.saldoPendiente > 0,
-          )
-          .toList();
-
-      // Agrupar por cliente
-      final Map<String, ReceivableClientModel> byClient = {};
-      for (final v in pendientes) {
-        final cliente = await isar.clienteCollections
-            .filter()
-            .serverIdEqualTo(v.clienteId)
-            .findFirst();
-        final nombre = cliente?.nombre ?? 'Cliente Desconocido';
-
-        // Último pago de esta venta
-        final ultimoPago = await isar.historialPagoCollections
-            .filter()
-            .ventaIdEqualTo(v.serverId)
-            .sortByFechaRegistroDesc()
-            .findFirst();
-
-        if (byClient.containsKey(v.clienteId)) {
-          final existing = byClient[v.clienteId]!;
-          final newDebt = existing.totalDebt + v.saldoPendiente;
-          final newCount = existing.ventasCount + 1;
-          DateTime? lastPay = existing.lastPaymentDate;
-          if (ultimoPago != null &&
-              (lastPay == null || ultimoPago.fechaRegistro.isAfter(lastPay))) {
-            lastPay = ultimoPago.fechaRegistro;
-          }
-          byClient[v.clienteId] = ReceivableClientModel(
-            clientId: v.clienteId,
-            name: nombre,
-            totalDebt: newDebt,
-            lastPaymentDate: lastPay,
-            ventasCount: newCount,
-          );
-        } else {
-          byClient[v.clienteId] = ReceivableClientModel(
-            clientId: v.clienteId,
-            name: nombre,
-            totalDebt: v.saldoPendiente,
-            lastPaymentDate: ultimoPago?.fechaRegistro,
-            ventasCount: 1,
-          );
-        }
-      }
-
-      // Ordenar por mayor deuda
-      final result = byClient.values.toList()
-        ..sort((a, b) => b.totalDebt.compareTo(a.totalDebt));
-      return result;
+      return db.salesDao.getReceivablesReport(bodegaIds: validBodegaIds);
     });
 
-// ------------------------------------------------------------------
-// SCREEN
-// ------------------------------------------------------------------
 class ReceivablesReportScreen extends ConsumerStatefulWidget {
   const ReceivablesReportScreen({super.key});
 
@@ -136,19 +28,17 @@ class _ReceivablesReportScreenState
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref
-          .read(appBarProvider.notifier)
-          .setOptions(
-            title: "Cuentas por Cobrar",
-            subtitle: "Análisis de fiados",
-            showBackButton: true,
-            actions: [
-              IconButton(
-                onPressed: () => ref.invalidate(receivablesProvider),
-                icon: const Icon(Icons.refresh),
-              ),
-            ],
-          );
+      ref.read(appBarProvider.notifier).setOptions(
+        title: 'Cuentas por Cobrar',
+        subtitle: 'Analisis de fiados',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            onPressed: () => ref.invalidate(receivablesProvider),
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      );
     });
   }
 
@@ -160,41 +50,20 @@ class _ReceivablesReportScreenState
       backgroundColor: Colors.grey[50],
       body: receivablesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.red),
-              const SizedBox(height: 10),
-              Text(
-                "Error al cargar: $err",
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.red),
-              ),
-            ],
-          ),
-        ),
+        error: (err, _) => Center(child: Text('Error al cargar: $err')),
         data: (clients) {
           final totalDebt = clients.fold(0.0, (sum, c) => sum + c.totalDebt);
-
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. TOTAL PENDIENTE
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Colors.red.shade100),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.red.withValues(alpha: 0.05),
-                        blurRadius: 10,
-                      ),
-                    ],
                   ),
                   child: Row(
                     children: [
@@ -216,11 +85,8 @@ class _ReceivablesReportScreenState
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              "Total en la Calle (Fiado)",
-                              style: TextStyle(
-                                color: Colors.grey,
-                                fontSize: 12,
-                              ),
+                              'Total en la Calle (Fiado)',
+                              style: TextStyle(color: Colors.grey, fontSize: 12),
                             ),
                             const SizedBox(height: 5),
                             Text(
@@ -232,7 +98,7 @@ class _ReceivablesReportScreenState
                               ),
                             ),
                             Text(
-                              "${clients.length} cliente(s) con deuda",
+                              '${clients.length} cliente(s) con deuda',
                               style: TextStyle(
                                 color: Colors.grey[500],
                                 fontSize: 12,
@@ -244,10 +110,8 @@ class _ReceivablesReportScreenState
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 30),
-
-                if (clients.isEmpty) ...[
+                if (clients.isEmpty)
                   Center(
                     child: Column(
                       children: [
@@ -258,23 +122,22 @@ class _ReceivablesReportScreenState
                         ),
                         const SizedBox(height: 10),
                         const Text(
-                          "¡Sin deudas pendientes!",
+                          'Sin deudas pendientes',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         Text(
-                          "Todos los clientes están al día.",
+                          'Todos los clientes estan al dia.',
                           style: TextStyle(color: Colors.grey[500]),
                         ),
                       ],
                     ),
-                  ),
-                ] else ...[
-                  // 2. LISTA DE DEUDORES
+                  )
+                else ...[
                   const Text(
-                    "Clientes con Saldo Pendiente",
+                    'Clientes con Saldo Pendiente',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -320,26 +183,23 @@ class _ReceivablesReportScreenState
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                "${client.ventasCount} venta(s) pendiente(s)",
+                                '${client.ventasCount} venta(s) pendiente(s)',
                                 style: const TextStyle(fontSize: 12),
                               ),
-                              if (client.lastPaymentDate != null)
-                                Text(
-                                  "Último abono: ${DateFormat('dd MMM yyyy').format(client.lastPaymentDate!)}",
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey[500],
-                                  ),
-                                )
-                              else
-                                Text(
-                                  "Sin abonos registrados",
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.orange[700],
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                              Text(
+                                client.lastPaymentDate != null
+                                    ? 'Ultimo abono: ${DateFormat('dd MMM yyyy').format(client.lastPaymentDate!)}'
+                                    : 'Sin abonos registrados',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: client.lastPaymentDate != null
+                                      ? Colors.grey[500]
+                                      : Colors.orange[700],
+                                  fontWeight: client.lastPaymentDate == null
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
                                 ),
+                              ),
                             ],
                           ),
                           trailing: Column(
@@ -357,7 +217,7 @@ class _ReceivablesReportScreenState
                                 ),
                               ),
                               const Text(
-                                "Pendiente",
+                                'Pendiente',
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: Colors.grey,
@@ -365,16 +225,12 @@ class _ReceivablesReportScreenState
                               ),
                             ],
                           ),
-                          onTap: () {
-                            // Navegar a ventas filtradas por este cliente
-                            context.push('/sales');
-                          },
+                          onTap: () => context.push('/sales'),
                         ),
                       );
                     },
                   ),
                 ],
-
                 const SizedBox(height: 40),
               ],
             ),

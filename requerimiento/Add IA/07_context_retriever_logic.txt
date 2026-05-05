@@ -1,0 +1,90 @@
+# ARCHIVO: 07_context_retriever_logic
+# ROL: Search Engine Engineer / Data Scientist
+# PROYECTO: Sistema de Inventario Inteligente Offline
+
+===========================================================================
+🎯 OBJETIVO DE ESTE MÓDULO
+===========================================================================
+Implementar la lógica de recuperación de datos. Cuando el usuario pregunte 
+por un producto o cliente, este módulo buscará en Drift mediante "Similitud 
+de Coseno" y extraerá la información real para alimentar el prompt de la IA.
+
+===========================================================================
+🧠 EL FLUJO RAG (RETRIEVAL-AUGMENTED GENERATION)
+===========================================================================
+
+1. INPUT: "Vende 2 jugos de uva".
+2. VECTORIZAR: El VectorEngine (Paso 04) genera el embedding de "jugos de uva".
+3. BUSCAR: Drift recorre la tabla Productos y compara vectores.
+4. FILTRAR: Se obtienen los 3 productos con mayor puntaje (> 0.80).
+5. INYECTAR: Se le dice a Gemma: "Estos son los productos reales en stock: [Lista]".
+
+
+
+===========================================================================
+🏗️ IMPLEMENTACIÓN DEL RETRIEVER (DART)
+===========================================================================
+
+class ContextRetriever {
+  final AppDatabase db;
+  final VectorEngine _vectorEngine = VectorEngine();
+
+  ContextRetriever(this.db);
+
+  Future<String> getProductContext(String query) async {
+    // 1. Convertir la duda del usuario en un vector
+    final queryVector = await _vectorEngine.generateEmbedding(query);
+
+    // 2. Traer todos los productos (o filtrar por empresaId primero)
+    // En Drift usamos select().get()
+    final allProducts = await db.select(db.productos).get();
+
+    // 3. Ranking de similitud manual (Fuerza bruta optimizada)
+    List<Map<String, dynamic>> ranked = [];
+    for (var prod in allProducts) {
+      if (prod.embedding == null) continue;
+      
+      // Convertimos el String del embedding a List<double>
+      final List<double> embedding = _parseEmbedding(prod.embedding!);
+      
+      double score = queryVector.computeSimilarity(embedding);
+      if (score > 0.75) { // Umbral de relevancia
+        ranked.add({
+          'nombre': prod.nombre,
+          'precio': prod.precioBase,
+          'score': score
+        });
+      }
+    }
+
+    // Ordenar por el mejor match
+    ranked.sort((a, b) => b['score'].compareTo(a['score']));
+
+    // 4. Formatear como texto para la IA
+    if (ranked.isEmpty) return "No se encontraron productos relacionados.";
+    
+    return ranked.take(3).map((p) => 
+      "- ${p['nombre']}: Price ${p['precio']}, Stock ${p['stock']}"
+    ).join("\n");
+  }
+}
+
+===========================================================================
+⚠️ ANÁLISIS AUTOCRÍTICO (REVISIÓN SENIOR)
+===========================================================================
+
+* UMBRAL DE CORTE (THRESHOLD): Un score de 0.75 es bueno para nombres 
+  similares. Si es muy bajo, la IA recibirá basura. Si es muy alto, 
+  no encontrará nada si el usuario escribe con errores ortográficos.
+
+* RENDIMIENTO: Hacer un loop sobre 1,000 productos es instantáneo (<2ms). 
+  Si la base de datos crece a 10,000+, deberíamos usar 'Drift.where()' 
+  para filtrar primero por Categoría o Marca antes de calcular vectores.
+
+* CONTEXT WINDOW: Gemma 2B tiene un límite de memoria. No le pases 20 
+  productos; con los 3 mejores es suficiente para que tome una decisión.
+
+===========================================================================
+🚀 PRÓXIMO PASO: 08_voice_to_text_pipeline
+Convertir la voz del usuario en texto para iniciar todo este proceso.
+===========================================================================

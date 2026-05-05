@@ -1,14 +1,12 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:inventario_v2/core/providers/app_bar_provider.dart';
-
-// Providers y Colecciones
-import 'package:inventario_v2/features/inventory/data/collections/producto_collection.dart';
-import 'package:inventario_v2/features/inventory/data/providers/producto_provider.dart';
-import 'package:inventario_v2/features/inventory/data/providers/categoria_provider.dart';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:inventario_v2/core/db/models/product_catalog_models.dart';
+import 'package:inventario_v2/core/providers/app_bar_provider.dart';
+import 'package:inventario_v2/features/inventory/data/providers/categoria_provider.dart';
+import 'package:inventario_v2/features/inventory/data/providers/producto_provider.dart';
 
 import 'product_create_screen.dart';
 
@@ -20,8 +18,8 @@ class ProductListScreen extends ConsumerStatefulWidget {
 }
 
 class _ProductListScreenState extends ConsumerState<ProductListScreen> {
-  String _searchQuery = "";
-  String _selectedCategoryId = "Todos"; // ID de la categoría seleccionada
+  String _searchQuery = '';
+  String _selectedCategoryId = 'Todos';
 
   @override
   void initState() {
@@ -30,7 +28,7 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
       ref
           .read(appBarProvider.notifier)
           .setOptions(
-            title: "Catálogo de Productos",
+            title: 'Catalogo de Productos',
             showBackButton: true,
             actions: [],
           );
@@ -39,48 +37,22 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Obtener Productos
-    final asyncProductos = ref.watch(listaProductosProvider);
-    final listaProductos = asyncProductos.value ?? [];
-
-    // 2. Obtener Categorías
-    final asyncCategorias = ref.watch(listCategoriasAllProvider);
-    final listaCategorias = asyncCategorias.value ?? [];
-
-    // 3. Crear Mapa de Categorías (ID -> Nombre) para búsqueda rápida
-    final Map<String, String> categoriaMap = {
-      for (var c in listaCategorias) c.serverId: c.nombre,
-    };
-
-    // 4. Lógica de Filtrado (Buscador + Categoría)
-    final filteredProducts = listaProductos.where((p) {
-      // Filtro Categoría
-      final matchesCategory =
-          _selectedCategoryId == "Todos" ||
-          p.categoriaId == _selectedCategoryId;
-
-      // Filtro Texto
-      final nombre = p.nombre.toLowerCase();
-      final query = _searchQuery.toLowerCase();
-      final matchesSearch = nombre.contains(query);
-
-      return matchesCategory && matchesSearch;
-    }).toList();
+    final productosAsync = ref.watch(listaProductosProvider);
+    final categoriasAsync = ref.watch(listCategoriasAllProvider);
+    final categorias = categoriasAsync.value ?? [];
+    final categoriaMap = {for (final c in categorias) c.id: c.nombre};
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
-
-      // Botón flotante para crear nuevo
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _navigateToAddEditProduct(),
         backgroundColor: Colors.cyan.shade800,
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text(
-          "Nuevo producto",
+          'Nuevo producto',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
-
       body: Column(
         children: [
           Container(
@@ -100,7 +72,6 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
             ),
             child: Column(
               children: [
-                // 1. Buscador
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.grey[100],
@@ -109,7 +80,7 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                   child: TextField(
                     onChanged: (val) => setState(() => _searchQuery = val),
                     decoration: const InputDecoration(
-                      hintText: "Buscar producto...",
+                      hintText: 'Buscar producto...',
                       prefixIcon: Icon(Icons.search, color: Colors.grey),
                       border: InputBorder.none,
                       contentPadding: EdgeInsets.symmetric(vertical: 14),
@@ -117,17 +88,13 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // 2. Chips de Categorías (Dinámicos desde DB)
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      // Chip "Todos"
-                      _buildCategoryChip("Todos", "Todos"),
-                      // Chips de la DB
-                      ...listaCategorias.map(
-                        (cat) => _buildCategoryChip(cat.nombre, cat.serverId),
+                      _buildCategoryChip('Todos', 'Todos'),
+                      ...categorias.map(
+                        (cat) => _buildCategoryChip(cat.nombre, cat.id),
                       ),
                     ],
                   ),
@@ -135,31 +102,44 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
               ],
             ),
           ),
-
-          // --- ZONA INFERIOR: GRILLA DE PRODUCTOS ---
           Expanded(
-            child: filteredProducts.isEmpty
-                ? _buildEmptyState()
-                : GridView.builder(
-                    padding: const EdgeInsets.all(16),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2, // 2 columnas
-                          childAspectRatio:
-                              0.75, // Proporción exacta de tu referencia
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
-                        ),
-                    itemCount: filteredProducts.length,
-                    itemBuilder: (context, index) {
-                      final product = filteredProducts[index];
-                      // Buscamos el nombre de la categoría usando el mapa
-                      final categoryName =
-                          categoriaMap[product.categoriaId] ?? 'Sin Categoría';
+            child: productosAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (err, _) => Center(child: Text('Error: $err')),
+              data: (productos) {
+                final filteredProducts = productos.where((p) {
+                  final matchesCategory =
+                      _selectedCategoryId == 'Todos' ||
+                      p.categoriaId == _selectedCategoryId;
+                  final query = _searchQuery.toLowerCase();
+                  final matchesSearch =
+                      p.nombre.toLowerCase().contains(query) ||
+                      p.sku.toLowerCase().contains(query);
+                  return matchesCategory && matchesSearch;
+                }).toList();
 
-                      return _buildProductGridCard(product, categoryName);
-                    },
+                if (filteredProducts.isEmpty) {
+                  return _buildEmptyState();
+                }
+
+                return GridView.builder(
+                  padding: const EdgeInsets.all(16),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 0.82,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
                   ),
+                  itemCount: filteredProducts.length,
+                  itemBuilder: (context, index) {
+                    final product = filteredProducts[index];
+                    final categoryName =
+                        categoriaMap[product.categoriaId] ?? 'Sin Categoria';
+                    return _buildProductGridCard(product, categoryName);
+                  },
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -169,13 +149,11 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
   Widget _buildCategoryChip(String label, String id) {
     final isSelected = _selectedCategoryId == id;
     return Padding(
-      padding: const EdgeInsets.only(right: 8.0),
+      padding: const EdgeInsets.only(right: 8),
       child: FilterChip(
         label: Text(label),
         selected: isSelected,
-        onSelected: (bool selected) {
-          setState(() => _selectedCategoryId = id);
-        },
+        onSelected: (_) => setState(() => _selectedCategoryId = id),
         backgroundColor: Colors.white,
         selectedColor: Colors.cyan.shade100,
         labelStyle: TextStyle(
@@ -195,10 +173,9 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
   }
 
   Widget _buildProductGridCard(
-    ProductoCollection product,
+    ProductCatalogItemDrift product,
     String categoryName,
   ) {
-    // Quitamos el GestureDetector global de aquí
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -215,9 +192,9 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            flex: 4,
+            flex: 3,
             child: GestureDetector(
-              onTap: () => _openFullScreenImage(product), // Abre Preview
+              onTap: () => _openFullScreenImage(product),
               child: Container(
                 decoration: BoxDecoration(
                   color: Colors.grey[50],
@@ -229,52 +206,44 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(20),
                   ),
-                  // Aquí usamos el fit por defecto (cover) para la tarjeta
                   child: _buildImageWidget(product),
                 ),
               ),
             ),
           ),
-
           Expanded(
             flex: 2,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => _navigateToAddEditProduct(existingProduct: product),
               child: Padding(
-                padding: const EdgeInsets.all(12.0),
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          categoryName,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          product.nombre,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            height: 1.2,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+                    Text(
+                      categoryName,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-
-                    // Aquí puedes poner tu fila de SKU y Stock...
+                    const SizedBox(height: 4),
+                    Expanded(
+                      child: Text(
+                        product.nombre,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          height: 1.2,
+                        ),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -285,27 +254,24 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
     );
   }
 
-  // --- HELPER: IMAGEN (Local > Caché Inteligente > Placeholder) ---
   Widget _buildImageWidget(
-    ProductoCollection product, {
+    ProductCatalogItemDrift product, {
     BoxFit fit = BoxFit.cover,
   }) {
-    // 1. IMAGEN LOCAL
     if (product.imagenLocal != null &&
         File(product.imagenLocal!).existsSync()) {
       return Image.file(
         File(product.imagenLocal!),
-        fit: fit, // Usamos la variable fit
+        fit: fit,
         width: double.infinity,
-        height: double.infinity, // Aseguramos que llene el contenedor
+        height: double.infinity,
       );
     }
 
-    // 2. IMAGEN REMOTA
     if (product.imagenUrl != null && product.imagenUrl!.isNotEmpty) {
       return CachedNetworkImage(
         imageUrl: product.imagenUrl!,
-        fit: fit, // Usamos la variable fit
+        fit: fit,
         width: double.infinity,
         height: double.infinity,
         placeholder: (context, url) => Center(
@@ -323,11 +289,10 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
       );
     }
 
-    // 3. Fallback
     return _buildPlaceholder();
   }
 
-  void _openFullScreenImage(ProductoCollection product) {
+  void _openFullScreenImage(ProductCatalogItemDrift product) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => Scaffold(
@@ -341,7 +306,6 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
             ),
           ),
           body: Center(
-            // InteractiveViewer permite hacer Zoom con los dedos
             child: InteractiveViewer(
               panEnabled: true,
               minScale: 0.5,
@@ -349,7 +313,6 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
               child: SizedBox(
                 width: double.infinity,
                 height: double.infinity,
-                // Usamos BoxFit.contain para ver la foto completa
                 child: _buildImageWidget(product, fit: BoxFit.contain),
               ),
             ),
@@ -362,14 +325,13 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
   Widget _buildPlaceholder() {
     return Center(
       child: Icon(
-        Icons.checkroom, // El icono de ropa que tenías en la referencia
+        Icons.checkroom,
         size: 50,
         color: Colors.cyan.shade800.withValues(alpha: 0.3),
       ),
     );
   }
 
-  // --- ESTADO VACÍO ---
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -378,7 +340,7 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
           Icon(Icons.search_off, size: 60, color: Colors.grey[300]),
           const SizedBox(height: 10),
           Text(
-            "No se encontraron productos",
+            'No se encontraron productos',
             style: TextStyle(color: Colors.grey[500]),
           ),
         ],
@@ -386,13 +348,12 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
     );
   }
 
-  // --- NAVEGACIÓN ---
-  void _navigateToAddEditProduct({ProductoCollection? existingProduct}) {
+  void _navigateToAddEditProduct({ProductCatalogItemDrift? existingProduct}) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) =>
-            ProductCreateScreen(productToEdit: existingProduct),
+            ProductCreateScreen(productToEdit: existingProduct?.producto),
       ),
     );
   }

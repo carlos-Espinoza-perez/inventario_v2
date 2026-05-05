@@ -32,10 +32,7 @@ class ErrorHandler {
       return "No tienes conexión a internet. Verifica tu red.";
     }
 
-    // 4. Errores de BASE DE DATOS LOCAL (Isar)
-    if (rawMessage.contains("IsarError")) {
-      return "Error interno de base de datos.";
-    }
+
 
     // 5. Errores Personalizados (Los que tú lanzas con throw Exception("..."))
     if (rawMessage.startsWith("Exception: ")) {

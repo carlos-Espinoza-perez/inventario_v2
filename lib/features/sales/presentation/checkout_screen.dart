@@ -1,22 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:isar/isar.dart';
-import 'package:uuid/uuid.dart';
-import 'package:inventario_v2/core/providers/database_provider.dart';
-import 'package:inventario_v2/features/sales/data/collections/venta_collection.dart';
-import 'package:inventario_v2/features/sales/data/collections/detalle_venta_collection.dart';
-import 'package:inventario_v2/features/sales/data/collections/historial_pago_collection.dart';
-import 'package:inventario_v2/features/sales/data/collections/cliente_collection.dart';
-import 'package:inventario_v2/core/constants/app_enums.dart';
+import 'package:inventario_v2/core/db/exceptions/dao_exceptions.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
-import 'package:inventario_v2/features/auth/presentation/providers/auth_provider.dart';
-import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
-import 'package:inventario_v2/features/inventory/data/collections/inventario_collection.dart';
-import 'package:inventario_v2/features/inventory/data/collections/codigo_producto_collection.dart';
-import 'package:inventario_v2/features/inventory/data/collections/inventario_codigo_producto_collection.dart';
-import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
-import 'package:inventario_v2/features/inventory/data/collections/producto_collection.dart';
+import 'package:inventario_v2/features/sales/domain/use_cases/registrar_venta_use_case.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   final List<Map<String, dynamic>> cartItems;
@@ -37,8 +24,7 @@ class CheckoutScreen extends ConsumerStatefulWidget {
 }
 
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
-  // Estado
-  String _saleType = "Contado"; // Opciones: "Contado", "Fiado"
+  String _saleType = "Contado";
   final TextEditingController _clientCtrl = TextEditingController();
   final TextEditingController _depositCtrl = TextEditingController();
 
@@ -52,14 +38,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     });
   }
 
-  // Cálculos dinámicos
   double get _depositAmount => double.tryParse(_depositCtrl.text) ?? 0.0;
 
   double get _pendingBalance {
     if (_saleType == "Contado") return 0.0;
-    // Si es fiado: Total - Abono. Si el abono es mayor al total, es 0.
-    double balance = widget.total - _depositAmount;
+    final balance = widget.total - _depositAmount;
     return balance < 0 ? 0 : balance;
+  }
+
+  @override
+  void dispose() {
+    _clientCtrl.dispose();
+    _depositCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -71,7 +62,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. CLIENTE
             const Text(
               "Cliente",
               style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
@@ -91,10 +81,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 30),
-
-            // 2. TIPO DE VENTA (SELECTOR)
             const Text(
               "Tipo de Venta",
               style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
@@ -110,14 +97,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   onTap: () {
                     setState(() {
                       _saleType = "Contado";
-                      _depositCtrl
-                          .clear(); // Limpiamos abono si cambia a contado
+                      _depositCtrl.clear();
                     });
                   },
                 ),
                 const SizedBox(width: 15),
                 _SaleTypeCard(
-                  label: "FIADO / CRÉDITO",
+                  label: "FIADO / CREDITO",
                   icon: Icons.history_edu_outlined,
                   isSelected: _saleType == "Fiado",
                   color: Colors.orange,
@@ -125,8 +111,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ),
               ],
             ),
-
-            // 3. SECCIÓN ABONO (SOLO SI ES FIADO)
             if (_saleType == "Fiado") ...[
               const SizedBox(height: 20),
               Container(
@@ -150,8 +134,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     TextField(
                       controller: _depositCtrl,
                       keyboardType: TextInputType.number,
-                      // Actualizamos la UI cada vez que escribe para recalcular el saldo
-                      onChanged: (val) => setState(() {}),
+                      onChanged: (_) => setState(() {}),
                       decoration: InputDecoration(
                         prefixIcon: const Icon(
                           Icons.attach_money,
@@ -170,10 +153,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ),
               ),
             ],
-
             const SizedBox(height: 30),
-
-            // 4. RESUMEN FINANCIERO
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -185,8 +165,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 children: [
                   _SummaryRow(label: "Subtotal", value: widget.subtotal),
                   const Divider(height: 24),
-
-                  // TOTAL DE LA VENTA
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -207,8 +185,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       ),
                     ],
                   ),
-
-                  // INFORMACIÓN DE CRÉDITO (SI ES FIADO)
                   if (_saleType == "Fiado") ...[
                     const SizedBox(height: 12),
                     const Divider(color: Colors.orange, thickness: 1),
@@ -244,10 +220,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ],
               ),
             ),
-
             const SizedBox(height: 40),
-
-            // 5. BOTÓN FINALIZAR
             SizedBox(
               width: double.infinity,
               height: 55,
@@ -284,228 +257,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
-  void _processSale() async {
-    // Validaciones
-    if (_saleType == "Fiado" && _clientCtrl.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "⚠️ Para ventas al fiado, el nombre del cliente es obligatorio",
-          ),
-        ),
-      );
-      return;
-    }
-
-    if (_depositAmount > widget.total) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("⚠️ El abono no puede ser mayor al total"),
-        ),
-      );
-      return;
-    }
-
+  Future<void> _processSale() async {
     try {
-      final isar = await ref.read(isarDbProvider.future);
+      final registrarVenta = ref.read(registrarVentaUseCaseProvider);
 
-      final authCtrl = ref.read(authControllerProvider.notifier);
-      final usuario = authCtrl.usuarioActual;
-      final empresaId = usuario?.empresaId ?? 'empresa_id_placeholder';
-      final usuarioRegistroId = usuario?.serverId ?? 'user_current';
-      final dashboardState = ref.read(dashboardProvider).value;
-      final cajaSesionId = dashboardState?.cajaAbierta?.serverId;
-
-      if (cajaSesionId == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                "⚠️ No hay una sesión de caja abierta. Abre caja primero.",
-              ),
-            ),
-          );
-        }
-        return;
-      }
-
-      final selectedBodega = ref.read(selectedBodegaProvider);
-      final bodegaId = selectedBodega?.serverId ?? '';
-
-      if (bodegaId.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                "⚠️ Requieres tener una bodega seleccionada para vender.",
-              ),
-            ),
-          );
-        }
-        return;
-      }
-
-      // PROCESAR CLIENTE (Buscar o Crear)
-
-      // PROCESAR CLIENTE (Buscar o Crear)
-      ClienteCollection? cliente;
-      if (_clientCtrl.text.isNotEmpty) {
-        cliente = await isar.clienteCollections
-            .filter()
-            .nombreEqualTo(_clientCtrl.text)
-            .findFirst();
-        if (cliente == null) {
-          cliente = ClienteCollection()
-            ..serverId = const Uuid().v4()
-            ..empresaId = empresaId // ID de la empresa real
-            ..nombre = _clientCtrl.text
-            ..celular =
-                '' // Opcional
-            ..fechaRegistro = DateTime.now()
-            ..ultimaActualizacion = DateTime.now();
-
-          await isar.writeTxn(() async {
-            await isar.clienteCollections.put(cliente!);
-          });
-        }
-      }
-
-      await isar.writeTxn(() async {
-        // 1. CREAR VENTA
-        final nuevaVenta = VentaCollection()
-          ..serverId = const Uuid().v4()
-          ..empresaId = empresaId
-          ..clienteId = cliente?.serverId ?? 'final_consumer'
-          ..fechaVenta = DateTime.now()
-          ..totalVenta = widget.total
-          ..totalPagado = _saleType == "Contado" ? widget.total : _depositAmount
-          ..saldoPendiente = _saleType == "Contado"
-              ? 0
-              : (widget.total - _depositAmount)
-          ..tipoVenta = _saleType == "Contado"
-              ? TipoVenta.contado
-              : TipoVenta.credito
-          ..estadoPago =
-              (_saleType == "Contado" || _depositAmount >= widget.total)
-              ? EstadoPago.pagado
-              : EstadoPago.pendiente
-          ..cajaSesionId = cajaSesionId
-          ..estado = true
-          ..ultimaActualizacion = DateTime.now()
-          ..usuarioRegistroId = usuarioRegistroId;
-
-        await isar.ventaCollections.put(nuevaVenta);
-
-        // 2. CREAR DETALLES Y ACTUALIZAR STOCK
-        for (var item in widget.cartItems) {
-          final productoId = item['id'] as String;
-          final cantidad = (item['qty'] as num).toDouble();
-          final precio = (item['price'] as num).toDouble();
-          final talla = item['size']; // Puede ser nulo o vacío
-
-          double costoDelProducto = 0.0;
-
-          if (talla != null && talla.toString().isNotEmpty) {
-            final codigoProd = await isar.codigoProductoCollections
-                .filter()
-                .productoIdEqualTo(productoId)
-                .tallaEqualTo(talla.toString())
-                .findFirst();
-            if (codigoProd != null && codigoProd.costoEspecifico != null) {
-              costoDelProducto = codigoProd.costoEspecifico!;
-            }
-          }
-
-          if (costoDelProducto == 0.0) {
-            final producto = await isar.productoCollections
-                .filter()
-                .serverIdEqualTo(productoId)
-                .findFirst();
-            if (producto != null) costoDelProducto = producto.ultimoCosto;
-          }
-
-          final detalle = DetalleVentaCollection()
-            ..serverId =
-                "${nuevaVenta.serverId}-$productoId-${DateTime.now().millisecondsSinceEpoch}"
-            ..ventaId = nuevaVenta.serverId
-            ..productoId = productoId
-            ..cantidad = cantidad
-            ..precioUnitario = precio
-            ..subTotal = (precio * cantidad)
-            ..descuento = 0.0
-            ..costoHistoricoCompra = costoDelProducto
-            ..ultimaActualizacion = DateTime.now();
-
-          await isar.detalleVentaCollections.put(detalle);
-
-          // ACTUALIZAR STOCK EN INVENTARIO (Bodega actual)
-          final inventario = await isar.inventarioCollections
-              .filter()
-              .bodegaIdEqualTo(bodegaId)
-              .productoIdEqualTo(productoId)
-              .findFirst();
-
-          if (inventario != null) {
-            inventario.cantidadActual -= cantidad;
-            inventario.ultimaActualizacion = DateTime.now();
-            inventario.pendienteSincronizacion = true;
-            await isar.inventarioCollections.put(inventario);
-
-            // ACTUALIZAR STOCK DE LA TALLA (Si aplica)
-            if (talla != null && talla.toString().isNotEmpty) {
-              final codigoProd = await isar.codigoProductoCollections
-                  .filter()
-                  .productoIdEqualTo(productoId)
-                  .tallaEqualTo(talla.toString())
-                  .findFirst();
-
-              if (codigoProd != null) {
-                final invCodProd = await isar
-                    .inventarioCodigoProductoCollections
-                    .filter()
-                    .inventarioIdEqualTo(inventario.serverId)
-                    .codigoProductoIdEqualTo(codigoProd.serverId)
-                    .findFirst();
-
-                if (invCodProd != null) {
-                  invCodProd.cantidad -= cantidad;
-                  invCodProd.ultimaActualizacion = DateTime.now();
-                  invCodProd.pendienteSincronizacion = true;
-                  await isar.inventarioCodigoProductoCollections.put(
-                    invCodProd,
-                  );
-                }
-              }
-            }
-          }
-        }
-
-        // 3. REGISTRAR PAGO INICIAL (Si aplica)
-        double montoInicial = _saleType == "Contado"
-            ? widget.total
-            : _depositAmount;
-        if (montoInicial > 0) {
-          final pago = HistorialPagoCollection()
-            ..serverId = const Uuid().v4()
-            ..ventaId = nuevaVenta.serverId
-            ..cajaSesionId = cajaSesionId
-            ..montoPagado = montoInicial
-            ..metodoDePago = MetodoPago
-                .efectivo // Por defecto Efectivo, mejorar UI para selección
-            ..fechaRegistro = DateTime.now()
-            ..usuarioRegistroId = usuarioRegistroId
-            ..ultimaActualizacion = DateTime.now();
-
-          await isar.historialPagoCollections.put(pago);
-        }
-      });
-
-      // Refrescar indicadores financieros de la caja abierta
-      ref.invalidate(dashboardProvider);
+      await registrarVenta.ejecutar(
+        cartItems: widget.cartItems,
+        nombreCliente: _clientCtrl.text,
+        saleType: _saleType,
+        total: widget.total,
+        depositAmount: _depositAmount,
+      );
 
       if (!mounted) return;
 
-      // EXITO
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -525,7 +290,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ),
               const SizedBox(height: 20),
               Text(
-                _saleType == "Fiado" ? "Crédito Registrado" : "Venta Exitosa",
+                _saleType == "Fiado" ? "Credito Registrado" : "Venta Exitosa",
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 20,
@@ -542,11 +307,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(ctx); // Close dialog
-                Navigator.pop(
-                  context,
-                  true,
-                ); // Close checkout and return true to clear cart
+                Navigator.pop(ctx);
+                Navigator.pop(context, true);
               },
               child: const Text("CERRAR"),
             ),
@@ -555,17 +317,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       );
     } catch (e) {
       debugPrint("Error procesando venta: $e");
+      final message = switch (e) {
+        CajaSesionNoActivaException(:final message) => message,
+        StockInsuficienteException(:final message) => message,
+        ContextoInvalidoException(:final message) => message,
+        _ => "Error al guardar venta: $e",
+      };
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Error al guardar venta: $e"),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
       );
     }
   }
 }
-
-// --- WIDGETS AUXILIARES ---
 
 class _SaleTypeCard extends StatelessWidget {
   final String label;

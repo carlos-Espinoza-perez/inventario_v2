@@ -3,11 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:uuid/uuid.dart';
+import 'package:inventario_v2/core/db/app_database.dart';
+import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/core/presentation/widgets/custom_text_field.dart';
 
-import 'package:inventario_v2/features/inventory/data/collections/producto_collection.dart';
-import 'package:inventario_v2/features/inventory/data/providers/producto_provider.dart';
-import 'package:inventario_v2/features/inventory/data/providers/categoria_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/inventario_provider.dart';
 import 'package:inventario_v2/features/inventory/presentation/widgets/product_label_widget.dart';
 
@@ -26,7 +25,7 @@ class ProductEntryArgs {
 }
 
 class ProductEntryData {
-  final ProductoCollection producto;
+  final Producto producto;
   final List<String> tallasDisponibles;
   final double margenSugerido;
   final double ultimoCosto;
@@ -47,18 +46,20 @@ final productEntryDataProvider =
       ref,
       args,
     ) async {
-      final repoProducto = await ref.read(productoRepositoryProvider.future);
-      final repoCategoria = await ref.read(categoriaRepositoryProvider.future);
+      final db = ref.read(driftDatabaseProvider);
       final repoInventario = await ref.read(
         inventarioRepositoryProvider.future,
       );
 
-      final producto = await repoProducto.getProductoPorServerId(
-        args.productId,
-      );
-      final categoria = await repoCategoria.getCategoriaPorServerId(
+      final producto = await db.inventoryDao.getProductoById(args.productId);
+      final categoria = await db.inventoryDao.getCategoriaById(
         args.categoriaId,
       );
+      if (producto == null || categoria == null) {
+        throw Exception(
+          'No se pudo cargar el producto o la categoria desde Drift.',
+        );
+      }
       final inventarios = await repoInventario.getInventariosByProductId(
         args.productId,
       );
@@ -106,6 +107,7 @@ class ProductDetailEntryScreen extends ConsumerStatefulWidget {
   final double? initialCost;
   final double? initialPrice;
   final List<Map<String, String>>? initialItems;
+  final String? preferredBarcode;
 
   const ProductDetailEntryScreen({
     super.key,
@@ -114,6 +116,7 @@ class ProductDetailEntryScreen extends ConsumerStatefulWidget {
     this.initialCost,
     this.initialPrice,
     this.initialItems,
+    this.preferredBarcode,
   });
 
   @override
@@ -474,6 +477,7 @@ class _ProductDetailEntryScreenState
       builder: (context) => _SizeSelectorModal(
         tallasDisponibles: data.tallasDisponibles,
         basePrice: basePrice,
+        initialBarcode: widget.preferredBarcode,
         initialPrint: _defaultPrint,
         initialShowPrice: _defaultShowPrice,
         initialOnePerLot: _defaultOnePerLot,
@@ -800,6 +804,7 @@ enum QrMode { generate, scan }
 class _SizeSelectorModal extends StatefulWidget {
   final List<String> tallasDisponibles;
   final double basePrice;
+  final String? initialBarcode;
   final bool initialPrint;
   final bool initialShowPrice;
   final bool initialOnePerLot;
@@ -818,6 +823,7 @@ class _SizeSelectorModal extends StatefulWidget {
   const _SizeSelectorModal({
     required this.tallasDisponibles,
     required this.basePrice,
+    this.initialBarcode,
     required this.onAdd,
     this.initialPrint = true,
     this.initialShowPrice = true,
@@ -846,6 +852,10 @@ class _SizeSelectorModalState extends State<_SizeSelectorModal> {
     _shouldPrint = widget.initialPrint;
     _showPrice = widget.initialShowPrice;
     _onePerLot = widget.initialOnePerLot;
+    if (widget.initialBarcode != null && widget.initialBarcode!.isNotEmpty) {
+      _qrMode = QrMode.scan;
+      _scannedCode = widget.initialBarcode;
+    }
 
     _priceCtrl.text = widget.basePrice % 1 == 0
         ? widget.basePrice.toInt().toString()
@@ -924,7 +934,7 @@ class _SizeSelectorModalState extends State<_SizeSelectorModal> {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: widget.tallasDisponibles.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
                 itemBuilder: (context, index) {
                   final talla = widget.tallasDisponibles[index];
                   return ChoiceChip(

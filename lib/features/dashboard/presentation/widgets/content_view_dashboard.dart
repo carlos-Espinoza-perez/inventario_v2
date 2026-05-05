@@ -46,7 +46,64 @@ class ContentViewDashboard extends StatelessWidget {
               },
             ),
 
+            const SizedBox(height: 12),
+
+            Row(
+              children: [
+                Expanded(
+                  child: CardInfoDashboard(
+                    title: "Ventas del dia",
+                    amount: currencyFormat.format(state.ventasDelDia),
+                    icon: Icons.today_outlined,
+                    color: Colors.blue.shade700,
+                    isOutlined: true,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: CardInfoDashboard(
+                    title: "Stock bajo",
+                    amount: state.stockBajo.toString(),
+                    icon: Icons.warning_amber_rounded,
+                    color: Colors.orange.shade700,
+                    isOutlined: true,
+                  ),
+                ),
+              ],
+            ),
+
             SectionCajaDashboard(state: state),
+            if (state.productosMasVendidos.isNotEmpty) ...[
+              const SizedBox(height: 22),
+              const Text(
+                "Productos mas vendidos",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              ...state.productosMasVendidos.map(
+                (item) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.blue.shade50,
+                    child: Text(
+                      item.cantidadVendida.toStringAsFixed(0),
+                      style: TextStyle(
+                        color: Colors.blue.shade700,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  title: Text(
+                    item.nombre,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: Text(
+                    "Total vendido: ${currencyFormat.format(item.totalVendido)}",
+                  ),
+                ),
+              ),
+            ],
             SectionTransactionDashboard(
               transactions: state.ultimasTransacciones,
             ),

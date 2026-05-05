@@ -1,0 +1,23 @@
+FLUJO CONVERSACIONAL: MODO SECRETARIO
+
+ESCENARIO: CARGA DE ENTRADA DE BODEGA
+
+PASO 1: ACTIVACIÓN
+- Usuario: Toca botón "Iniciar Dictado" o usa comando de activación.
+- IA: (Tono de notificación) "Modo secretario activo. Estoy listo para anotar la entrada."
+
+PASO 2: DICTADO NATURAL Y CONTINUO
+- Usuario: "Apunta 10 Camisas Nike Rojas talla M a 15 dólares."
+- IA: (Voz) "Listo, 10 Camisas Nike Rojas anotadas. ¿Qué sigue?"
+- Usuario: "También 5 Pantalones Levi's azules."
+- IA: (Voz) "Agregados 5 Pantalones Levi's. Llevamos 2 productos."
+
+PASO 3: CORRECCIÓN Y FLEXIBILIDAD
+- Usuario: "Ah, espera, no son 10 camisas, cámbialo a 15 y quita los pantalones."
+- IA: (Voz) "Entendido. Actualizado a 15 camisas Nike y eliminé los pantalones de la lista temporal."
+
+PASO 4: FINALIZACIÓN
+- Usuario: "Eso es todo. Guarda la orden."
+- IA: (Voz) "Orden completada con 1 producto (15 unidades). ¿Confirmas el registro en la Bodega Central?"
+- Usuario: "Confirmado."
+- IA: Ejecuta la lógica de negocio y confirma el éxito auditivamente.

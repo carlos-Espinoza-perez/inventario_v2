@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/features/sales/data/repositories/caja_repository.dart';
-import 'package:inventario_v2/features/sales/data/collections/caja_sesion_collection.dart';
 import 'package:inventario_v2/features/sales/presentation/cash_register_detail_screen.dart';
 
-// Provider for obtaining cash register history
-final historialCajasProvider =
-    FutureProvider.autoDispose<List<CajaSesionCollection>>((ref) async {
-      final repo = ref.read(cajaRepositoryProvider);
-      return await repo.obtenerHistorialCajas();
-    });
+final historialCajasProvider = FutureProvider.autoDispose<List<CajaSesione>>((
+  ref,
+) async {
+  final repo = ref.read(cajaRepositoryProvider);
+  return repo.obtenerHistorialCajas();
+});
 
 class CashRegisterHistoryScreen extends ConsumerStatefulWidget {
   const CashRegisterHistoryScreen({super.key});
@@ -29,7 +29,7 @@ class _CashRegisterHistoryScreenState
     Future.microtask(() {
       ref
           .read(appBarProvider.notifier)
-          .setOptions(title: "Historial de Cajas", showBackButton: true);
+          .setOptions(title: 'Historial de Cajas', showBackButton: true);
     });
   }
 
@@ -45,7 +45,7 @@ class _CashRegisterHistoryScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "Bitácora de Sesiones",
+              'Bitacora de Sesiones',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
@@ -53,7 +53,6 @@ class _CashRegisterHistoryScreenState
               ),
             ),
             const SizedBox(height: 10),
-
             historialCajasAsync.when(
               loading: () => const Center(
                 child: Padding(
@@ -62,13 +61,13 @@ class _CashRegisterHistoryScreenState
                 ),
               ),
               error: (err, stack) =>
-                  Center(child: Text("Error al cargar historial: $err")),
+                  Center(child: Text('Error al cargar historial: $err')),
               data: (cajas) {
                 if (cajas.isEmpty) {
                   return const Center(
                     child: Padding(
                       padding: EdgeInsets.all(20),
-                      child: Text("No hay historial de cajas registrado"),
+                      child: Text('No hay historial de cajas registrado'),
                     ),
                   );
                 }
@@ -91,31 +90,29 @@ class _CashRegisterHistoryScreenState
   }
 }
 
-// --- WIDGET: ITEM DE LA BITACORA ---
 class _SessionItem extends StatelessWidget {
-  final CajaSesionCollection session;
+  final CajaSesione session;
 
   const _SessionItem({required this.session});
 
   @override
   Widget build(BuildContext context) {
-    final double diff = session.diferencia;
-    Color diffColor = Colors.grey;
-    IconData diffIcon = Icons.check_circle_outline;
-
-    final bool isAbierta = session.estadoSesion.name == 'abierta';
+    final diff = session.diferencia;
+    var diffColor = Colors.grey;
+    var diffIcon = Icons.check_circle_outline;
+    final isAbierta = session.estadoSesion == 'abierta';
 
     if (isAbierta) {
-      diffColor = Colors.orange; // Color distintivo para caja activa
+      diffColor = Colors.orange;
       diffIcon = Icons.lock_open;
     } else if (diff > 0) {
-      diffColor = Colors.blue; // Sobrante
+      diffColor = Colors.blue;
       diffIcon = Icons.arrow_upward;
     } else if (diff < 0) {
-      diffColor = Colors.red; // Faltante
+      diffColor = Colors.red;
       diffIcon = Icons.warning_amber_rounded;
     } else {
-      diffColor = Colors.green; // Cuadre
+      diffColor = Colors.green;
     }
 
     final closeDate = session.fechaCierre;
@@ -140,7 +137,7 @@ class _SessionItem extends StatelessWidget {
             context,
             MaterialPageRoute(
               builder: (context) =>
-                  CashRegisterDetailScreen(sessionId: session.serverId),
+                  CashRegisterDetailScreen(sessionId: session.id),
             ),
           );
         },
@@ -174,11 +171,11 @@ class _SessionItem extends StatelessWidget {
           children: [
             const SizedBox(height: 6),
             Text(
-              "Apertura: ${DateFormat('hh:mm a').format(session.fechaApertura)}",
+              'Apertura: ${DateFormat('hh:mm a').format(session.fechaApertura)}',
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
             Text(
-              "Cierre: ${closeDate != null ? DateFormat('hh:mm a').format(closeDate) : 'EN CURSO'}",
+              'Cierre: ${closeDate != null ? DateFormat('hh:mm a').format(closeDate) : 'EN CURSO'}',
               style: TextStyle(
                 fontSize: 12,
                 color: isAbierta ? Colors.orange[800] : Colors.grey[600],
@@ -195,7 +192,7 @@ class _SessionItem extends StatelessWidget {
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  "Inicial: ${NumberFormat.simpleCurrency().format(session.montoInicial)}",
+                  'Inicial: ${NumberFormat.simpleCurrency().format(session.montoInicial)}',
                   style: TextStyle(
                     fontSize: 11,
                     color: Colors.blueGrey[600],
@@ -210,7 +207,7 @@ class _SessionItem extends StatelessWidget {
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  "Ventas: ${NumberFormat.simpleCurrency().format(session.totalVentasSistema)}",
+                  'Ventas: ${NumberFormat.simpleCurrency().format(session.totalVentasSistema)}',
                   style: TextStyle(
                     fontSize: 11,
                     color: Colors.blueGrey[600],

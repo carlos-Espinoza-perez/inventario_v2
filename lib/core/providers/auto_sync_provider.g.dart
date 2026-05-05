@@ -6,36 +6,39 @@ part of 'auto_sync_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$syncRepositoryHash() => r'78e0e5982e3641df836569a4220525bf9cff94b9';
+String _$syncRepositoryHash() => r'f2557c353bb348a9e8554fc503741a684d219052';
 
 /// See also [syncRepository].
 @ProviderFor(syncRepository)
 final syncRepositoryProvider =
     AutoDisposeFutureProvider<SyncRepository>.internal(
-  syncRepository,
-  name: r'syncRepositoryProvider',
-  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-      ? null
-      : _$syncRepositoryHash,
-  dependencies: null,
-  allTransitiveDependencies: null,
-);
+      syncRepository,
+      name: r'syncRepositoryProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$syncRepositoryHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
 
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
 typedef SyncRepositoryRef = AutoDisposeFutureProviderRef<SyncRepository>;
-String _$autoSyncHash() => r'4cb54618198a8603de8f5727936261775e24d04f';
+String _$autoSyncHash() => r'a97b1e5e04c17a24bbbf183529c0cbaf0e14a089';
 
 /// See also [AutoSync].
 @ProviderFor(AutoSync)
 final autoSyncProvider =
     AutoDisposeAsyncNotifierProvider<AutoSync, SyncState>.internal(
-  AutoSync.new,
-  name: r'autoSyncProvider',
-  debugGetCreateSourceHash:
-      const bool.fromEnvironment('dart.vm.product') ? null : _$autoSyncHash,
-  dependencies: null,
-  allTransitiveDependencies: null,
-);
+      AutoSync.new,
+      name: r'autoSyncProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$autoSyncHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
 
 typedef _$AutoSync = AutoDisposeAsyncNotifier<SyncState>;
 // ignore_for_file: type=lint
-// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

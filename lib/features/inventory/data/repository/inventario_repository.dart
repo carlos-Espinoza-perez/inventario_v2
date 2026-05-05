@@ -1,76 +1,194 @@
-import 'package:inventario_v2/features/inventory/data/collections/inventario_collection.dart';
-import 'package:inventario_v2/features/inventory/data/collections/codigo_producto_collection.dart';
-import 'package:inventario_v2/features/inventory/data/collections/inventario_codigo_producto_collection.dart';
-import 'package:isar/isar.dart';
+import 'package:drift/drift.dart';
+import 'package:inventario_v2/core/db/app_database.dart';
+import 'package:inventario_v2/core/db/models/inventory_requests.dart';
+import 'package:inventario_v2/core/db/models/producto_stock_drift.dart';
 
 class InventarioRepository {
-  final Isar _isar;
+  final AppDatabase _db;
 
-  InventarioRepository(this._isar);
+  InventarioRepository(this._db);
 
-  Future<List<InventarioCollection>> getInventariosByProductId(
-    String productId,
-  ) async {
-    final inventarios = await _isar.inventarioCollections
-        .filter()
-        .productoIdEqualTo(productId)
-        .findAll();
-
-    return inventarios;
+  Future<List<Inventario>> getInventariosByProductId(String productId) async {
+    final variants = await _db.inventoryDao.getVariantesByProductoId(productId);
+    if (variants.isEmpty) return [];
+    return (_db.select(_db.inventarios)..where(
+          (tbl) => tbl.productoVarianteId.isIn(
+            variants.map((variant) => variant.id).toList(),
+          ),
+        ))
+        .get();
   }
 
-  Future<InventarioCollection?> getStockByProductAndBodega(
+  Future<Inventario?> getStockByProductAndBodega(
     String productId,
     String bodegaId,
+    String? productVariantId,
+  ) {
+    return (_db.select(_db.inventarios)
+          ..where(
+            (tbl) => productVariantId != null
+                ? tbl.productoVarianteId.equals(productVariantId)
+                : tbl.productoVarianteId.isInQuery(
+                    _db.selectOnly(_db.productoVariantes)
+                      ..addColumns([_db.productoVariantes.id])
+                      ..where(
+                        _db.productoVariantes.productoId.equals(productId),
+                      ),
+                  ),
+          )
+          ..where((tbl) => tbl.bodegaId.equals(bodegaId))
+          ..limit(1))
+        .getSingleOrNull();
+  }
+
+  Future<InventoryProductLookup?> buscarProductoPorCodigoONombre(
+    String query,
   ) async {
-    return await _isar.inventarioCollections
-        .filter()
-        .productoIdEqualTo(productId)
-        .and()
-        .bodegaIdEqualTo(bodegaId)
-        .findFirst();
+    final normalized = query.trim();
+    if (normalized.isEmpty) return null;
+
+    final variantes =
+        await (_db.select(_db.productoVariantes)
+              ..where((tbl) => tbl.sku.equals(normalized))
+              ..limit(1))
+            .getSingleOrNull();
+
+    if (variantes != null) {
+      final producto = await _db.inventoryDao.getProductoById(
+        variantes.productoId,
+      );
+      if (producto != null) {
+        return InventoryProductLookup(
+          productId: producto.id,
+          productVariantId: variantes.id,
+          nombre: producto.nombre,
+          categoriaId: producto.categoriaId,
+          codigo: producto.codigoPersonalizado,
+          sku: variantes.sku,
+          talla: variantes.talla,
+          color: variantes.color,
+          ultimoCosto: producto.ultimoCosto,
+          precioBase: variantes.precioEspecifico ?? producto.precioBase ?? 0.0,
+        );
+      }
+    }
+
+    final producto = await _db.inventoryDao.searchProductoByCodeOrName(
+      normalized,
+    );
+    if (producto == null) return null;
+
+    final variante =
+        await (_db.select(_db.productoVariantes)
+              ..where((tbl) => tbl.productoId.equals(producto.id))
+              ..orderBy([(tbl) => OrderingTerm.asc(tbl.sku)])
+              ..limit(1))
+            .getSingleOrNull();
+
+    return InventoryProductLookup(
+      productId: producto.id,
+      productVariantId: variante?.id,
+      nombre: producto.nombre,
+      categoriaId: producto.categoriaId,
+      codigo: producto.codigoPersonalizado,
+      sku: variante?.sku,
+      talla: variante?.talla,
+      color: variante?.color,
+      ultimoCosto: variante?.costoEspecifico ?? producto.ultimoCosto,
+      precioBase: variante?.precioEspecifico ?? producto.precioBase ?? 0.0,
+    );
+  }
+
+  Future<void> asignarCodigoAProducto({
+    required String productId,
+    required String barcode,
+  }) {
+    return _db.inventoryDao.assignBarcodeToProduct(
+      productoId: productId,
+      barcode: barcode,
+    );
+  }
+
+  Future<TransferItemDraft?> crearBorradorTrasladoDesdeCodigo({
+    required String query,
+    required String bodegaOrigenId,
+  }) async {
+    final producto = await buscarProductoPorCodigoONombre(query);
+    if (producto == null) return null;
+
+    final inventario = await getStockByProductAndBodega(
+      producto.productId,
+      bodegaOrigenId,
+      producto.productVariantId,
+    );
+
+    if (inventario == null || inventario.cantidadActual <= 0) {
+      return null;
+    }
+
+    return TransferItemDraft(
+      productId: producto.productId,
+      productVariantId: producto.productVariantId,
+      nombre: producto.nombre,
+      sku: producto.sku ?? producto.codigo ?? producto.productId,
+      size: producto.talla ?? 'General',
+      color: producto.color,
+      availableStock: inventario.cantidadActual,
+      cost: inventario.costoPromedio,
+      price: inventario.precioVenta,
+    );
   }
 
   Future<List<Map<String, dynamic>>> getVariantsWithStock(
     String productId,
     String bodegaId,
   ) async {
-    final inventario = await _isar.inventarioCollections
-        .filter()
-        .productoIdEqualTo(productId)
-        .and()
-        .bodegaIdEqualTo(bodegaId)
-        .findFirst();
-
-    if (inventario == null) return [];
-
-    final relaciones = await _isar.inventarioCodigoProductoCollections
-        .filter()
-        .inventarioIdEqualTo(inventario.serverId)
-        .and()
-        .cantidadGreaterThan(0)
-        .and()
-        .estadoEqualTo(true)
-        .findAll();
-
-    final List<Map<String, dynamic>> results = [];
-    for (final rel in relaciones) {
-      final codigo = await _isar.codigoProductoCollections
-          .filter()
-          .serverIdEqualTo(rel.codigoProductoId)
-          .and()
-          .estadoEqualTo(true)
-          .findFirst();
-
-      if (codigo != null) {
-        results.add({
-          'talla': codigo.talla,
-          'cantidad': rel.cantidad,
-          'precio': codigo.precioEspecifico,
-          'sku': codigo.codigoSku,
-        });
-      }
+    if (bodegaId.isEmpty) {
+      final variantes = await _db.inventoryDao.getVariantesByProductoId(
+        productId,
+      );
+      return variantes
+          .map(
+            (item) => {
+              'talla': item.talla ?? 'General',
+              'color': item.color,
+              'cantidad': 0.0,
+              'stock': 0.0,
+              'precio': item.precioEspecifico ?? 0.0,
+              'sku': item.sku,
+              'varianteId': item.id,
+            },
+          )
+          .toList();
     }
-    return results;
+
+    final stock = await _db.inventoryDao.getStockRealPorBodega(bodegaId);
+    return stock
+        .where((item) => item.producto.id == productId)
+        .map(
+          (item) => {
+            'talla': item.variante.talla ?? 'General',
+            'color': item.variante.color,
+            'cantidad': item.inventario.cantidadActual,
+            'stock': item.inventario.cantidadActual,
+            'precio':
+                item.variante.precioEspecifico ?? item.inventario.precioVenta,
+            'sku': item.variante.sku,
+            'varianteId': item.variante.id,
+          },
+        )
+        .toList();
+  }
+
+  Future<void> registrarEntrada(InventoryEntryRequest request) {
+    return _db.inventoryDao.registrarMovimientoLogistico(request);
+  }
+
+  Future<void> registrarTraslado(TransferRequest request) {
+    return _db.inventoryDao.registrarMovimientoLogistico(request);
+  }
+
+  Future<List<ProductoStockDrift>> getStockRealPorBodega(String bodegaId) {
+    return _db.inventoryDao.getStockRealPorBodega(bodegaId);
   }
 }
