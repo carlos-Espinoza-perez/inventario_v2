@@ -1255,6 +1255,17 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
       ),
     );
   }
+
+  // Fallback para el asistente: primera bodega disponible cuando el usuario
+  // no tiene bodegaDefaultId configurado en su perfil.
+  Future<String?> getPrimeraBodegaId() async {
+    final row = await (select(bodegas)
+          ..where((b) => b.syncStatus.isNotIn(['deleted', 'pending_delete']))
+          ..orderBy([(b) => OrderingTerm.asc(b.nombre)])
+          ..limit(1))
+        .getSingleOrNull();
+    return row?.id;
+  }
 }
 
 class InventoryLowStockData {
@@ -1288,3 +1299,4 @@ class InventoryReportData {
     required this.lowStock,
   });
 }
+

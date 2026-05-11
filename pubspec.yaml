@@ -53,11 +53,15 @@ dependencies:
   
   pdf: ^3.11.3
   printing: ^5.14.2
+  http: ^1.2.0
   flutter_dotenv: ^5.1.0
   flutter_cache_manager: ^3.4.1
   connectivity_plus: ^7.1.0
   cached_network_image: ^3.4.1
   qr_flutter: ^4.1.0
+  speech_to_text: ^7.0.0
+  permission_handler: ^11.3.1
+  flutter_tts: ^4.2.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

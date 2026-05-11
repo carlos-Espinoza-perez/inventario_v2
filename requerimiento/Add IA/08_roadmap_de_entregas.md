@@ -123,6 +123,28 @@ Resultado:
 
 - experiencia tipo secretario, pero con logica ya probada
 
+## Entrega 11 - Sesion acumulativa con input mixto
+
+Objetivo:
+
+- implementar estado de sesion activa en el asistente
+- acumular items en borrador a lo largo de varios turnos
+- conectar scanner de camara como canal de entrada dentro de la sesion
+- mostrar items agregados en pantalla mientras la sesion esta activa
+- cancelar sesion sin guardar nada
+- confirmar y ejecutar Use Case al final
+
+Resultado:
+
+- el usuario puede registrar una entrada completa diciendo productos uno a uno
+- puede alternar entre hablar, escribir y escanear en la misma sesion
+- ver `09_sesion_acumulativa.md` para detalle completo
+
+Prerequisito:
+
+- Entregas 6, 7 y 8 completadas (borradores de entrada, venta y salida funcionando)
+- Voz basica (Entrega 9) recomendada pero no obligatoria para empezar con texto
+
 ## Criterio para avanzar de fase
 
 No avanzar a voz hasta que:
@@ -131,3 +153,8 @@ No avanzar a voz hasta que:
 - la resolucion de productos funcione bien
 - los permisos esten integrados
 - el borrador de acciones no modifique datos sin confirmacion
+
+No avanzar a sesion acumulativa hasta que:
+
+- los borradores de entrada y venta funcionen en flujo de un solo turno
+- el scanner ya este integrado en la app de forma estable

@@ -45,6 +45,11 @@ El asistente solo interpreta la solicitud, resuelve entidades y prepara una resp
 8. `08_roadmap_de_entregas.md`
    - Secuencia concreta de desarrollo y criterios de avance.
 
+9. `09_sesion_acumulativa.md`
+   - Sesion activa que acumula items en varios turnos.
+   - Input mixto: voz, texto y scanner de codigos de barra en la misma sesion.
+   - El usuario va agregando productos uno a uno y confirma al final.
+
 ## Decision importante
 
 No iniciaremos con un overlay global ni con modo manos libres completo.

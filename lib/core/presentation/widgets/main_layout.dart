@@ -37,7 +37,7 @@ class MainLayout extends ConsumerWidget {
           ? null
           : const BottomAppBarDashboard(),
 
-      floatingActionButton: isKeyboardOpen
+      floatingActionButton: isKeyboardOpen || location.startsWith('/assistant')
           ? null
           : FloatingActionButton(
               onPressed: () {
@@ -50,7 +50,9 @@ class MainLayout extends ConsumerWidget {
               child: const Icon(Icons.home_rounded, color: Colors.black87),
             ),
 
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButtonLocation: location.startsWith('/assistant')
+          ? FloatingActionButtonLocation.endFloat
+          : FloatingActionButtonLocation.centerDocked,
     );
   }
 }

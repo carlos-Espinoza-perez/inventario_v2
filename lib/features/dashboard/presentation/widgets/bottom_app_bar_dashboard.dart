@@ -96,9 +96,9 @@ class BottomAppBarDashboard extends StatelessWidget {
             ),
             const Spacer(),
             _MenuButton(
-              icon: Icons.chat_bubble_outline,
+              icon: Icons.auto_awesome_rounded,
               text: 'IA',
-              onTap: () {},
+              onTap: () => context.push('/assistant'),
             ),
             const Spacer(),
           ],
