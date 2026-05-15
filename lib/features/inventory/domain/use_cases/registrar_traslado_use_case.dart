@@ -26,8 +26,8 @@ class RegistrarTrasladoUseCase {
       throw ArgumentError('La orden de traslado está vacía.');
     }
 
-    final repository = await _ref.read(inventarioRepositoryProvider.future);
-    
+    final repository = _ref.read(inventarioRepositoryProvider);
+
     final request = TransferRequest(
       originWarehouseId: originWarehouseId,
       destinationWarehouseId: destinationWarehouseId,
@@ -35,9 +35,15 @@ class RegistrarTrasladoUseCase {
       items: transferItems.map(_mapItemToRequest).toList(),
     );
 
-    await repository.registrarTraslado(request);
+    try {
+      await repository.registrarTraslado(request);
+    } catch (e, st) {
+      Error.throwWithStackTrace(
+        Exception('Error al registrar traslado de inventario: $e'),
+        st,
+      );
+    }
 
-    // Invalidar estados para refrescar la UI
     _ref.invalidate(warehouseInventoryProvider(originWarehouseId));
     _ref.invalidate(warehouseInventoryProvider(destinationWarehouseId));
   }

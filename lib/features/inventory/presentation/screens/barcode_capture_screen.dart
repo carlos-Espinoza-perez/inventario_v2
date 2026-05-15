@@ -139,7 +139,7 @@ class _BarcodeCaptureScreenState extends State<BarcodeCaptureScreen> {
         // 1. La máscara oscura con el recorte
         ColorFiltered(
           colorFilter: ColorFilter.mode(
-            Colors.black.withOpacity(0.6),
+            Colors.black.withValues(alpha: 0.6),
             BlendMode.srcOut,
           ),
           child: Stack(

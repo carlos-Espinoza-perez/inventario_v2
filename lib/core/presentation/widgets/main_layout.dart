@@ -80,11 +80,11 @@ class _SyncStatusIndicator extends StatelessWidget {
               key: const ValueKey('loading'), // Key necesaria para la animación
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.9), // Fondo semitransparente
+                color: Colors.white.withValues(alpha: 0.9), // Fondo semitransparente
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),

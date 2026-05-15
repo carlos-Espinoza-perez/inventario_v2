@@ -190,7 +190,7 @@ class _WarehouseTransferScreenState
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: _transferItems.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
                     itemBuilder: (context, index) => _TransferItemCard(
                       item: _transferItems[index],
                       onDelete: () =>
@@ -264,7 +264,7 @@ class _WarehouseTransferScreenState
     );
     if (normalizedCode.isEmpty) return;
 
-    final repository = await ref.read(inventarioRepositoryProvider.future);
+    final repository = ref.read(inventarioRepositoryProvider);
     final draft = await repository.crearBorradorTrasladoDesdeCodigo(
       query: normalizedCode,
       bodegaOrigenId: originWarehouseId,

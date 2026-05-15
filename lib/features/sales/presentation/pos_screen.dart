@@ -303,7 +303,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
 
   Future<void> _processScannedCode(
       String code, List<InventarioDTO> inventoryItems) async {
-    final repo = await ref.read(inventarioRepositoryProvider.future);
+    final repo = ref.read(inventarioRepositoryProvider);
     final lookup = await repo.buscarProductoPorCodigoONombre(code);
     if (lookup == null) {
       if (!mounted) return;
@@ -364,7 +364,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     final selectedBodega = ref.read(selectedBodegaProvider);
     if (selectedBodega == null) return;
 
-    final repo = await ref.read(inventarioRepositoryProvider.future);
+    final repo = ref.read(inventarioRepositoryProvider);
     final variants = await repo.getVariantsWithStock(
       productId,
       selectedBodega.serverId,
@@ -599,80 +599,130 @@ class _ProductDetailModal extends StatefulWidget {
 class _ProductDetailModalState extends State<_ProductDetailModal> {
   int _qty = 1;
   int _selectedIndex = 0;
+  late TextEditingController _precioController;
+
+  @override
+  void initState() {
+    super.initState();
+    final initialPrice = widget.variants.isNotEmpty
+        ? (widget.variants[0]['precio'] as num?)?.toDouble() ?? 0.0
+        : 0.0;
+    _precioController = TextEditingController(
+      text: initialPrice.toStringAsFixed(2),
+    );
+  }
+
+  @override
+  void dispose() {
+    _precioController.dispose();
+    super.dispose();
+  }
+
+  void _onVariantChanged(int index) {
+    setState(() => _selectedIndex = index);
+    final price =
+        (widget.variants[index]['precio'] as num?)?.toDouble() ?? 0.0;
+    _precioController.text = price.toStringAsFixed(2);
+  }
 
   @override
   Widget build(BuildContext context) {
     final variants = widget.variants;
     final current = variants.isEmpty ? null : variants[_selectedIndex];
 
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            widget.productName,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            children: List.generate(variants.length, (index) {
-              final variant = variants[index];
-              return ChoiceChip(
-                label: Text(variant['talla']?.toString() ?? 'General'),
-                selected: index == _selectedIndex,
-                onSelected: (_) => setState(() => _selectedIndex = index),
-              );
-            }),
-          ),
-          const SizedBox(height: 16),
-          if (current != null) ...[
-            Text('SKU: ${current['sku']}'),
-            Text('Color: ${current['color'] ?? 'N/A'}'),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Text(
-              'Precio: ${NumberFormat.simpleCurrency().format((current['precio'] as num?)?.toDouble() ?? 0.0)}',
+              widget.productName,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             ),
-            Text('Disponible: ${current['stock']}'),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                IconButton(
-                  onPressed: _qty > 1 ? () => setState(() => _qty--) : null,
-                  icon: const Icon(Icons.remove),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              children: List.generate(variants.length, (index) {
+                final variant = variants[index];
+                return ChoiceChip(
+                  label: Text(variant['talla']?.toString() ?? 'General'),
+                  selected: index == _selectedIndex,
+                  onSelected: (_) => _onVariantChanged(index),
+                );
+              }),
+            ),
+            const SizedBox(height: 16),
+            if (current != null) ...[
+              Text('SKU: ${current['sku']}'),
+              Text('Color: ${current['color'] ?? 'N/A'}'),
+              Text('Disponible: ${current['stock']}'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _precioController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
                 ),
-                Text(
-                  '$_qty',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
+                decoration: const InputDecoration(
+                  labelText: 'Precio de venta',
+                  prefixText: 'C\$ ',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: _qty > 1 ? () => setState(() => _qty--) : null,
+                    icon: const Icon(Icons.remove),
                   ),
-                ),
-                IconButton(
-                  onPressed: _qty < ((current['stock'] as num?)?.toInt() ?? 0)
-                      ? () => setState(() => _qty++)
-                      : null,
-                  icon: const Icon(Icons.add),
-                ),
-              ],
+                  Text(
+                    '$_qty',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed:
+                        _qty < ((current['stock'] as num?)?.toInt() ?? 0)
+                        ? () => setState(() => _qty++)
+                        : null,
+                    icon: const Icon(Icons.add),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: current == null
+                    ? null
+                    : () {
+                        final editedPrice =
+                            double.tryParse(_precioController.text) ??
+                            (current['precio'] as num?)?.toDouble() ??
+                            0.0;
+                        widget.onAddToCart(
+                          {...current, 'precio': editedPrice},
+                          _qty,
+                        );
+                      },
+                child: const Text('AGREGAR AL CARRITO'),
+              ),
             ),
           ],
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: current == null
-                  ? null
-                  : () => widget.onAddToCart(current, _qty),
-              child: const Text('AGREGAR AL CARRITO'),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

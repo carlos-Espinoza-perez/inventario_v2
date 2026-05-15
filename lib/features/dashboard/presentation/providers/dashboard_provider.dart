@@ -48,9 +48,7 @@ class DashboardState {
   });
 }
 
-final dashboardProvider = FutureProvider.autoDispose<DashboardState>((
-  ref,
-) async {
+final dashboardProvider = FutureProvider<DashboardState>((ref) async {
   final db = ref.watch(driftDatabaseProvider);
   final validBodegaIds = await ref.watch(validBodegasIdsProvider.future);
 

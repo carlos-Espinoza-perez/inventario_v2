@@ -24,8 +24,11 @@ class ProductCatalogItemDrift {
       producto.id.substring(0, 8).toUpperCase();
   String? get talla => variante?.talla;
   String? get color => variante?.color;
-  double get precioVenta =>
-      variante?.precioEspecifico ?? producto.precioBase ?? producto.ultimoPrecioVenta;
+  double get precioVenta {
+    if ((variante?.precioEspecifico ?? 0) > 0) return variante!.precioEspecifico!;
+    if ((producto.precioBase ?? 0) > 0) return producto.precioBase!;
+    return producto.ultimoPrecioVenta;
+  }
 }
 
 class BarcodeLookupResultDrift {
@@ -39,7 +42,11 @@ class BarcodeLookupResultDrift {
 
   String get nombre => producto.nombre;
   String get sku => variante.sku;
-  double get precio => variante.precioEspecifico ?? producto.precioBase ?? 0.0;
+  double get precio {
+    if ((variante.precioEspecifico ?? 0) > 0) return variante.precioEspecifico!;
+    if ((producto.precioBase ?? 0) > 0) return producto.precioBase!;
+    return producto.ultimoPrecioVenta;
+  }
   double get costo => variante.costoEspecifico ?? producto.ultimoCosto;
   String get imagen => producto.imagenUrl ?? producto.imagenLocal ?? '';
 }

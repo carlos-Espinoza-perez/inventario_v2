@@ -42,14 +42,12 @@ class ProductEntryData {
 }
 
 final productEntryDataProvider =
-    FutureProvider.family<ProductEntryData, ProductEntryArgs>((
+    FutureProvider.autoDispose.family<ProductEntryData, ProductEntryArgs>((
       ref,
       args,
     ) async {
       final db = ref.read(driftDatabaseProvider);
-      final repoInventario = await ref.read(
-        inventarioRepositoryProvider.future,
-      );
+      final repoInventario = ref.read(inventarioRepositoryProvider);
 
       final producto = await db.inventoryDao.getProductoById(args.productId);
       final categoria = await db.inventoryDao.getCategoriaById(

@@ -5,19 +5,17 @@ import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/inventario_provider.dart';
 
-final productDetailProvider = FutureProvider.family<Producto?, String>((
-  ref,
-  id,
-) async {
-  final db = ref.watch(driftDatabaseProvider);
-  return db.inventoryDao.getProductoById(id);
-});
+final productDetailProvider =
+    FutureProvider.autoDispose.family<Producto?, String>((ref, id) async {
+      final db = ref.watch(driftDatabaseProvider);
+      return db.inventoryDao.getProductoById(id);
+    });
 
-final productHistoryProvider =
-    FutureProvider.family<
-      List<Map<String, dynamic>>,
-      ({String id, String? bodegaId})
-    >((ref, args) async {
+final productHistoryProvider = FutureProvider.autoDispose
+    .family<List<Map<String, dynamic>>, ({String id, String? bodegaId})>((
+      ref,
+      args,
+    ) async {
       final db = ref.watch(driftDatabaseProvider);
       return db.inventoryDao.getHistorialProducto(
         args.id,
@@ -25,17 +23,20 @@ final productHistoryProvider =
       );
     });
 
-final productVariantsProvider =
-    FutureProvider.family<
-      List<Map<String, dynamic>>,
-      ({String id, String? bodegaId})
-    >((ref, args) async {
-      final repo = await ref.watch(inventarioRepositoryProvider.future);
+final productVariantsProvider = FutureProvider.autoDispose
+    .family<List<Map<String, dynamic>>, ({String id, String? bodegaId})>((
+      ref,
+      args,
+    ) async {
+      final repo = ref.watch(inventarioRepositoryProvider);
       return repo.getVariantsWithStock(args.id, args.bodegaId ?? '');
     });
 
 final productPriceByWarehouseProvider =
-    FutureProvider.family<List<Map<String, dynamic>>, String>((ref, id) async {
+    FutureProvider.autoDispose.family<List<Map<String, dynamic>>, String>((
+      ref,
+      id,
+    ) async {
       final db = ref.watch(driftDatabaseProvider);
       return db.inventoryDao.getPreciosProductoPorBodega(id);
     });
@@ -128,62 +129,76 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Card(
-            elevation: 0,
-            color: Colors.white,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(12),
-                      image:
-                          product.imagenUrl != null &&
-                              product.imagenUrl!.isNotEmpty
-                          ? DecorationImage(
-                              image: NetworkImage(product.imagenUrl!),
-                              fit: BoxFit.cover,
-                            )
-                          : null,
-                    ),
-                    child:
-                        product.imagenUrl == null || product.imagenUrl!.isEmpty
-                        ? const Icon(Icons.inventory_2, size: 36)
-                        : null,
+          variantsAsync.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, _) => const SizedBox.shrink(),
+            data: (variants) {
+              final primerVariant = variants.isNotEmpty ? variants.first : null;
+              final precioMostrar = (product.precioBase ?? 0) > 0
+                  ? product.precioBase!
+                  : ((primerVariant?['precio'] as num?)?.toDouble() ?? 0);
+              final costoMostrar = product.ultimoCosto > 0
+                  ? product.ultimoCosto
+                  : ((primerVariant?['costo'] as num?)?.toDouble() ?? 0);
+
+              return Card(
+                elevation: 0,
+                color: Colors.white,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 100,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                          image:
+                              product.imagenUrl != null &&
+                                  product.imagenUrl!.isNotEmpty
+                              ? DecorationImage(
+                                  image: NetworkImage(product.imagenUrl!),
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
+                        ),
+                        child: product.imagenUrl == null ||
+                                product.imagenUrl!.isEmpty
+                            ? const Icon(Icons.inventory_2, size: 36)
+                            : null,
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              product.nombre,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'SKU base: ${product.codigoPersonalizado ?? 'N/A'}',
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Precio base: C\$ ${precioMostrar.toStringAsFixed(2)}',
+                            ),
+                            Text(
+                              'Ultimo costo: C\$ ${costoMostrar.toStringAsFixed(2)}',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          product.nombre,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'SKU base: ${product.codigoPersonalizado ?? 'N/A'}',
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Precio base: C\$ ${(product.precioBase ?? 0).toStringAsFixed(2)}',
-                        ),
-                        Text(
-                          'Ultimo costo: C\$ ${product.ultimoCosto.toStringAsFixed(2)}',
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
           const SizedBox(height: 16),
           const Text(

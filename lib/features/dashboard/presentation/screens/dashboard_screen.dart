@@ -15,7 +15,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => ref.read(appBarProvider.notifier).reset());
+    Future.microtask(() {
+      ref.read(appBarProvider.notifier).reset();
+      ref.invalidate(dashboardProvider);
+    });
   }
 
   @override

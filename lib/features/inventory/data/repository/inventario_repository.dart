@@ -68,7 +68,11 @@ class InventarioRepository {
           talla: variantes.talla,
           color: variantes.color,
           ultimoCosto: producto.ultimoCosto,
-          precioBase: variantes.precioEspecifico ?? producto.precioBase ?? 0.0,
+          precioBase: (variantes.precioEspecifico ?? 0) > 0
+              ? variantes.precioEspecifico!
+              : (producto.precioBase ?? 0) > 0
+                  ? producto.precioBase!
+                  : producto.ultimoPrecioVenta,
         );
       }
     }
@@ -95,7 +99,11 @@ class InventarioRepository {
       talla: variante?.talla,
       color: variante?.color,
       ultimoCosto: variante?.costoEspecifico ?? producto.ultimoCosto,
-      precioBase: variante?.precioEspecifico ?? producto.precioBase ?? 0.0,
+      precioBase: (variante?.precioEspecifico ?? 0) > 0
+          ? variante!.precioEspecifico!
+          : (producto.precioBase ?? 0) > 0
+              ? producto.precioBase!
+              : producto.ultimoPrecioVenta,
     );
   }
 
@@ -161,6 +169,9 @@ class InventarioRepository {
                 producto?.precioBase,
                 producto?.ultimoPrecioVenta,
               ),
+              'costo': (item.costoEspecifico ?? 0) > 0
+                  ? item.costoEspecifico!
+                  : producto?.ultimoCosto ?? 0.0,
               'sku': item.sku,
               'varianteId': item.id,
             },
@@ -183,6 +194,11 @@ class InventarioRepository {
               item.producto.precioBase,
               item.producto.ultimoPrecioVenta,
             ),
+            'costo': (item.variante.costoEspecifico ?? 0) > 0
+                ? item.variante.costoEspecifico!
+                : item.inventario.costoPromedio > 0
+                    ? item.inventario.costoPromedio
+                    : item.producto.ultimoCosto,
             'sku': item.variante.sku,
             'varianteId': item.variante.id,
           },
@@ -192,9 +208,10 @@ class InventarioRepository {
 
   double _resolvePrice(double? precioEspecifico, double? precioVenta,
       double? precioBase, double? ultimoPrecioVenta) {
-    final directo = precioEspecifico ?? precioVenta;
-    if ((directo ?? 0) > 0) return directo!;
-    return precioBase ?? ultimoPrecioVenta ?? 0.0;
+    if ((precioEspecifico ?? 0) > 0) return precioEspecifico!;
+    if ((precioVenta ?? 0) > 0) return precioVenta!;
+    if ((precioBase ?? 0) > 0) return precioBase!;
+    return ultimoPrecioVenta ?? 0.0;
   }
 
   Future<void> registrarEntrada(InventoryEntryRequest request) {

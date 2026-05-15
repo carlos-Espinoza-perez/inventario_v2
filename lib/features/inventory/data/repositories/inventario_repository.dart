@@ -52,7 +52,9 @@ class InventarioRepository {
                   'color': variante.color,
                   'sku': variante.sku,
                   'stock': 0.0,
-                  'precio': variante.precioEspecifico ?? 0.0,
+                  'precio': (variante.precioEspecifico ?? 0) > 0
+                      ? variante.precioEspecifico!
+                      : 0.0,
                   'varianteId': variante.id,
                 },
               )
@@ -75,10 +77,10 @@ class InventarioRepository {
   }
 
   static double _resolvePrecio(ProductoStockDrift item) {
-    final directo =
-        item.variante.precioEspecifico ?? item.inventario.precioVenta;
-    if (directo > 0) return directo;
-    return item.producto.precioBase ?? item.producto.ultimoPrecioVenta;
+    if ((item.variante.precioEspecifico ?? 0) > 0) return item.variante.precioEspecifico!;
+    if (item.inventario.precioVenta > 0) return item.inventario.precioVenta;
+    if ((item.producto.precioBase ?? 0) > 0) return item.producto.precioBase!;
+    return item.producto.ultimoPrecioVenta;
   }
 
   InventarioDTO _toDto(ProductoStockDrift item) {
@@ -92,7 +94,11 @@ class InventarioRepository {
       categoria: item.producto.categoriaId ?? 'Sin Categoria',
       stock: item.inventario.cantidadActual,
       precio: _resolvePrecio(item),
-      costo: item.variante.costoEspecifico ?? item.inventario.costoPromedio,
+      costo: (item.variante.costoEspecifico ?? 0) > 0
+          ? item.variante.costoEspecifico!
+          : item.inventario.costoPromedio > 0
+              ? item.inventario.costoPromedio
+              : item.producto.ultimoCosto,
       imagen: item.producto.imagenUrl,
     );
   }

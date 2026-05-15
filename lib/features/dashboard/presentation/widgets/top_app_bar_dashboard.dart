@@ -30,7 +30,7 @@ class TopAppBarDashboard extends ConsumerWidget implements PreferredSizeWidget {
 
       // 2. RECUPERADO: Sombra y Elevación
       elevation: 4,
-      shadowColor: Colors.black.withOpacity(0.2), // o .withValues(alpha: .2)
+      shadowColor: Colors.black.withValues(alpha: 0.2), // o .withValues(alpha: .2)
       // 3. RECUPERADO: Bordes Redondeados abajo
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),

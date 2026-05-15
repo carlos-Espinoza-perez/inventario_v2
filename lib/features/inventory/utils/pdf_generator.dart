@@ -1,6 +1,7 @@
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:pdf/widgets.dart' show TableHelper;
 import 'package:printing/printing.dart';
 
 class PdfGenerator {
@@ -78,7 +79,7 @@ class PdfGenerator {
               ),
               pw.SizedBox(height: 10),
 
-              pw.Table.fromTextArray(
+              TableHelper.fromTextArray(
                 context: context,
                 border: pw.TableBorder.all(color: PdfColors.grey300),
                 headerAlignment: pw.Alignment.centerLeft,

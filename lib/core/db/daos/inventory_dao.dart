@@ -443,6 +443,10 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
                   ),
                 ),
                 innerJoin(bodegas, bodegas.id.equalsExp(inventarios.bodegaId)),
+                innerJoin(
+                  productos,
+                  productos.id.equalsExp(productoVariantes.productoId),
+                ),
               ])
               ..where(productoVariantes.productoId.equals(productoId))
               ..orderBy([OrderingTerm.asc(bodegas.nombre)]))
@@ -456,16 +460,43 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
             'sku': row.readTable(productoVariantes).sku,
             'talla': row.readTable(productoVariantes).talla ?? 'General',
             'color': row.readTable(productoVariantes).color,
-            'precio':
-                row.readTable(productoVariantes).precioEspecifico ??
-                row.readTable(inventarios).precioVenta,
-            'costo':
-                row.readTable(productoVariantes).costoEspecifico ??
-                row.readTable(inventarios).costoPromedio,
+            'precio': _resolvePrice(
+              row.readTable(productoVariantes).precioEspecifico,
+              row.readTable(inventarios).precioVenta,
+              row.readTable(productos).precioBase,
+              row.readTable(productos).ultimoPrecioVenta,
+            ),
+            'costo': _resolveCosto(
+              row.readTable(productoVariantes).costoEspecifico,
+              row.readTable(inventarios).costoPromedio,
+              row.readTable(productos).ultimoCosto,
+            ),
             'stock': row.readTable(inventarios).cantidadActual,
           },
         )
         .toList();
+  }
+
+  static double _resolvePrice(
+    double? precioEspecifico,
+    double precioVenta,
+    double? precioBase,
+    double ultimoPrecioVenta,
+  ) {
+    if ((precioEspecifico ?? 0) > 0) return precioEspecifico!;
+    if (precioVenta > 0) return precioVenta;
+    if ((precioBase ?? 0) > 0) return precioBase!;
+    return ultimoPrecioVenta;
+  }
+
+  static double _resolveCosto(
+    double? costoEspecifico,
+    double costoPromedio,
+    double ultimoCosto,
+  ) {
+    if ((costoEspecifico ?? 0) > 0) return costoEspecifico!;
+    if (costoPromedio > 0) return costoPromedio;
+    return ultimoCosto;
   }
 
   List<Map<String, dynamic>> _decodeVariantes(String json) {
@@ -701,7 +732,7 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
                       talla: item.talla,
                       color: item.color,
                       cantidad: item.cantidad,
-                      precio: item.precioVenta ?? item.costoUnitarioFinal,
+                      precio: (item.precioVenta ?? 0) > 0 ? item.precioVenta! : item.costoUnitarioFinal,
                     ),
               ),
             )
@@ -971,6 +1002,18 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
           syncStatus: const Value('pending_update'),
         ),
       );
+
+      if (effectivePrecio != null && effectivePrecio > 0) {
+        await (update(productoVariantes)
+              ..where((tbl) => tbl.id.equals(current.productoVarianteId)))
+            .write(
+          ProductoVariantesCompanion(
+            precioEspecifico: Value(effectivePrecio),
+            updatedAt: Value(now),
+            syncStatus: const Value('pending_update'),
+          ),
+        );
+      }
     }
 
     // Actualizar ultimoPrecioVenta en el producto si se recibió un precio válido
@@ -1077,11 +1120,11 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
       final inventario = row.readTable(inventarios);
       final variante = row.readTable(productoVariantes);
       final producto = row.readTable(productos);
-      final costo =
-          variante.costoEspecifico ??
-          (inventario.costoPromedio > 0
-              ? inventario.costoPromedio
-              : producto.ultimoCosto);
+      final costo = _resolveCosto(
+        variante.costoEspecifico,
+        inventario.costoPromedio,
+        producto.ultimoCosto,
+      );
       total += inventario.cantidadActual * costo;
     }
     return total;
@@ -1169,11 +1212,11 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
       final variante = row.readTable(productoVariantes);
       final producto = row.readTable(productos);
       final cantidad = inventario.cantidadActual.toInt();
-      final costo =
-          variante.costoEspecifico ??
-          (inventario.costoPromedio > 0
-              ? inventario.costoPromedio
-              : producto.ultimoCosto);
+      final costo = _resolveCosto(
+        variante.costoEspecifico,
+        inventario.costoPromedio,
+        producto.ultimoCosto,
+      );
 
       valorTotal += inventario.cantidadActual * costo;
 

@@ -6,7 +6,7 @@ part 'logistics_dao.g.dart';
 
 @DriftAccessor(tables: [Movimientos, DetalleMovimientos])
 class LogisticsDao extends DatabaseAccessor<AppDatabase> with _$LogisticsDaoMixin {
-  LogisticsDao(AppDatabase db) : super(db);
+  LogisticsDao(super.db);
 
   // Muted for initial generation
 }

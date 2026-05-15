@@ -536,7 +536,7 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
 
     setState(() => _isLoadingProduct = true);
     try {
-      final repository = await ref.read(inventarioRepositoryProvider.future);
+      final repository = ref.read(inventarioRepositoryProvider);
       final product = await repository.buscarProductoPorCodigoONombre(sku);
 
       if (product == null) {
@@ -605,7 +605,7 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
     if (!mounted || product == null) return;
 
     try {
-      final repository = await ref.read(inventarioRepositoryProvider.future);
+      final repository = ref.read(inventarioRepositoryProvider);
       await repository.asignarCodigoAProducto(
         productId: product.id,
         barcode: barcode,

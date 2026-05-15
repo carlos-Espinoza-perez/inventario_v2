@@ -231,8 +231,16 @@ class _ProductResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final precio = result.variante.precioEspecifico ?? result.producto.precioBase ?? 0.0;
-    final costo = result.variante.costoEspecifico ?? result.producto.ultimoCosto;
+    final precio = (result.variante.precioEspecifico ?? 0) > 0
+        ? result.variante.precioEspecifico!
+        : (result.producto.precioBase ?? 0) > 0
+            ? result.producto.precioBase!
+            : result.producto.ultimoPrecioVenta;
+    final costo = (result.variante.costoEspecifico ?? 0) > 0
+        ? result.variante.costoEspecifico!
+        : result.producto.ultimoCosto > 0
+            ? result.producto.ultimoCosto
+            : 0.0;
     final margen = (precio > 0 && costo > 0) ? ((precio - costo) / costo * 100) : null;
 
     return GestureDetector(

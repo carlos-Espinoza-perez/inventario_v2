@@ -7,10 +7,11 @@ import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
 import 'package:inventario_v2/features/sales/presentation/sales_dashboard_screen.dart';
 
-final saleDetailProvider = FutureProvider.family<SaleDetailDrift, String>((
-  ref,
-  saleId,
-) async {
+final saleDetailProvider =
+    FutureProvider.autoDispose.family<SaleDetailDrift, String>((
+      ref,
+      saleId,
+    ) async {
   final db = ref.watch(driftDatabaseProvider);
   return db.salesDao.getSaleDetail(saleId);
 });

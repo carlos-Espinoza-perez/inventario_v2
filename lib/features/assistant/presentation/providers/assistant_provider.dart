@@ -1073,24 +1073,32 @@ FORMATO:
   }
 
   String _friendlyOpenAIError(OpenAIException e) {
-    if (e.statusCode == 401)
+    if (e.statusCode == 401) {
       return 'API key inválida. Verificá la configuración.';
-    if (e.statusCode == 429)
+    }
+    if (e.statusCode == 429) {
       return 'Límite de solicitudes alcanzado. Esperá unos segundos.';
-    if (e.statusCode >= 500)
+    }
+    if (e.statusCode >= 500) {
       return 'El servicio de IA no está disponible. Intentá más tarde.';
+    }
     return 'Error al conectar con el asistente (${e.statusCode}).';
   }
 
   String _friendlyExecutionError(Object e) {
     final msg = e.toString().toLowerCase();
-    if (msg.contains('caja'))
+    if (msg.contains('caja')) {
       return 'No hay caja abierta. Abrí caja antes de registrar.';
-    if (msg.contains('bodega')) return 'No hay bodega seleccionada.';
-    if (msg.contains('stock'))
+    }
+    if (msg.contains('bodega')) {
+      return 'No hay bodega seleccionada.';
+    }
+    if (msg.contains('stock')) {
       return 'Stock insuficiente para completar la operación.';
-    if (msg.contains('fiado'))
+    }
+    if (msg.contains('fiado')) {
       return 'Para ventas al fiado se requiere nombre del cliente.';
+    }
     return 'No se pudo completar la operación. Error: ${e.toString().replaceAll('Exception: ', '')}';
   }
 

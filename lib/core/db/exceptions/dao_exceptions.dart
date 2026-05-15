@@ -8,21 +8,21 @@ class DaoException implements Exception {
 }
 
 class CajaSesionNoActivaException extends DaoException {
-  const CajaSesionNoActivaException(String message) : super(message);
+  const CajaSesionNoActivaException(super.message);
 }
 
 class StockInsuficienteException extends DaoException {
-  const StockInsuficienteException(String message) : super(message);
+  const StockInsuficienteException(super.message);
 }
 
 class ContextoInvalidoException extends DaoException {
-  const ContextoInvalidoException(String message) : super(message);
+  const ContextoInvalidoException(super.message);
 }
 
 class WarehouseNotFoundException extends DaoException {
-  const WarehouseNotFoundException(String message) : super(message);
+  const WarehouseNotFoundException(super.message);
 }
 
 class InvalidTransferException extends DaoException {
-  const InvalidTransferException(String message) : super(message);
+  const InvalidTransferException(super.message);
 }

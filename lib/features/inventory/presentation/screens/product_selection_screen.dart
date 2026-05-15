@@ -520,7 +520,7 @@ class _ProductSelectionScreenState
       return;
     }
 
-    final repo = await ref.read(inventarioRepositoryProvider.future);
+    final repo = ref.read(inventarioRepositoryProvider);
     final variantes = await repo.getVariantsWithStock(
       product.id,
       widget.originWarehouseId!,
@@ -600,7 +600,7 @@ class _ProductSelectionScreenState
         );
         if (!mounted || product == null) return;
         try {
-          final repo = await ref.read(inventarioRepositoryProvider.future);
+          final repo = ref.read(inventarioRepositoryProvider);
           await repo.asignarCodigoAProducto(
             productId: product.id,
             barcode: barcode,
@@ -932,9 +932,15 @@ class _VariantSelectorSheetState extends State<_VariantSelectorSheet> {
       final talla = (v['talla'] as String?) ?? 'U';
       final costo =
           ((v['costoPromedio'] ?? v['costo']) as num?)?.toDouble() ?? 0.0;
-      final precio =
-          ((v['precioEspecifico'] ?? v['precio']) as num?)?.toDouble() ??
-          widget.product.precioVenta;
+      final precioEspecifico =
+          ((v['precioEspecifico']) as num?)?.toDouble() ?? 0.0;
+      final precioFallback =
+          ((v['precio']) as num?)?.toDouble() ?? 0.0;
+      final precio = precioEspecifico > 0
+          ? precioEspecifico
+          : precioFallback > 0
+              ? precioFallback
+              : widget.product.precioVenta;
       final key = '${talla}_#_${costo}_#_$precio';
       grouped.putIfAbsent(key, () => []).add(v);
     }

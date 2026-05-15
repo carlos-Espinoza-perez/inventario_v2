@@ -27,15 +27,22 @@ class RegistrarEntradaUseCase {
       throw ArgumentError('La orden de entrada está vacía.');
     }
 
-    final repository = await _ref.read(inventarioRepositoryProvider.future);
-    
+    final repository = _ref.read(inventarioRepositoryProvider);
+
     final request = InventoryEntryRequest(
       destinationWarehouseId: bodegaId,
       descripcion: descripcion.trim(),
       items: orderLines.map(_mapOrderLineToRequest).toList(),
     );
 
-    await repository.registrarEntrada(request);
+    try {
+      await repository.registrarEntrada(request);
+    } catch (e, st) {
+      Error.throwWithStackTrace(
+        Exception('Error al registrar entrada de inventario: $e'),
+        st,
+      );
+    }
   }
 
   InventoryEntryItem _mapOrderLineToRequest(Map<String, dynamic> line) {

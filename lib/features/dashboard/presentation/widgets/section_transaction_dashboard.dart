@@ -31,10 +31,9 @@ class SectionTransactionDashboard extends StatelessWidget {
             subtitle: subtitleDate,
             amount: currencyFormat.format(tx.amount),
             isIncome: tx.isIncome,
-            // Podríamos calcular el icono basado en isIncome o en título
             icon: tx.isIncome ? Icons.trending_up : Icons.trending_down,
           );
-        }).toList(),
+        }),
       ],
     );
   }

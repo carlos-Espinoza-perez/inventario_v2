@@ -739,26 +739,32 @@ WHERE v.estado = 1
   Future<List<RecentTransactionDrift>> getRecentTransactions({
     int limit = 5,
   }) async {
-    final ventasRows =
-        await (select(ventas)
-              ..where((tbl) => tbl.estado.equals(true))
-              ..orderBy([(tbl) => OrderingTerm.desc(tbl.fechaVenta)])
+    // Ventas con cliente en un solo JOIN
+    final ventasJoin =
+        await (select(ventas).join([
+              leftOuterJoin(clientes, clientes.id.equalsExp(ventas.clienteId)),
+            ])
+              ..where(ventas.estado.equals(true))
+              ..orderBy([OrderingTerm.desc(ventas.fechaVenta)])
               ..limit(limit))
             .get();
-    final pagosRows =
-        await (select(pagosVentas)
-              ..where((tbl) => tbl.estado.equals(true))
-              ..orderBy([(tbl) => OrderingTerm.desc(tbl.fechaRegistro)])
+
+    // Pagos con venta y cliente en un solo JOIN
+    final pagosJoin =
+        await (select(pagosVentas).join([
+              innerJoin(ventas, ventas.id.equalsExp(pagosVentas.ventaId)),
+              leftOuterJoin(clientes, clientes.id.equalsExp(ventas.clienteId)),
+            ])
+              ..where(pagosVentas.estado.equals(true))
+              ..orderBy([OrderingTerm.desc(pagosVentas.fechaRegistro)])
               ..limit(limit))
             .get();
 
     final items = <RecentTransactionDrift>[];
-    for (final venta in ventasRows) {
-      final cliente =
-          await (select(clientes)
-                ..where((tbl) => tbl.id.equals(venta.clienteId))
-                ..limit(1))
-              .getSingleOrNull();
+
+    for (final row in ventasJoin) {
+      final venta = row.readTable(ventas);
+      final cliente = row.readTableOrNull(clientes);
       items.add(
         RecentTransactionDrift(
           title: venta.tipoVenta == 'credito'
@@ -771,18 +777,10 @@ WHERE v.estado = 1
         ),
       );
     }
-    for (final pago in pagosRows) {
-      final venta =
-          await (select(ventas)
-                ..where((tbl) => tbl.id.equals(pago.ventaId))
-                ..limit(1))
-              .getSingleOrNull();
-      final cliente = venta == null
-          ? null
-          : await (select(clientes)
-                  ..where((tbl) => tbl.id.equals(venta.clienteId))
-                  ..limit(1))
-                .getSingleOrNull();
+
+    for (final row in pagosJoin) {
+      final pago = row.readTable(pagosVentas);
+      final cliente = row.readTableOrNull(clientes);
       items.add(
         RecentTransactionDrift(
           title: 'Abono de cliente',
@@ -793,6 +791,7 @@ WHERE v.estado = 1
         ),
       );
     }
+
     items.sort((a, b) => b.date.compareTo(a.date));
     return items.take(limit).toList();
   }
@@ -813,50 +812,72 @@ WHERE v.estado = 1
     final monday = now.subtract(Duration(days: now.weekday - 1));
     final start = DateTime(monday.year, monday.month, monday.day);
 
-    final sales =
-        await (select(ventas)
-              ..where((tbl) => tbl.fechaVenta.isBiggerOrEqualValue(start))
-              ..where((tbl) => tbl.estado.equals(true)))
-            .get();
+    // Una sola query: ventas + detalles + productos + categorías
+    final rows = await customSelect(
+      '''
+SELECT v.fecha_venta      AS fecha_venta,
+       v.total_venta      AS total_venta,
+       v.tipo_venta       AS tipo_venta,
+       v.total_pagado     AS total_pagado,
+       dv.sub_total       AS sub_total,
+       dv.descuento       AS descuento,
+       dv.cantidad        AS cantidad,
+       dv.costo_historico_compra AS costo,
+       p.nombre           AS producto_nombre,
+       COALESCE(cat.nombre, 'Sin categoria') AS categoria_nombre
+FROM ventas v
+INNER JOIN detalle_ventas dv ON dv.venta_id = v.id
+INNER JOIN productos p ON p.id = dv.producto_id
+LEFT  JOIN categorias cat ON cat.id = p.categoria_id
+WHERE v.estado = 1
+  AND v.fecha_venta >= ?
+''',
+      variables: [Variable<DateTime>(start)],
+      readsFrom: {ventas, detalleVentas, productos},
+    ).get();
 
     final ventasDia = List<double>.filled(7, 0);
     var totalSemana = 0.0;
     final ventasPorCategoria = <String, double>{};
     final gananciasPorProducto = <String, double>{};
+    // Acumula total_venta una sola vez por venta usando fecha como agrupación
+    final ventasContadas = <String, bool>{};
 
-    for (final venta in sales) {
-      final idx = venta.fechaVenta.weekday - 1;
-      if (idx >= 0 && idx < 7) {
-        ventasDia[idx] += venta.totalVenta;
-        totalSemana += venta.totalVenta;
+    for (final row in rows) {
+      final fechaVenta = row.read<DateTime>('fecha_venta');
+      final totalVenta = row.read<double>('total_venta');
+      final tipoVenta = row.read<String>('tipo_venta');
+      final totalPagado = row.read<double>('total_pagado');
+      final subTotal = row.read<double>('sub_total');
+      final descuento = row.read<double>('descuento');
+      final cantidad = row.read<double>('cantidad');
+      final costo = row.read<double>('costo');
+      final productoNombre = row.read<String>('producto_nombre');
+      final categoriaNombre = row.read<String>('categoria_nombre');
+
+      // Acumula ventas del día solo una vez por fila de venta (agrupado por fecha+total)
+      final ventaKey = '${fechaVenta.millisecondsSinceEpoch}_$totalVenta';
+      if (!ventasContadas.containsKey(ventaKey)) {
+        ventasContadas[ventaKey] = true;
+        final idx = fechaVenta.weekday - 1;
+        if (idx >= 0 && idx < 7) {
+          ventasDia[idx] += totalVenta;
+          totalSemana += totalVenta;
+        }
       }
 
-      final detalles = await (select(
-        detalleVentas,
-      )..where((tbl) => tbl.ventaId.equals(venta.id))).get();
+      ventasPorCategoria[categoriaNombre] =
+          (ventasPorCategoria[categoriaNombre] ?? 0) + subTotal;
 
-      for (final detalle in detalles) {
-        final producto =
-            await (select(productos)
-                  ..where((tbl) => tbl.id.equals(detalle.productoId))
-                  ..limit(1))
-                .getSingleOrNull();
-        final categoriaNombre = producto?.categoriaId == null
-            ? 'Sin categoria'
-            : await _resolveCategoriaNombre(producto!.categoriaId!);
-        ventasPorCategoria[categoriaNombre] =
-            (ventasPorCategoria[categoriaNombre] ?? 0) + detalle.subTotal;
-
-        final nombre = producto?.nombre ?? 'Producto';
-        final costo = detalle.cantidad * detalle.costoHistoricoCompra;
-        final ingreso = detalle.subTotal - detalle.descuento;
-        final pctPagado = venta.tipoVenta == 'credito' && venta.totalVenta > 0
-            ? venta.totalPagado / venta.totalVenta
-            : 1.0;
-        gananciasPorProducto[nombre] =
-            (gananciasPorProducto[nombre] ?? 0) +
-            ((ingreso - costo) * pctPagado);
-      }
+      final ingreso = subTotal - descuento;
+      final costoParcial = cantidad * costo;
+      final pctPagado =
+          tipoVenta == 'credito' && totalVenta > 0
+              ? totalPagado / totalVenta
+              : 1.0;
+      gananciasPorProducto[productoNombre] =
+          (gananciasPorProducto[productoNombre] ?? 0) +
+          ((ingreso - costoParcial) * pctPagado);
     }
 
     final gananciasList =
@@ -889,46 +910,54 @@ WHERE v.estado = 1
   Future<List<SalesListItemDrift>> _getSalesListInternal({
     String? sessionId,
   }) async {
-    final query = select(ventas).join([
-      leftOuterJoin(clientes, clientes.id.equalsExp(ventas.clienteId)),
-    ]);
+    // Trae ventas + cliente + conteo de detalles en una sola query SQL
+    final whereClause =
+        sessionId != null ? 'AND v.caja_sesion_id = ?' : '';
+    final variables = <Variable<Object>>[
+      if (sessionId != null) Variable<String>(sessionId),
+    ];
 
-    if (sessionId != null) {
-      query.where(ventas.cajaSesionId.equals(sessionId));
-    }
+    final rows = await customSelect(
+      '''
+SELECT v.id              AS id,
+       v.caja_sesion_id  AS caja_sesion_id,
+       v.tipo_venta      AS tipo_venta,
+       v.estado_pago     AS estado_pago,
+       v.estado          AS estado,
+       v.total_venta     AS total_venta,
+       v.fecha_venta     AS fecha_venta,
+       COALESCE(c.nombre, 'Cliente Desconocido') AS cliente_nombre,
+       COUNT(dv.id)      AS items_count
+FROM ventas v
+LEFT  JOIN clientes c ON c.id = v.cliente_id
+LEFT  JOIN detalle_ventas dv ON dv.venta_id = v.id
+WHERE 1=1 $whereClause
+GROUP BY v.id, v.caja_sesion_id, v.tipo_venta, v.estado_pago,
+         v.estado, v.total_venta, v.fecha_venta, c.nombre
+ORDER BY v.fecha_venta DESC
+''',
+      variables: variables,
+      readsFrom: {ventas, clientes, detalleVentas},
+    ).get();
 
-    query.orderBy([OrderingTerm.desc(ventas.fechaVenta)]);
-
-    final rows = await query.get();
-
-    final result = <SalesListItemDrift>[];
-    for (final row in rows) {
-      final venta = row.readTable(ventas);
-      final cliente = row.readTableOrNull(clientes);
-      final countExp = detalleVentas.id.count();
-      final countRow =
-          await (selectOnly(detalleVentas)
-                ..addColumns([countExp])
-                ..where(detalleVentas.ventaId.equals(venta.id)))
-              .getSingle();
-      final itemsCount = countRow.read(countExp) ?? 0;
-      final status = !venta.estado
+    return rows.map((row) {
+      final id = row.read<String>('id');
+      final estadoBool = row.read<int>('estado') == 1;
+      final estadoPago = row.read<String>('estado_pago');
+      final status = !estadoBool
           ? 'Anulado'
-          : (venta.estadoPago == 'pagado' ? 'Pagado' : 'Pendiente');
+          : (estadoPago == 'pagado' ? 'Pagado' : 'Pendiente');
 
-      result.add(
-        SalesListItemDrift(
-          id: venta.id.substring(0, 8).toUpperCase(),
-          fullId: venta.id,
-          client: cliente?.nombre ?? 'Cliente Desconocido',
-          date: venta.fechaVenta,
-          total: venta.totalVenta,
-          status: status,
-          itemsCount: itemsCount,
-        ),
+      return SalesListItemDrift(
+        id: id.substring(0, 8).toUpperCase(),
+        fullId: id,
+        client: row.read<String>('cliente_nombre'),
+        date: row.read<DateTime>('fecha_venta'),
+        total: row.read<double>('total_venta'),
+        status: status,
+        itemsCount: row.read<int>('items_count'),
       );
-    }
-    return result;
+    }).toList();
   }
 
   Future<SaleDetailDrift> getSaleDetail(String saleId) async {
@@ -1266,13 +1295,6 @@ $expenseBodegaFilter
     );
   }
 
-  Future<String> _resolveCategoriaNombre(String categoriaId) async {
-    final row = await customSelect(
-      'SELECT nombre FROM categorias WHERE id = ? LIMIT 1',
-      variables: [Variable<String>(categoriaId)],
-    ).getSingleOrNull();
-    return row?.read<String>('nombre') ?? 'Sin categoria';
-  }
 }
 
 class SalesWeeklyReportData {

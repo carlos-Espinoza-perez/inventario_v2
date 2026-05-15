@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../app_database.dart';
 import 'base_dao.dart';
+import '../exceptions/dao_exceptions.dart';
 import '../models/auth_admin_models.dart';
 import '../models/sesion_activa_drift.dart';
 import '../tables/auth_tables.dart';
@@ -123,44 +124,62 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
     CajasCompanion? caja,
     CajaSesionesCompanion? cajaSesion,
   }) async {
-    await transaction(() async {
-      await delete(cajaSesiones).go();
-      await delete(cajas).go();
-      await delete(accesosRol).go();
-      await delete(roles).go();
-      await delete(bodegasUsuarios).go();
-      await delete(bodegas).go();
-      await delete(usuarios).go();
-      await delete(empresas).go();
+    try {
+      await transaction(() async {
+        await delete(cajaSesiones).go();
+        await delete(cajas).go();
+        await delete(accesosRol).go();
+        await delete(roles).go();
+        await delete(bodegasUsuarios).go();
+        await delete(bodegas).go();
+        await delete(usuarios).go();
+        await delete(empresas).go();
 
-      await into(empresas).insertOnConflictUpdate(empresa);
-      await into(roles).insertOnConflictUpdate(rol);
-      await into(usuarios).insertOnConflictUpdate(usuario);
+        await into(empresas).insertOnConflictUpdate(empresa);
+        await into(roles).insertOnConflictUpdate(rol);
+        await into(usuarios).insertOnConflictUpdate(usuario);
 
-      for (final permiso in permisos) {
-        await into(accesosRol).insertOnConflictUpdate(permiso);
-      }
+        for (final permiso in permisos) {
+          await into(accesosRol).insertOnConflictUpdate(permiso);
+        }
 
-      if (caja != null) {
-        await into(cajas).insertOnConflictUpdate(caja);
-      }
-      if (cajaSesion != null) {
-        await into(cajaSesiones).insertOnConflictUpdate(cajaSesion);
-      }
-    });
+        if (caja != null) {
+          await into(cajas).insertOnConflictUpdate(caja);
+        }
+        if (cajaSesion != null) {
+          await into(cajaSesiones).insertOnConflictUpdate(cajaSesion);
+        }
+      });
+    } on DaoException {
+      rethrow;
+    } catch (e, st) {
+      Error.throwWithStackTrace(
+        DaoException('replaceSesionActiva falló: $e'),
+        st,
+      );
+    }
   }
 
   Future<void> clearSesion() async {
-    await transaction(() async {
-      await delete(cajaSesiones).go();
-      await delete(cajas).go();
-      await delete(accesosRol).go();
-      await delete(roles).go();
-      await delete(bodegasUsuarios).go();
-      await delete(bodegas).go();
-      await delete(usuarios).go();
-      await delete(empresas).go();
-    });
+    try {
+      await transaction(() async {
+        await delete(cajaSesiones).go();
+        await delete(cajas).go();
+        await delete(accesosRol).go();
+        await delete(roles).go();
+        await delete(bodegasUsuarios).go();
+        await delete(bodegas).go();
+        await delete(usuarios).go();
+        await delete(empresas).go();
+      });
+    } on DaoException {
+      rethrow;
+    } catch (e, st) {
+      Error.throwWithStackTrace(
+        DaoException('clearSesion falló: $e'),
+        st,
+      );
+    }
   }
 
   Stream<List<Bodega>> watchBodegasVisibles({String query = ''}) async* {
@@ -229,36 +248,47 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
     final bodegaId = const Uuid().v4();
     final relacionId = const Uuid().v4();
 
-    await transaction(() async {
-      await into(bodegas).insert(
-        BodegasCompanion.insert(
-          id: bodegaId,
-          empresaId: context.empresaId,
-          nombre: nombre,
-          direccion: Value(direccion?.isEmpty == true ? null : direccion),
-          descripcion: Value(descripcion?.isEmpty == true ? null : descripcion),
-          esPuntoVenta: Value(esPuntoVenta),
-          usuarioRegistroId: Value(context.usuarioId),
-          estado: const Value(true),
-          createdAt: Value(now),
-          updatedAt: Value(now),
-          syncStatus: const Value('pending_insert'),
-        ),
-      );
+    try {
+      await transaction(() async {
+        await into(bodegas).insert(
+          BodegasCompanion.insert(
+            id: bodegaId,
+            empresaId: context.empresaId,
+            nombre: nombre,
+            direccion: Value(direccion?.isEmpty == true ? null : direccion),
+            descripcion: Value(
+              descripcion?.isEmpty == true ? null : descripcion,
+            ),
+            esPuntoVenta: Value(esPuntoVenta),
+            usuarioRegistroId: Value(context.usuarioId),
+            estado: const Value(true),
+            createdAt: Value(now),
+            updatedAt: Value(now),
+            syncStatus: const Value('pending_insert'),
+          ),
+        );
 
-      await into(bodegasUsuarios).insert(
-        BodegasUsuariosCompanion.insert(
-          id: relacionId,
-          usuarioId: context.usuarioId,
-          bodegaId: bodegaId,
-          usuarioRegistroId: Value(context.usuarioId),
-          estado: const Value(true),
-          createdAt: Value(now),
-          updatedAt: Value(now),
-          syncStatus: const Value('pending_insert'),
-        ),
+        await into(bodegasUsuarios).insert(
+          BodegasUsuariosCompanion.insert(
+            id: relacionId,
+            usuarioId: context.usuarioId,
+            bodegaId: bodegaId,
+            usuarioRegistroId: Value(context.usuarioId),
+            estado: const Value(true),
+            createdAt: Value(now),
+            updatedAt: Value(now),
+            syncStatus: const Value('pending_insert'),
+          ),
+        );
+      });
+    } on DaoException {
+      rethrow;
+    } catch (e, st) {
+      Error.throwWithStackTrace(
+        DaoException('createBodegaForCurrentUser falló: $e'),
+        st,
       );
-    });
+    }
   }
 
   Future<List<Empresa>> getPendingEmpresas() {

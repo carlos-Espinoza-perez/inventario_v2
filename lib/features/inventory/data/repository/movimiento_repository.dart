@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
@@ -7,7 +8,7 @@ import 'package:inventario_v2/core/db/models/inventory_requests.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/features/inventory/data/repository/inventario_repository.dart';
 
-final movimientoRepositoryProvider = FutureProvider((ref) async {
+final movimientoRepositoryProvider = Provider((ref) {
   final driftDb = ref.watch(driftDatabaseProvider);
   return MovimientoRepository(
     db: driftDb,
@@ -227,7 +228,9 @@ class MovimientoRepository {
           .whereType<Map>()
           .map((item) => Map<String, dynamic>.from(item))
           .toList();
-    } catch (_) {
+    } catch (e, st) {
+      // JSON malformado en DB: el detalle de movimiento sigue renderizando sin variantes
+      debugPrint('_decodeVariantes: JSON inválido en variantesJson — $e\n$st');
       return const [];
     }
   }

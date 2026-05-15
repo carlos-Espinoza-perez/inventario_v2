@@ -11,7 +11,7 @@ final listaProductosProvider = StreamProvider<List<ProductCatalogItemDrift>>((
 });
 
 final productsWithStockProvider =
-    FutureProvider.family<List<ProductCatalogItemDrift>, String>((
+    FutureProvider.autoDispose.family<List<ProductCatalogItemDrift>, String>((
       ref,
       bodegaId,
     ) async {
@@ -20,7 +20,10 @@ final productsWithStockProvider =
     });
 
 final stockDriftByBodegaProvider =
-    FutureProvider.family<List<ProductoStockDrift>, String>((ref, bodegaId) {
+    FutureProvider.autoDispose.family<List<ProductoStockDrift>, String>((
+      ref,
+      bodegaId,
+    ) {
       final db = ref.watch(driftDatabaseProvider);
       return db.inventoryDao.getStockRealPorBodega(bodegaId);
     });
