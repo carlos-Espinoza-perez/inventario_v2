@@ -1,6 +1,8 @@
+import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/constants/app_constants.dart';
 import '../data/connectivity/connectivity_checker.dart';
 import '../data/context/assistant_context_builder.dart';
+import '../data/entry/assistant_entry_workflow_service.dart';
 import '../data/offline/offline_query_handler.dart';
 import '../domain/models/assistant_operational_context.dart';
 import '../domain/models/conversation_state.dart';
@@ -27,6 +29,8 @@ class TurnPipeline {
   final StepwiseOrchestrator _orchestrator;
   final ConnectivityChecker _connectivityChecker;
   final OfflineQueryHandler _offlineQueryHandler;
+  final AssistantEntryWorkflowService _entryWorkflowService;
+  final AppDatabase _db;
 
   TurnPipeline({
     required AssistantContextBuilder contextBuilder,
@@ -35,12 +39,16 @@ class TurnPipeline {
     required StepwiseOrchestrator orchestrator,
     required ConnectivityChecker connectivityChecker,
     required OfflineQueryHandler offlineQueryHandler,
-  })  : _contextBuilder = contextBuilder,
-        _semanticRouter = semanticRouter,
-        _reasoningEngine = reasoningEngine,
-        _orchestrator = orchestrator,
-        _connectivityChecker = connectivityChecker,
-        _offlineQueryHandler = offlineQueryHandler;
+    required AssistantEntryWorkflowService entryWorkflowService,
+    required AppDatabase db,
+  }) : _contextBuilder = contextBuilder,
+       _semanticRouter = semanticRouter,
+       _reasoningEngine = reasoningEngine,
+       _orchestrator = orchestrator,
+       _connectivityChecker = connectivityChecker,
+       _offlineQueryHandler = offlineQueryHandler,
+       _entryWorkflowService = entryWorkflowService,
+       _db = db;
 
   Future<TurnResult> process(
     String userMessage,
@@ -91,6 +99,10 @@ class TurnPipeline {
       );
     }
 
+    if (_isSalesHistoryQuery(userMessage)) {
+      return _handleSalesHistoryQuery(userMessage, currentState);
+    }
+
     // ── Verificar conectividad ─────────────────────────────────────────────
     final online = await _connectivityChecker.isOnline();
     if (!online) {
@@ -109,8 +121,10 @@ class TurnPipeline {
           context: context,
         );
       }
-      final offlineResponse =
-          await _offlineQueryHandler.handle(userMessage, context);
+      final offlineResponse = await _offlineQueryHandler.handle(
+        userMessage,
+        context,
+      );
       return TurnResult(
         responseText: offlineResponse,
         updatedState: currentState,
@@ -121,7 +135,10 @@ class TurnPipeline {
     final mentionedWarehouse = _findMentionedWarehouse(userMessage, context);
     if (mentionedWarehouse != null &&
         mentionedWarehouse.id != context.selectedWarehouseId) {
-      currentState = _withSelectedWarehouse(currentState, mentionedWarehouse.id);
+      currentState = _withSelectedWarehouse(
+        currentState,
+        mentionedWarehouse.id,
+      );
       context = await _contextBuilder.build(
         selectedWarehouseId: mentionedWarehouse.id,
       );
@@ -148,6 +165,26 @@ class TurnPipeline {
       currentState,
       context,
     );
+    currentState = _withRouterEntities(currentState, routerResult.entities);
+
+    final hasActiveEntrySession = await _entryWorkflowService.hasActiveSession(
+      context,
+    );
+    if (routerResult.intent == 'action_register_entry' ||
+        (hasActiveEntrySession &&
+            routerResult.intent != 'action_register_sale')) {
+      final entryResult = await _entryWorkflowService.process(
+        message: clarifiedMessage,
+        context: context,
+        forceStart: routerResult.intent == 'action_register_entry',
+      );
+      if (entryResult.handled) {
+        return TurnResult(
+          responseText: entryResult.responseText,
+          updatedState: currentState,
+        );
+      }
+    }
 
     // ── 3. Routing por banda de confianza ──────────────────────────────────
     if (routerResult.shouldReject) {
@@ -202,7 +239,9 @@ class TurnPipeline {
         ),
       };
 
-      final resumedWorkflow = existingWorkflow.copyWith(clearPendingField: true);
+      final resumedWorkflow = existingWorkflow.copyWith(
+        clearPendingField: true,
+      );
       final resumedState = currentState.copyWith(
         activeWorkflow: resumedWorkflow,
         collectedData: updatedCollected,
@@ -268,14 +307,17 @@ class TurnPipeline {
         updatedState: _withWarehousePromptData(
           stateWithTurn,
           pendingMessage:
-              state.collectedData[_pendingWarehouseMessageKey]?.value as String?,
+              state.collectedData[_pendingWarehouseMessageKey]?.value
+                  as String?,
           context: context,
         ),
       );
     }
 
-    final selectedState =
-        _withSelectedWarehouse(stateWithTurn, selectedWarehouse.id);
+    final selectedState = _withSelectedWarehouse(
+      stateWithTurn,
+      selectedWarehouse.id,
+    );
     final pendingMessage =
         state.collectedData[_pendingWarehouseMessageKey]?.value as String?;
 
@@ -345,6 +387,23 @@ class TurnPipeline {
     return state.copyWith(collectedData: updated);
   }
 
+  ConversationState _withRouterEntities(
+    ConversationState state,
+    Map<String, dynamic> entities,
+  ) {
+    final updated = Map<String, CollectedVariable>.from(state.collectedData);
+    for (final entry in entities.entries) {
+      final value = entry.value;
+      if (value == null) continue;
+      if (value is String && value.trim().isEmpty) continue;
+      updated[entry.key] = CollectedVariable(
+        value: value,
+        type: CollectedVariable.inferType(entry.key),
+      );
+    }
+    return state.copyWith(collectedData: updated);
+  }
+
   String? _selectedWarehouseIdFrom(ConversationState state) {
     final value = state.collectedData[_selectedWarehouseIdKey]?.value;
     return value is String && value.isNotEmpty ? value : null;
@@ -401,6 +460,49 @@ class TurnPipeline {
     ).hasMatch(message);
   }
 
+  bool _isSalesHistoryQuery(String message) {
+    return RegExp(
+      r'historial de ventas|listado de ventas|ventas recientes|ultimas ventas|últimas ventas',
+      caseSensitive: false,
+    ).hasMatch(message);
+  }
+
+  Future<TurnResult> _handleSalesHistoryQuery(
+    String userMessage,
+    ConversationState state,
+  ) async {
+    final updatedState = state.addTurn(
+      ConversationTurn(
+        role: 'user',
+        content: userMessage,
+        timestamp: DateTime.now(),
+      ),
+      maxTurns: AppConstants.assistantHistoryTurns,
+    );
+
+    final sales = await _db.salesDao.getSalesList();
+    if (sales.isEmpty) {
+      return TurnResult(
+        responseText: 'No encontre ventas registradas todavia.',
+        updatedState: updatedState,
+      );
+    }
+
+    final lines = sales
+        .take(5)
+        .map((sale) {
+          final date =
+              '${sale.date.day.toString().padLeft(2, '0')}/${sale.date.month.toString().padLeft(2, '0')}';
+          return '- ${sale.client}: C\$${sale.total.toStringAsFixed(2)} ($date, ${sale.status})';
+        })
+        .join('\n');
+
+    return TurnResult(
+      responseText: 'Estas son las ultimas ventas registradas:\n$lines',
+      updatedState: updatedState,
+    );
+  }
+
   String _normalize(String value) {
     return value
         .toLowerCase()
@@ -442,10 +544,7 @@ class TurnPipeline {
     // 2. Estado temporal para responder la interrupción (sin workflow activo)
     final stateForInterruption = conversationState.copyWith(
       clearActiveWorkflow: true,
-      pausedWorkflowStack: [
-        ...conversationState.pausedWorkflowStack,
-        paused,
-      ],
+      pausedWorkflowStack: [...conversationState.pausedWorkflowStack, paused],
     );
 
     // 3. Ejecutar el orchestrator para la consulta de interrupción
@@ -469,7 +568,8 @@ class TurnPipeline {
         // Datos nuevos de la interrupción tienen prioridad sobre el snapshot
         ...interruptionResult.updatedState.collectedData,
       },
-      pausedWorkflowStack: conversationState.pausedWorkflowStack, // quitar el que acaba de resolverse
+      pausedWorkflowStack: conversationState
+          .pausedWorkflowStack, // quitar el que acaba de resolverse
     );
 
     // 5. Construir hint de reanudación
@@ -489,7 +589,9 @@ class TurnPipeline {
 
   String _questionForField(String fieldName) {
     return switch (fieldName) {
-      'items' || 'product' || 'productQuery' => '¿qué producto querés ingresar?',
+      'items' ||
+      'product' ||
+      'productQuery' => '¿qué producto querés ingresar?',
       'quantity' || 'cantidad' => '¿cuántas unidades?',
       'clientName' || 'client' => '¿a nombre de quién es la venta?',
       'saleType' => '¿es al contado o al fiado?',

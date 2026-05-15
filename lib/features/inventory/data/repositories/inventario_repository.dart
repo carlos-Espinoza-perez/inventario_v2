@@ -65,15 +65,20 @@ class InventarioRepository {
                   'color': item.variante.color,
                   'sku': item.variante.sku,
                   'stock': item.inventario.cantidadActual,
-                  'precio':
-                      item.variante.precioEspecifico ??
-                      item.inventario.precioVenta,
+                  'precio': _resolvePrecio(item),
                   'varianteId': item.variante.id,
                 },
               )
               .toList();
 
     return items.map((item) => item).toList();
+  }
+
+  static double _resolvePrecio(ProductoStockDrift item) {
+    final directo =
+        item.variante.precioEspecifico ?? item.inventario.precioVenta;
+    if (directo > 0) return directo;
+    return item.producto.precioBase ?? item.producto.ultimoPrecioVenta;
   }
 
   InventarioDTO _toDto(ProductoStockDrift item) {
@@ -86,7 +91,7 @@ class InventarioRepository {
       color: item.variante.color,
       categoria: item.producto.categoriaId ?? 'Sin Categoria',
       stock: item.inventario.cantidadActual,
-      precio: item.variante.precioEspecifico ?? item.inventario.precioVenta,
+      precio: _resolvePrecio(item),
       costo: item.variante.costoEspecifico ?? item.inventario.costoPromedio,
       imagen: item.producto.imagenUrl,
     );

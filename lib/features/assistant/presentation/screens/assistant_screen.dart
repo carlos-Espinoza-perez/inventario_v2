@@ -60,15 +60,12 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
         state.isLoading ||
         state.isStreaming ||
         state.isConfirming ||
-        state.hasPendingDraft ||
         state.isRecording;
 
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 400),
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: child,
-      ),
+      transitionBuilder: (child, animation) =>
+          FadeTransition(opacity: animation, child: child),
       child: state.isVoiceMode
           ? _VoiceModeView(
               key: const ValueKey('voice'),
@@ -135,9 +132,7 @@ class _ChatModeView extends StatelessWidget {
             backgroundColor: Colors.transparent,
           ),
         if (state.hasPausedWorkflows)
-          PausedWorkflowBanner(
-            workflowName: state.pausedWorkflowNames.last,
-          ),
+          PausedWorkflowBanner(workflowName: state.pausedWorkflowNames.last),
         if (state.hasClarificationOptions)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
@@ -152,6 +147,7 @@ class _ChatModeView extends StatelessWidget {
             isLoading: state.isConfirming,
             onConfirm: notifier.confirmDraft,
             onCancel: notifier.cancelDraft,
+            onUpdateItem: notifier.updateDraftItem,
           ),
 
         ChatInputBar(
@@ -226,15 +222,15 @@ class _EmptyState extends StatelessWidget {
           Text(
             'Asistente IA',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: colorScheme.onSurface.withValues(alpha: 0.5),
-                ),
+              color: colorScheme.onSurface.withValues(alpha: 0.5),
+            ),
           ),
           const SizedBox(height: 4),
           Text(
             'Preguntá sobre stock, precios o ventas',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurface.withValues(alpha: 0.35),
-                ),
+              color: colorScheme.onSurface.withValues(alpha: 0.35),
+            ),
           ),
           const SizedBox(height: 24),
           FilledButton.icon(

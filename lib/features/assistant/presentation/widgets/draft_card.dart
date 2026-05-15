@@ -5,6 +5,8 @@ class DraftCard extends StatelessWidget {
   final AssistantDraft draft;
   final VoidCallback onConfirm;
   final VoidCallback onCancel;
+  final void Function(int index, {double? quantity, double? unitPrice})
+  onUpdateItem;
   final bool isLoading;
 
   const DraftCard({
@@ -12,6 +14,7 @@ class DraftCard extends StatelessWidget {
     required this.draft,
     required this.onConfirm,
     required this.onCancel,
+    required this.onUpdateItem,
     this.isLoading = false,
   });
 
@@ -19,7 +22,9 @@ class DraftCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surfaceColor = isDark ? colorScheme.surfaceContainerHigh : Colors.white;
+    final surfaceColor = isDark
+        ? colorScheme.surfaceContainerHigh
+        : Colors.white;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -43,7 +48,7 @@ class DraftCard extends StatelessWidget {
         children: [
           _Header(draft: draft, colorScheme: colorScheme),
           const Divider(height: 1),
-          _ItemList(items: draft.items),
+          _ItemList(items: draft.items, onUpdateItem: onUpdateItem),
           const Divider(height: 1),
           _Footer(
             draft: draft,
@@ -111,8 +116,10 @@ class _Header extends StatelessWidget {
 
 class _ItemList extends StatelessWidget {
   final List<DraftItem> items;
+  final void Function(int index, {double? quantity, double? unitPrice})
+  onUpdateItem;
 
-  const _ItemList({required this.items});
+  const _ItemList({required this.items, required this.onUpdateItem});
 
   @override
   Widget build(BuildContext context) {
@@ -120,16 +127,107 @@ class _ItemList extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: items.length,
-      separatorBuilder: (context, index) => const Divider(height: 1, indent: 14),
-      itemBuilder: (context, i) => _ItemRow(item: items[i]),
+      separatorBuilder: (context, index) =>
+          const Divider(height: 1, indent: 14),
+      itemBuilder: (context, i) => _ItemRow(
+        item: items[i],
+        onEdit: () => _showEditItemDialog(
+          context,
+          item: items[i],
+          onSave: ({quantity, unitPrice}) =>
+              onUpdateItem(i, quantity: quantity, unitPrice: unitPrice),
+        ),
+      ),
     );
+  }
+
+  Future<void> _showEditItemDialog(
+    BuildContext context, {
+    required DraftItem item,
+    required void Function({double? quantity, double? unitPrice}) onSave,
+  }) async {
+    final quantityController = TextEditingController(
+      text: _formatNumber(item.quantity),
+    );
+    final priceController = TextEditingController(
+      text: _formatNumber(item.unitPrice),
+    );
+
+    final result = await showDialog<({double quantity, double unitPrice})>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(item.productName),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: quantityController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'Cantidad',
+                  prefixIcon: Icon(Icons.numbers_rounded),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: priceController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'Precio unitario',
+                  prefixIcon: Icon(Icons.sell_outlined),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final quantity = _parseNumber(quantityController.text);
+                final price = _parseNumber(priceController.text);
+                if (quantity == null || quantity <= 0 || price == null) {
+                  return;
+                }
+                Navigator.of(
+                  context,
+                ).pop((quantity: quantity, unitPrice: price));
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    quantityController.dispose();
+    priceController.dispose();
+
+    if (result != null) {
+      onSave(quantity: result.quantity, unitPrice: result.unitPrice);
+    }
+  }
+
+  String _formatNumber(double value) =>
+      value == value.truncateToDouble() ? value.toInt().toString() : '$value';
+
+  double? _parseNumber(String value) {
+    return double.tryParse(value.trim().replaceAll(',', '.'));
   }
 }
 
 class _ItemRow extends StatelessWidget {
   final DraftItem item;
+  final VoidCallback onEdit;
 
-  const _ItemRow({required this.item});
+  const _ItemRow({required this.item, required this.onEdit});
 
   @override
   Widget build(BuildContext context) {
@@ -153,10 +251,9 @@ class _ItemRow extends StatelessWidget {
                 Text(
                   'x${_formatQty(item.quantity)}  ·  \$${_formatPrice(item.unitPrice)} c/u',
                   style: textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.6),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
               ],
@@ -164,9 +261,14 @@ class _ItemRow extends StatelessWidget {
           ),
           Text(
             '\$${_formatPrice(item.subtotal)}',
-            style: textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+            style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            tooltip: 'Editar',
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            onPressed: onEdit,
           ),
         ],
       ),
@@ -206,42 +308,61 @@ class _Footer extends StatelessWidget {
               children: [
                 Text(
                   'Total',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 Text(
                   '\$${draft.total.toStringAsFixed(2)}',
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: colorScheme.primary,
-                      ),
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.primary,
+                  ),
                 ),
               ],
             ),
+            if (draft.depositAmount != null &&
+                draft.depositAmount! < draft.total)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Abono', style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      '\$${draft.depositAmount!.toStringAsFixed(2)} · Saldo \$${(draft.total - draft.depositAmount!).toStringAsFixed(2)}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             if (draft.clientName != null && draft.clientName!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Row(
                   children: [
-                    Icon(Icons.person_outline,
-                        size: 14,
-                        color: colorScheme.onSurface.withValues(alpha: 0.5)),
+                    Icon(
+                      Icons.person_outline,
+                      size: 14,
+                      color: colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       draft.clientName!,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color:
-                                colorScheme.onSurface.withValues(alpha: 0.6),
-                          ),
+                        color: colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
                     ),
                     const SizedBox(width: 6),
                     Text(
                       draft.saleType ?? 'Contado',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: colorScheme.primary.withValues(alpha: 0.8),
-                            fontWeight: FontWeight.w600,
-                          ),
+                        color: colorScheme.primary.withValues(alpha: 0.8),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
@@ -256,7 +377,8 @@ class _Footer extends StatelessWidget {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: colorScheme.error,
                     side: BorderSide(
-                        color: colorScheme.error.withValues(alpha: 0.5)),
+                      color: colorScheme.error.withValues(alpha: 0.5),
+                    ),
                   ),
                   child: const Text('Cancelar'),
                 ),

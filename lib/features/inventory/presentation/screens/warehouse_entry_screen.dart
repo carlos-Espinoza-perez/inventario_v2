@@ -26,6 +26,7 @@ class WarehouseEntryScreen extends ConsumerStatefulWidget {
 class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
   final TextEditingController _descriptionCtrl = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _focusDescripcion = FocusNode();
   final List<Map<String, dynamic>> _orderLines = [];
 
   bool _isLoading = false;
@@ -46,10 +47,22 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
   void dispose() {
     _descriptionCtrl.dispose();
     _searchController.dispose();
+    _focusDescripcion.dispose();
     super.dispose();
   }
 
   Future<void> _saveEntireOrderToDB() async {
+    if (_descriptionCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Agrega una descripción para este movimiento'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      _focusDescripcion.requestFocus();
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {

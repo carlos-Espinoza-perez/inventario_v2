@@ -3,4 +3,5 @@ abstract class SpeechTranscriber {
   Future<String?> transcribe();
   void cancel();
   void dispose();
+  void Function(String partial)? onPartialResult;
 }

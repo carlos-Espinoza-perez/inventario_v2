@@ -171,9 +171,6 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
                         Text(
                           'SKU base: ${product.codigoPersonalizado ?? 'N/A'}',
                         ),
-                        Text(
-                          'Categoria: ${product.categoriaId ?? 'Sin categoria'}',
-                        ),
                         const SizedBox(height: 8),
                         Text(
                           'Precio base: C\$ ${(product.precioBase ?? 0).toStringAsFixed(2)}',
@@ -217,7 +214,6 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
                           title: Text(
                             '${variant['talla'] ?? 'General'} • ${variant['sku']}',
                           ),
-                          subtitle: Text('Color: ${variant['color'] ?? 'N/A'}'),
                           trailing: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [

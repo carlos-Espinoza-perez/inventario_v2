@@ -20,13 +20,33 @@ class DraftExecutor {
 
   Future<void> _executeSale(AssistantDraft draft) async {
     final useCase = _ref.read(registrarVentaUseCaseProvider);
+    final saleType = _normalizeSaleType(draft.saleType);
     await useCase.ejecutar(
       cartItems: draft.items.map((i) => i.toSaleCartItem()).toList(),
       nombreCliente: draft.clientName ?? '',
-      saleType: draft.saleType ?? 'Contado',
+      saleType: saleType,
       total: draft.total,
-      depositAmount: draft.total,
+      depositAmount:
+          draft.depositAmount ?? (saleType == 'Contado' ? draft.total : 0),
+      bodegaId: draft.bodegaId,
+      cajaSesionId: draft.cajaSesionId,
     );
+  }
+
+  String _normalizeSaleType(String? value) {
+    final normalized = _normalizeDomainValue(value);
+    if (normalized == 'fiado') return 'Fiado';
+    if (normalized == 'credito') return 'Fiado';
+    if (normalized == 'contado') return 'Contado';
+    return 'Contado';
+  }
+
+  String _normalizeDomainValue(String? value) {
+    return (value ?? '')
+        .trim()
+        .toLowerCase()
+        .replaceAll('é', 'e')
+        .replaceAll('è', 'e');
   }
 
   Future<void> _executeEntry(AssistantDraft draft) async {

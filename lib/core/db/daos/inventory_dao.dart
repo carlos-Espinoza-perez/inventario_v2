@@ -611,6 +611,7 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
             cantidad: detalle.cantidad,
             usuarioId: usuarioId,
             costoPromedio: detalle.costoUnitarioFinal,
+            precioVenta: detalle.precioVenta,
           );
         } else if (request.tipoMovimiento == 'salida') {
           await _restarInventario(
@@ -635,6 +636,7 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
             cantidad: detalle.cantidad,
             usuarioId: usuarioId,
             costoPromedio: detalle.costoUnitarioFinal,
+            precioVenta: detalle.precioVenta,
           );
         } else if (request.tipoMovimiento == 'ajuste') {
           if (detalle.cantidad >= 0) {
@@ -645,6 +647,7 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
               cantidad: detalle.cantidad,
               usuarioId: usuarioId,
               costoPromedio: detalle.costoUnitarioFinal,
+              precioVenta: detalle.precioVenta,
             );
           } else {
             await _restarInventario(
@@ -690,6 +693,7 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
                 cantidad: item.cantidad,
                 costoProveedor: item.costoProveedor,
                 costoUnitarioFinal: item.costoUnitarioFinal,
+                precioVenta: item.precioVenta,
                 variantesJson:
                     item.variantesJson ??
                     _buildVariantesJson(
@@ -885,6 +889,7 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
     required double cantidad,
     required String usuarioId,
     required double costoPromedio,
+    double? precioVenta,
   }) async {
     if (bodegaId == null || bodegaId.isEmpty) {
       throw const WarehouseNotFoundException(
@@ -909,6 +914,19 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
               ..limit(1))
             .getSingleOrNull();
 
+    final now = DateTime.now();
+
+    // Resolver el precio efectivo: el recibido, o el precioBase del producto como fallback
+    double? effectivePrecio = precioVenta;
+    if ((effectivePrecio == null || effectivePrecio <= 0)) {
+      final prod = await (select(productos)
+            ..where((tbl) => tbl.id.equals(productoId))
+            ..limit(1))
+          .getSingleOrNull();
+      final fallback = prod?.precioBase ?? prod?.ultimoPrecioVenta;
+      if (fallback != null && fallback > 0) effectivePrecio = fallback;
+    }
+
     if (current == null) {
       final resolvedVarianteId =
           productoVarianteId ??
@@ -923,32 +941,48 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
           bodegaId: bodegaId,
           cantidadActual: Value(cantidad),
           costoPromedio: Value(costoPromedio),
+          precioVenta: effectivePrecio != null
+              ? Value(effectivePrecio)
+              : const Value(0.0),
           actualizadoPor: Value(usuarioId),
-          updatedAt: Value(DateTime.now()),
+          updatedAt: Value(now),
           syncStatus: const Value('pending_insert'),
         ),
       );
-      return;
+    } else {
+      final nuevaCantidad = current.cantidadActual + cantidad;
+      final nuevoCostoPromedio = nuevaCantidad > 0
+          ? ((current.cantidadActual * current.costoPromedio) +
+                    (cantidad * costoPromedio)) /
+                nuevaCantidad
+          : current.costoPromedio;
+
+      await (update(
+        inventarios,
+      )..where((tbl) => tbl.id.equals(current.id))).write(
+        InventariosCompanion(
+          cantidadActual: Value(nuevaCantidad),
+          costoPromedio: Value(nuevoCostoPromedio),
+          precioVenta: effectivePrecio != null && effectivePrecio > 0
+              ? Value(effectivePrecio)
+              : const Value.absent(),
+          actualizadoPor: Value(usuarioId),
+          updatedAt: Value(now),
+          syncStatus: const Value('pending_update'),
+        ),
+      );
     }
 
-    final nuevaCantidad = current.cantidadActual + cantidad;
-    final nuevoCostoPromedio = nuevaCantidad > 0
-        ? ((current.cantidadActual * current.costoPromedio) +
-                  (cantidad * costoPromedio)) /
-              nuevaCantidad
-        : current.costoPromedio;
-
-    await (update(
-      inventarios,
-    )..where((tbl) => tbl.id.equals(current.id))).write(
-      InventariosCompanion(
-        cantidadActual: Value(nuevaCantidad),
-        costoPromedio: Value(nuevoCostoPromedio),
-        actualizadoPor: Value(usuarioId),
-        updatedAt: Value(DateTime.now()),
-        syncStatus: const Value('pending_update'),
-      ),
-    );
+    // Actualizar ultimoPrecioVenta en el producto si se recibió un precio válido
+    if (effectivePrecio != null && effectivePrecio > 0) {
+      await (update(productos)..where((tbl) => tbl.id.equals(productoId))).write(
+        ProductosCompanion(
+          ultimoPrecioVenta: Value(effectivePrecio),
+          updatedAt: Value(now),
+          syncStatus: const Value('pending_update'),
+        ),
+      );
+    }
   }
 
   Future<String> _ensureDefaultVariantForProducto({

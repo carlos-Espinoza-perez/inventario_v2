@@ -302,6 +302,18 @@ class SalesDao extends BaseDao with _$SalesDaoMixin {
     return (select(clientes)..where((tbl) => _isPending(tbl.syncStatus))).get();
   }
 
+  Future<List<Cliente>> searchClientes(String query, String empresaId) async {
+    final pattern = '%$query%';
+    return (select(clientes)
+          ..where((tbl) =>
+              tbl.nombre.like(pattern) &
+              tbl.empresaId.equals(empresaId) &
+              tbl.estado.equals(true) &
+              tbl.fechaEliminacion.isNull())
+          ..limit(10))
+        .get();
+  }
+
   Future<List<Caja>> getPendingCajas() {
     return (select(cajas)..where((tbl) => _isPending(tbl.syncStatus))).get();
   }

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/db/exceptions/dao_exceptions.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
@@ -20,9 +21,12 @@ class RegistrarVentaUseCase {
     required String saleType,
     required double total,
     required double depositAmount,
+    String? bodegaId,
+    String? cajaSesionId,
   }) async {
+    final normalizedSaleType = _normalizeSaleType(saleType);
     // 1. Validaciones básicas de entrada
-    if (saleType == "Fiado" && nombreCliente.trim().isEmpty) {
+    if (normalizedSaleType == "Fiado" && nombreCliente.trim().isEmpty) {
       throw ContextoInvalidoException(
         "Para ventas al fiado, el nombre del cliente es obligatorio",
       );
@@ -35,20 +39,54 @@ class RegistrarVentaUseCase {
     // 2. Obtener contexto operativo
     final db = _ref.read(driftDatabaseProvider);
     final salesRepository = SalesRepository(db);
-    
-    final dashboardState = _ref.read(dashboardProvider).value;
-    final cajaSesionId = dashboardState?.cajaAbierta?.serverId;
 
-    if (cajaSesionId == null) {
+    CajaSesione? activeCashSession;
+    String effectiveCajaSesionId;
+    if (cajaSesionId != null && cajaSesionId.isNotEmpty) {
+      effectiveCajaSesionId = cajaSesionId;
+      activeCashSession =
+          await (db.select(db.cajaSesiones)
+                ..where((tbl) => tbl.id.equals(cajaSesionId))
+                ..limit(1))
+              .getSingleOrNull();
+      if (activeCashSession == null) {
+        activeCashSession = await db.salesDao.getCajaSesionActivaActual();
+        effectiveCajaSesionId = activeCashSession?.id ?? effectiveCajaSesionId;
+      }
+    } else {
+      final dashboardState = _ref.read(dashboardProvider).value;
+      activeCashSession = dashboardState?.cajaAbierta;
+      effectiveCajaSesionId = activeCashSession?.id ?? '';
+      if (effectiveCajaSesionId.isEmpty) {
+        activeCashSession = await db.salesDao.getCajaSesionActivaActual();
+        effectiveCajaSesionId = activeCashSession?.id ?? '';
+      }
+    }
+
+    if (effectiveCajaSesionId.isEmpty) {
       throw CajaSesionNoActivaException(
         "No hay una sesión de caja abierta. Abre caja primero.",
       );
     }
 
-    final selectedBodega = _ref.read(selectedBodegaProvider);
-    final bodegaId = selectedBodega?.serverId ?? '';
+    String effectiveBodegaId;
+    if (bodegaId != null && bodegaId.isNotEmpty) {
+      effectiveBodegaId = bodegaId;
+    } else {
+      final selectedBodega = _ref.read(selectedBodegaProvider);
+      effectiveBodegaId = selectedBodega?.serverId ?? '';
+      activeCashSession ??= await db.salesDao.getCajaSesionActivaActual();
+      if (effectiveBodegaId.isEmpty && activeCashSession != null) {
+        final caja =
+            await (db.select(db.cajas)
+                  ..where((tbl) => tbl.id.equals(activeCashSession!.cajaId))
+                  ..limit(1))
+                .getSingleOrNull();
+        effectiveBodegaId = caja?.bodegaId ?? '';
+      }
+    }
 
-    if (bodegaId.isEmpty) {
+    if (effectiveBodegaId.isEmpty) {
       throw ContextoInvalidoException(
         "Requieres tener una bodega seleccionada para vender.",
       );
@@ -56,16 +94,28 @@ class RegistrarVentaUseCase {
 
     // 3. Ejecutar la acción en el repositorio
     await salesRepository.registrarVentaDesdeCheckout(
-      cajaSesionId: cajaSesionId,
+      cajaSesionId: effectiveCajaSesionId,
       nombreCliente: nombreCliente,
-      saleType: saleType,
+      saleType: normalizedSaleType,
       total: total,
       depositAmount: depositAmount,
-      bodegaId: bodegaId,
+      bodegaId: effectiveBodegaId,
       cartItems: cartItems,
     );
 
     // 4. Invalidar estados para refrescar la UI
     _ref.invalidate(dashboardProvider);
+  }
+
+  String _normalizeSaleType(String value) {
+    final normalized = value
+        .trim()
+        .toLowerCase()
+        .replaceAll('é', 'e')
+        .replaceAll('è', 'e');
+    if (normalized == 'fiado') return 'Fiado';
+    if (normalized == 'credito') return 'Fiado';
+    if (normalized == 'contado') return 'Contado';
+    return 'Contado';
   }
 }

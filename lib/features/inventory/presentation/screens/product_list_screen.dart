@@ -244,6 +244,15 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'C\$ ${product.precioVenta.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        color: Colors.grey[700],
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ],
                 ),
               ),

@@ -109,6 +109,7 @@ class MovimientoInventarioDetalleInput {
   final double cantidad;
   final double costoProveedor;
   final double costoUnitarioFinal;
+  final double? precioVenta;
   final String? cargosAdicionalesJson;
   final String? variantesJson;
 
@@ -119,6 +120,7 @@ class MovimientoInventarioDetalleInput {
     required this.cantidad,
     required this.costoProveedor,
     required this.costoUnitarioFinal,
+    this.precioVenta,
     this.cargosAdicionalesJson,
     this.variantesJson,
   });

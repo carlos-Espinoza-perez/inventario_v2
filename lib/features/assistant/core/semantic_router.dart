@@ -35,13 +35,13 @@ VARIABLES YA RECOLECTADAS EN ESTA SESIÓN:
 
 INSTRUCCIONES:
 - Selecciona el intent que mejor coincide del catálogo.
-- Extrae las entidades mencionadas (producto, cliente, bodega, cantidad, etc.).
+   - Extrae las entidades mencionadas (producto, cliente, bodega, cantidad, tipo de venta, etc.).
 - Si el usuario referencia algo anterior ("el mismo", "ese", "el primero"), resuélvelo con el historial.
 - Asigna un score de confianza (0.0–1.0).
 - Devuelve SOLO JSON válido, sin texto adicional.
 
 FORMATO ESPERADO:
-{"intent":"...","score":0.0,"workflow_id":"...","intent_description":"...","entities":{"productQuery":null,"clientQuery":null,"quantity":null},"reasoning":"..."}
+{"intent":"...","score":0.0,"workflow_id":"...","intent_description":"...","entities":{"productQuery":null,"clientQuery":null,"quantity":null,"saleType":null},"reasoning":"..."}
 ''';
 
   SemanticRouter({

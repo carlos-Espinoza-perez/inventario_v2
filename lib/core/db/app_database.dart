@@ -11,6 +11,7 @@ import 'tables/cash_tables.dart';
 import 'tables/inventory_tables.dart';
 import 'tables/sales_tables.dart';
 import 'tables/logistics_tables.dart';
+import 'tables/assistant_tables.dart';
 import 'daos/auth_dao.dart';
 import 'daos/inventory_dao.dart';
 import 'daos/sales_dao.dart';
@@ -39,6 +40,8 @@ part 'app_database.g.dart';
     PagosVentas,
     Movimientos,
     DetalleMovimientos,
+    AssistantEntrySessions,
+    AssistantEntrySessionItems,
   ],
   daos: [AuthDao, InventoryDao, SalesDao, LogisticsDao],
 )
@@ -46,7 +49,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration {
@@ -56,8 +59,14 @@ class AppDatabase extends _$AppDatabase {
         await _createIndexes();
       },
       onUpgrade: (Migrator m, int from, int to) async {
-        if (from != to) {
+        if (from < 5) {
+          await m.createTable(assistantEntrySessions);
+          await m.createTable(assistantEntrySessionItems);
+          await _createIndexes();
+        } else if (from != to) {
           await transaction(() async {
+            await m.deleteTable('assistant_entry_session_items');
+            await m.deleteTable('assistant_entry_sessions');
             await m.deleteTable('detalle_movimientos');
             await m.deleteTable('movimientos');
             await m.deleteTable('pagos_ventas');
@@ -134,6 +143,12 @@ class AppDatabase extends _$AppDatabase {
     );
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_sync_status_caja_movimientos_extras ON caja_movimientos_extras (sync_status)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_assistant_entry_sessions_active ON assistant_entry_sessions (empresa_id, usuario_id, bodega_id, status)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_assistant_entry_items_session ON assistant_entry_session_items (session_id)',
     );
   }
 

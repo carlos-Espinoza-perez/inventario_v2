@@ -61,6 +61,9 @@ class AssistantDraft {
   final String? clientName;
   final String? saleType;
   final String? description;
+  final double? depositAmount;
+  final String? bodegaId;
+  final String? cajaSesionId;
 
   const AssistantDraft({
     required this.type,
@@ -68,6 +71,9 @@ class AssistantDraft {
     this.clientName,
     this.saleType,
     this.description,
+    this.depositAmount,
+    this.bodegaId,
+    this.cajaSesionId,
   });
 
   double get total => items.fold(0, (sum, i) => sum + i.subtotal);
@@ -79,6 +85,9 @@ class AssistantDraft {
     String? clientName,
     String? saleType,
     String? description,
+    double? depositAmount,
+    String? bodegaId,
+    String? cajaSesionId,
   }) =>
       AssistantDraft(
         type: type,
@@ -86,34 +95,96 @@ class AssistantDraft {
         clientName: clientName ?? this.clientName,
         saleType: saleType ?? this.saleType,
         description: description ?? this.description,
+        depositAmount: depositAmount ?? this.depositAmount,
+        bodegaId: bodegaId ?? this.bodegaId,
+        cajaSesionId: cajaSesionId ?? this.cajaSesionId,
       );
 
   factory AssistantDraft.fromMap(Map<String, dynamic> data) {
-    final typeStr = data['draft_type'] as String? ?? 'sale';
-    final type = typeStr == 'inventory_entry' ? DraftType.inventoryEntry : DraftType.sale;
+    final typeStr = _readString(data, [
+      'draft_type',
+      '__draft_type',
+      'draftType',
+      'type',
+    ]);
+    final type = typeStr == 'inventory_entry' ||
+            typeStr == 'entry' ||
+            typeStr == 'inventoryEntry'
+        ? DraftType.inventoryEntry
+        : DraftType.sale;
 
     final rawItems = data['items'] as List? ?? const [];
     final items = rawItems
         .map((e) => _itemFromMap(e as Map<String, dynamic>, type))
         .toList();
 
+    final depositAmount = _readDouble(data, [
+      'deposit_amount',
+      'depositAmount',
+      'abono',
+      'montoAbonado',
+      'paidAmount',
+    ]);
+
     return AssistantDraft(
       type: type,
       items: items,
-      clientName: data['client_name'] as String?,
-      saleType: data['sale_type'] as String?,
-      description: data['description'] as String?,
+      clientName: _readString(data, [
+        'client_name',
+        'clientName',
+        'clientQuery',
+        'nombreCliente',
+      ]),
+      saleType: _readString(data, ['sale_type', 'saleType', 'tipoVenta']) ??
+          _inferSaleType(depositAmount, items),
+      description: _readString(data, ['description', 'descripcion']),
+      depositAmount: depositAmount,
+      bodegaId: _readString(data, ['bodegaId', 'bodega_id', 'warehouseId']),
+      cajaSesionId: _readString(data, [
+        'cajaSesionId',
+        'caja_sesion_id',
+        'openCashSessionId',
+      ]),
     );
   }
 
   static DraftItem _itemFromMap(Map<String, dynamic> m, DraftType type) {
     return DraftItem(
-      productId: m['product_id'] as String? ?? '',
-      productName: m['product_name'] as String? ?? 'Producto',
-      quantity: (m['quantity'] as num?)?.toDouble() ?? 1.0,
-      unitPrice: (m['unit_price'] as num?)?.toDouble() ?? 0.0,
-      unitCost: (m['unit_cost'] as num?)?.toDouble(),
-      variantId: m['variant_id'] as String?,
+      productId: _readString(m, ['product_id', 'productoId', 'productId']) ?? '',
+      productName:
+          _readString(m, ['product_name', 'productoNombre', 'productName']) ??
+              'Producto',
+      quantity: _readDouble(m, ['quantity', 'cantidad', 'qty']) ?? 1.0,
+      unitPrice: _readDouble(m, ['unit_price', 'precio', 'price']) ?? 0.0,
+      unitCost: _readDouble(m, ['unit_cost', 'costo', 'cost']),
+      variantId: _readString(m, ['variant_id', 'varianteId', 'variantId']),
     );
+  }
+
+  static String? _readString(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final value = data[key];
+      if (value is String && value.trim().isNotEmpty) return value.trim();
+    }
+    return null;
+  }
+
+  static double? _readDouble(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final value = data[key];
+      if (value is num) return value.toDouble();
+      if (value is String) {
+        final parsed = double.tryParse(value.replaceAll(',', '.'));
+        if (parsed != null) return parsed;
+      }
+    }
+    return null;
+  }
+
+  static String? _inferSaleType(double? depositAmount, List<DraftItem> items) {
+    if (depositAmount == null) return null;
+    final total = items.fold(0.0, (sum, item) => sum + item.subtotal);
+    if (depositAmount < total) return 'Fiado';
+    return 'Contado';
   }
 }

@@ -8,6 +8,7 @@ import 'package:inventario_v2/features/inventory/data/providers/inventario_provi
 import 'package:inventario_v2/features/inventory/data/repositories/inventario_repository.dart';
 import 'package:inventario_v2/features/inventory/presentation/providers/warehouse_inventory_provider.dart'
     show warehouseInventoryProvider;
+import 'package:inventario_v2/features/inventory/presentation/screens/barcode_capture_screen.dart';
 import 'package:inventario_v2/features/sales/presentation/cash_register_screen.dart';
 import 'package:inventario_v2/features/sales/presentation/checkout_screen.dart';
 
@@ -162,7 +163,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                                       prefixIcon: const Icon(Icons.search),
                                       suffixIcon: IconButton(
                                         onPressed: () =>
-                                            _handleScannedProduct(items),
+                                            _openBarcodeScanner(items),
                                         icon: const Icon(Icons.qr_code_scanner),
                                       ),
                                       border: OutlineInputBorder(
@@ -288,6 +289,32 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         (a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()),
       );
     return result;
+  }
+
+  Future<void> _openBarcodeScanner(List<InventarioDTO> inventoryItems) async {
+    final code = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const BarcodeCaptureScreen()),
+    );
+    if (code == null || code.isEmpty) return;
+    _searchController.text = code;
+    await _processScannedCode(code, inventoryItems);
+  }
+
+  Future<void> _processScannedCode(
+      String code, List<InventarioDTO> inventoryItems) async {
+    final repo = await ref.read(inventarioRepositoryProvider.future);
+    final lookup = await repo.buscarProductoPorCodigoONombre(code);
+    if (lookup == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se encontró un producto con ese código'),
+        ),
+      );
+      return;
+    }
+    await _showProductModal(lookup.productId, lookup.nombre);
   }
 
   Future<void> _handleScannedProduct(List<InventarioDTO> inventoryItems) async {

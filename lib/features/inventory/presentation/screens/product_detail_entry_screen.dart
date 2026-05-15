@@ -724,6 +724,11 @@ class _ProductDetailEntryScreenState
       return;
     }
 
+    if (_generatedItems.isEmpty) {
+      _showErrorSnack("Agrega al menos una talla con cantidad antes de confirmar");
+      return;
+    }
+
     final List<Map<String, String>> finalItems = _generatedItems
         .map(
           (e) => {
@@ -869,6 +874,12 @@ class _SizeSelectorModalState extends State<_SizeSelectorModal> {
     _qtyCtrl.dispose();
     _priceCtrl.dispose();
     super.dispose();
+  }
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Colors.red.shade700),
+    );
   }
 
   Future<void> _openScanner() async {
@@ -1210,26 +1221,31 @@ class _SizeSelectorModalState extends State<_SizeSelectorModal> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
-                  if (_selectedSize == null) return;
+                  if (_selectedSize == null) {
+                    _showError("Selecciona una talla");
+                    return;
+                  }
                   // Si modo escanear pero sin código → abrir escáner primero
                   if (_qrMode == QrMode.scan && _scannedCode == null) {
                     _openScanner();
                     return;
                   }
                   final int qtyLocal = int.tryParse(_qtyCtrl.text) ?? 0;
+                  if (qtyLocal <= 0) {
+                    _showError("Ingresa una cantidad válida");
+                    return;
+                  }
                   final double priceLocal =
                       double.tryParse(_priceCtrl.text) ?? 0.0;
-                  if (qtyLocal > 0) {
-                    widget.onAdd(
-                      _selectedSize!,
-                      qtyLocal,
-                      priceLocal,
-                      _shouldPrint,
-                      _showPrice,
-                      _onePerLot,
-                      _qrMode == QrMode.scan ? _scannedCode : null,
-                    );
-                  }
+                  widget.onAdd(
+                    _selectedSize!,
+                    qtyLocal,
+                    priceLocal,
+                    _shouldPrint,
+                    _showPrice,
+                    _onePerLot,
+                    _qrMode == QrMode.scan ? _scannedCode : null,
+                  );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.orange.shade800,

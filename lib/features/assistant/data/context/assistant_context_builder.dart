@@ -8,9 +8,13 @@ class AssistantContextBuilder {
 
   AssistantContextBuilder(this._ref);
 
-  Future<AssistantOperationalContext> build({String? selectedWarehouseId}) async {
+  Future<AssistantOperationalContext> build({
+    String? selectedWarehouseId,
+  }) async {
     final authNotifier = _ref.read(authControllerProvider.notifier);
-    final sesion = authNotifier.sesionActiva;
+    final db = _ref.read(driftDatabaseProvider);
+    final sesion =
+        await db.authDao.getSesionActiva() ?? authNotifier.sesionActiva;
 
     if (sesion == null) {
       return const AssistantOperationalContext(
@@ -22,7 +26,6 @@ class AssistantContextBuilder {
     }
 
     final usuario = sesion.usuario;
-    final db = _ref.read(driftDatabaseProvider);
 
     final allowedBodegas = await db.authDao.watchBodegasVisibles().first;
     final allowedWarehouses = allowedBodegas
@@ -38,13 +41,25 @@ class AssistantContextBuilder {
       bodegaId = allowedWarehouses.first.id;
     }
 
-    // Verificar si hay sesión de caja activa
-    final cajaSesionActiva = sesion.cajaSesionActiva;
+    // Leer caja desde Drift evita usar una sesion de auth vieja despues de
+    // abrir caja desde dashboard/POS.
+    final cajaSesionActiva =
+        await db.salesDao.getCajaSesionActivaActual() ??
+        sesion.cajaSesionActiva;
     final cajaSesionAbierta = cajaSesionActiva != null;
-    final cajaId = sesion.cajaActiva?.id;
+    final cajaId = cajaSesionActiva?.cajaId ?? sesion.cajaActiva?.id;
     final openCashSessionId = cajaSesionActiva?.id;
+    if (bodegaId == null && cajaId != null) {
+      final caja =
+          await (db.select(db.cajas)
+                ..where((tbl) => tbl.id.equals(cajaId))
+                ..limit(1))
+              .getSingleOrNull();
+      if (caja != null && allowedWarehouseIds.contains(caja.bodegaId)) {
+        bodegaId = caja.bodegaId;
+      }
+    }
 
-    // Permisos del rol
     List<String> permisos = sesion.permisos;
     if (permisos.isEmpty) {
       try {
@@ -68,6 +83,8 @@ class AssistantContextBuilder {
   }
 }
 
-final assistantContextBuilderProvider = Provider<AssistantContextBuilder>((ref) {
+final assistantContextBuilderProvider = Provider<AssistantContextBuilder>((
+  ref,
+) {
   return AssistantContextBuilder(ref);
 });

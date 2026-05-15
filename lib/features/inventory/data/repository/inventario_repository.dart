@@ -147,6 +147,7 @@ class InventarioRepository {
       final variantes = await _db.inventoryDao.getVariantesByProductoId(
         productId,
       );
+      final producto = await _db.inventoryDao.getProductoById(productId);
       return variantes
           .map(
             (item) => {
@@ -154,7 +155,12 @@ class InventarioRepository {
               'color': item.color,
               'cantidad': 0.0,
               'stock': 0.0,
-              'precio': item.precioEspecifico ?? 0.0,
+              'precio': _resolvePrice(
+                item.precioEspecifico,
+                null,
+                producto?.precioBase,
+                producto?.ultimoPrecioVenta,
+              ),
               'sku': item.sku,
               'varianteId': item.id,
             },
@@ -171,13 +177,24 @@ class InventarioRepository {
             'color': item.variante.color,
             'cantidad': item.inventario.cantidadActual,
             'stock': item.inventario.cantidadActual,
-            'precio':
-                item.variante.precioEspecifico ?? item.inventario.precioVenta,
+            'precio': _resolvePrice(
+              item.variante.precioEspecifico,
+              item.inventario.precioVenta,
+              item.producto.precioBase,
+              item.producto.ultimoPrecioVenta,
+            ),
             'sku': item.variante.sku,
             'varianteId': item.variante.id,
           },
         )
         .toList();
+  }
+
+  double _resolvePrice(double? precioEspecifico, double? precioVenta,
+      double? precioBase, double? ultimoPrecioVenta) {
+    final directo = precioEspecifico ?? precioVenta;
+    if ((directo ?? 0) > 0) return directo!;
+    return precioBase ?? ultimoPrecioVenta ?? 0.0;
   }
 
   Future<void> registrarEntrada(InventoryEntryRequest request) {
