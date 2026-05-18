@@ -1,0 +1,109 @@
+name: Bug visual / funcional
+about: Reportar un problema detectado en una vista de la app Inventario v2
+title: "[Bug] "
+labels: "bug, needs-review"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Usa esta plantilla para registrar bugs detectados desde capturas, pruebas manuales o revisión de vistas.
+        Si el bug viene desde ChatGPT, el issue debe generarse solo después de aclarar dudas importantes.
+
+  - type: input
+    id: vista
+    attributes:
+      label: Vista afectada
+      description: Nombre de la pantalla, módulo o flujo donde aparece el error.
+      placeholder: Ej. Productos, Login, Inventario, Ajustes, Categorías
+    validations:
+      required: true
+
+  - type: textarea
+    id: descripcion
+    attributes:
+      label: Descripción del error
+      description: Explica qué está mal de forma clara y directa.
+      placeholder: Ej. El botón guardar se sale del contenedor al abrir el teclado.
+    validations:
+      required: true
+
+  - type: textarea
+    id: esperado
+    attributes:
+      label: Resultado esperado
+      description: Indica cómo debería verse o comportarse correctamente.
+      placeholder: Ej. El botón debe mantenerse dentro del formulario y respetar el scroll.
+    validations:
+      required: true
+
+  - type: textarea
+    id: pasos
+    attributes:
+      label: Pasos para reproducir
+      description: Lista los pasos mínimos para reproducir el problema.
+      placeholder: |
+        1. Abrir la vista ...
+        2. Realizar ...
+        3. Observar ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: evidencia
+    attributes:
+      label: Evidencia visual
+      description: Adjunta captura o video del problema.
+      placeholder: Arrastra aquí la captura o pega la imagen.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: prioridad
+    attributes:
+      label: Prioridad
+      options:
+        - Baja
+        - Media
+        - Alta
+        - Crítica
+      default: 1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: tipo
+    attributes:
+      label: Tipo de problema
+      options:
+        - UI / Diseño visual
+        - Funcionalidad
+        - Navegación
+        - Validación de formulario
+        - Rendimiento
+        - Datos / Supabase
+        - Offline first / sincronización
+        - Otro
+    validations:
+      required: true
+
+  - type: input
+    id: dispositivo
+    attributes:
+      label: Dispositivo o entorno
+      placeholder: Ej. Android físico, emulador, tablet, Chrome, pantalla pequeña
+    validations:
+      required: false
+
+  - type: textarea
+    id: notas_antigravity
+    attributes:
+      label: Notas para Antigravity
+      description: Instrucciones adicionales para el agente antes de modificar código.
+      value: |
+        Analizar antes de modificar.
+        Identificar archivos Flutter relacionados.
+        Proponer causa probable.
+        Corregir de forma puntual, sin refactorizaciones grandes no solicitadas.
+        Validar que el cambio no rompa otras vistas.
+    validations:
+      required: false
