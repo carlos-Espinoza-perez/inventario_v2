@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/db/models/inventory_requests.dart';
+import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/db/exceptions/dao_exceptions.dart';
 import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/inventario_provider.dart';
@@ -237,16 +238,18 @@ class _WarehouseTransferScreenState
 
 
 
-  List<dynamic> _destinationWarehouses(List<dynamic> bodegas) {
+  List<Bodega> _destinationWarehouses(List<Bodega> bodegas) {
     final originId = _selectedOriginWarehouseId;
     if (originId == null || originId.isEmpty) return bodegas;
 
     return bodegas.where((b) => b.serverId != originId).toList();
   }
 
-  void _syncDestinationSelection(List<dynamic> destinationBodegas) {
+  void _syncDestinationSelection(List<Bodega> destinationBodegas) {
     final currentDestination = _selectedDestinationWarehouseId;
-    final hasCurrent = destinationBodegas.any((b) => b.serverId == currentDestination);
+    final hasCurrent = destinationBodegas.any(
+      (b) => b.serverId == currentDestination,
+    );
 
     if (destinationBodegas.isEmpty) {
       if (currentDestination != null) {
