@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:inventario_v2/core/presentation/widgets/custom_card.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/features/auth/presentation/providers/auth_provider.dart';
 
@@ -47,7 +49,42 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
               usuario?.correo ?? 'Sin correo',
               style: TextStyle(fontSize: 16, color: Colors.grey[600]),
             ),
-            const SizedBox(height: 50),
+            const SizedBox(height: 32),
+            CustomCard(
+              padding: const EdgeInsets.all(16),
+              onTap: () => context.push('/sync-status'),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.cloud_sync, color: Colors.teal.shade700, size: 28),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Estado de Sincronización",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          "Monitorear contadores locales y ver logs del sistema en vivo",
+                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,
               height: 55,

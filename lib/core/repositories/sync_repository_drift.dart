@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 
-import 'package:flutter/foundation.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
+import 'package:inventario_v2/core/services/app_logger.dart';
 import 'package:inventario_v2/core/services/image_sync_service.dart';
 import 'package:inventario_v2/core/utils/uuid_validator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -136,58 +136,68 @@ class SyncRepository {
     if (_channels.isNotEmpty) return;
     _channels.addAll([
       _subscribe(
+        'empresas',
         'empresa',
         (j) =>
             _db.into(_db.empresas).insertOnConflictUpdate(_empresaFromJson(j)),
       ),
       _subscribe(
+        'roles',
         'rol',
         (j) => _db.into(_db.roles).insertOnConflictUpdate(_rolFromJson(j)),
       ),
       _subscribe(
+        'accesos_rol',
         'acceso_rol',
         (j) => _db
             .into(_db.accesosRol)
             .insertOnConflictUpdate(_accesoRolFromJson(j)),
       ),
       _subscribe(
+        'usuarios',
         'usuario',
         (j) =>
             _db.into(_db.usuarios).insertOnConflictUpdate(_usuarioFromJson(j)),
       ),
       _subscribe(
+        'bodegas',
         'bodega',
         (j) => _db.into(_db.bodegas).insertOnConflictUpdate(_bodegaFromJson(j)),
       ),
       _subscribe(
+        'bodegas_usuarios',
         'bodega_usuario',
         (j) => _db
             .into(_db.bodegasUsuarios)
             .insertOnConflictUpdate(_bodegaUsuarioFromJson(j)),
       ),
       _subscribe(
+        'cajas',
         'caja',
         (j) => _db.into(_db.cajas).insertOnConflictUpdate(_cajaFromJson(j)),
       ),
       _subscribe(
+        'caja_sesiones',
         'caja_sesion',
         (j) => _db
             .into(_db.cajaSesiones)
             .insertOnConflictUpdate(_cajaSesionFromJson(j)),
       ),
       _subscribe(
+        'caja_movimientos_extras',
         'caja_movimiento_extra',
         (j) => _db
             .into(_db.cajaMovimientosExtras)
             .insertOnConflictUpdate(_cajaMovimientoExtraFromJson(j)),
       ),
       _subscribe(
+        'categorias',
         'categoria',
         (j) => _db
             .into(_db.categorias)
             .insertOnConflictUpdate(_categoriaFromJson(j)),
       ),
-      _subscribe('producto', (j) async {
+      _subscribe('productos', 'producto', (j) async {
         final companion = _productoFromJson(j);
         await _db.into(_db.productos).insertOnConflictUpdate(companion);
         final producto = await (_db.select(
@@ -198,45 +208,53 @@ class SyncRepository {
         }
       }),
       _subscribe(
+        'producto_variantes',
         'codigo_producto',
         (j) => _db
             .into(_db.productoVariantes)
             .insertOnConflictUpdate(_productoVarianteFromJson(j)),
       ),
       _subscribe(
+        'inventarios',
         'inventario_producto',
         (j) => _db
             .into(_db.inventarios)
             .insertOnConflictUpdate(_inventarioFromJson(j)),
       ),
       _subscribe(
+        'clientes',
         'cliente',
         (j) =>
             _db.into(_db.clientes).insertOnConflictUpdate(_clienteFromJson(j)),
       ),
       _subscribe(
+        'movimientos',
         'movimiento_producto',
         (j) => _db
             .into(_db.movimientos)
             .insertOnConflictUpdate(_movimientoFromJson(j)),
       ),
       _subscribe(
+        'detalle_movimientos',
         'detalle_movimiento_producto',
         (j) => _db
             .into(_db.detalleMovimientos)
             .insertOnConflictUpdate(_detalleMovimientoFromJson(j)),
       ),
       _subscribe(
+        'ventas',
         'venta_producto',
         (j) => _db.into(_db.ventas).insertOnConflictUpdate(_ventaFromJson(j)),
       ),
       _subscribe(
+        'detalle_ventas',
         'detalle_venta',
         (j) => _db
             .into(_db.detalleVentas)
             .insertOnConflictUpdate(_detalleVentaFromJson(j)),
       ),
       _subscribe(
+        'pagos_ventas',
         'historial_pago',
         (j) => _db
             .into(_db.pagosVentas)
@@ -247,67 +265,80 @@ class SyncRepository {
 
   Future<void> pullRemoteChanges() async {
     await _pull(
+      'empresas',
       'empresa',
       (j) => _db.into(_db.empresas).insertOnConflictUpdate(_empresaFromJson(j)),
     );
     await _pull(
+      'roles',
       'rol',
       (j) => _db.into(_db.roles).insertOnConflictUpdate(_rolFromJson(j)),
     );
     await _pull(
+      'accesos_rol',
       'acceso_rol',
       (j) => _db
           .into(_db.accesosRol)
           .insertOnConflictUpdate(_accesoRolFromJson(j)),
     );
     await _pull(
+      'usuarios',
       'usuario',
       (j) => _db.into(_db.usuarios).insertOnConflictUpdate(_usuarioFromJson(j)),
     );
     await _pull(
+      'bodegas',
       'bodega',
       (j) => _db.into(_db.bodegas).insertOnConflictUpdate(_bodegaFromJson(j)),
     );
     await _pull(
+      'bodegas_usuarios',
       'bodega_usuario',
       (j) => _db
           .into(_db.bodegasUsuarios)
           .insertOnConflictUpdate(_bodegaUsuarioFromJson(j)),
     );
     await _pull(
+      'cajas',
       'caja',
       (j) => _db.into(_db.cajas).insertOnConflictUpdate(_cajaFromJson(j)),
     );
     await _pull(
+      'caja_sesiones',
       'caja_sesion',
       (j) => _db
           .into(_db.cajaSesiones)
           .insertOnConflictUpdate(_cajaSesionFromJson(j)),
     );
     await _pull(
+      'caja_movimientos_extras',
       'caja_movimiento_extra',
       (j) => _db
           .into(_db.cajaMovimientosExtras)
           .insertOnConflictUpdate(_cajaMovimientoExtraFromJson(j)),
     );
     await _pull(
+      'categorias',
       'categoria',
       (j) => _db
           .into(_db.categorias)
           .insertOnConflictUpdate(_categoriaFromJson(j)),
     );
     await _pull(
+      'productos',
       'producto',
       (j) =>
           _db.into(_db.productos).insertOnConflictUpdate(_productoFromJson(j)),
     );
     await _pull(
+      'producto_variantes',
       'codigo_producto',
       (j) => _db
           .into(_db.productoVariantes)
           .insertOnConflictUpdate(_productoVarianteFromJson(j)),
     );
     await _pull(
+      'inventarios',
       'inventario_producto',
       (j) async {
         final productoId = _text(j['producto_id']);
@@ -324,37 +355,81 @@ class SyncRepository {
       },
     );
     await _pull(
+      'clientes',
       'cliente',
       (j) => _db.into(_db.clientes).insertOnConflictUpdate(_clienteFromJson(j)),
     );
     await _pull(
+      'movimientos',
       'movimiento_producto',
       (j) => _db
           .into(_db.movimientos)
           .insertOnConflictUpdate(_movimientoFromJson(j)),
     );
     await _pull(
+      'detalle_movimientos',
       'detalle_movimiento_producto',
       (j) => _db
           .into(_db.detalleMovimientos)
           .insertOnConflictUpdate(_detalleMovimientoFromJson(j)),
     );
     await _pull(
+      'ventas',
       'venta_producto',
       (j) => _db.into(_db.ventas).insertOnConflictUpdate(_ventaFromJson(j)),
     );
     await _pull(
+      'detalle_ventas',
       'detalle_venta',
       (j) => _db
           .into(_db.detalleVentas)
           .insertOnConflictUpdate(_detalleVentaFromJson(j)),
     );
     await _pull(
+      'pagos_ventas',
       'historial_pago',
       (j) => _db
           .into(_db.pagosVentas)
           .insertOnConflictUpdate(_pagoVentaFromJson(j)),
     );
+  }
+
+  Future<bool> _shouldUpdateLocal(
+    String tableName,
+    Map<String, dynamic> remoteJson,
+  ) async {
+    final id = remoteJson['id']?.toString();
+    if (id == null || id.isEmpty) return true;
+
+    final res = await _db.customSelect(
+      "SELECT sync_status, updated_at FROM $tableName WHERE id = '$id' LIMIT 1",
+    ).getSingleOrNull();
+
+    if (res == null) return true;
+
+    final syncStatus = res.read<String>('sync_status');
+    if (syncStatus == 'synced' || syncStatus == 'sync_error') {
+      return true;
+    }
+
+    final localUpdatedAtStr = res.read<String>('updated_at');
+    final localUpdatedAt = DateTime.tryParse(localUpdatedAtStr) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+
+    final remoteUpdatedAtStr = remoteJson['ultima_actualizacion']?.toString() ??
+        remoteJson['fecha_registro']?.toString();
+    final remoteUpdatedAt = remoteUpdatedAtStr != null
+        ? DateTime.tryParse(remoteUpdatedAtStr) ??
+            DateTime.fromMillisecondsSinceEpoch(0)
+        : DateTime.fromMillisecondsSinceEpoch(0);
+
+    if (localUpdatedAt.isAfter(remoteUpdatedAt) ||
+        localUpdatedAt.isAtSameMomentAs(remoteUpdatedAt)) {
+      AppLogger.debug('[Sync] Preservando edicion local offline para $tableName ($id)');
+      return false;
+    }
+
+    return true;
   }
 
   Future<void> _push<T>(
@@ -364,33 +439,76 @@ class SyncRepository {
     Map<String, dynamic> Function(T row) toJson,
   ) async {
     if (rows.isEmpty) return;
-    final ids = rows.map((e) => ((e as dynamic).id ?? '').toString()).toList();
-    final payload = rows.map(toJson).where(_isValidPayload).toList();
-    if (payload.isEmpty) {
-      await _markSynced(localTable, ids);
-      return;
+    AppLogger.info('[Sync][Push] Iniciando subida para $remoteTable ($localTable): ${rows.length} registros pendientes');
+
+    final validPayloads = <Map<String, dynamic>>[];
+    final validIds = <String>[];
+    final invalidIds = <String>[];
+
+    for (final row in rows) {
+      final id = ((row as dynamic).id ?? '').toString();
+      try {
+        final json = toJson(row);
+        if (_isValidPayload(json)) {
+          validPayloads.add(json);
+          validIds.add(id);
+        } else {
+          invalidIds.add(id);
+        }
+      } catch (e) {
+        invalidIds.add(id);
+      }
     }
-    await _supabase.from(remoteTable).upsert(payload);
-    await _markSynced(localTable, ids);
+
+    if (invalidIds.isNotEmpty) {
+      AppLogger.warn('[Sync][Push] Encontrados ${invalidIds.length} payloads o UUIDs invalidos en $localTable');
+      await _markSyncError(localTable, invalidIds, 'Payload o UUID invalido');
+    }
+
+    if (validPayloads.isEmpty) return;
+
+    try {
+      await _supabase.from(remoteTable).upsert(validPayloads);
+      await _markSynced(localTable, validIds);
+      AppLogger.info('[Sync][Push] Lote exitoso para $remoteTable: ${validIds.length} registros guardados');
+    } catch (batchError) {
+      AppLogger.warn('[Sync][Push] Fallo upsert en lote para $remoteTable: $batchError. Reintentando individualmente...');
+      for (var i = 0; i < validPayloads.length; i++) {
+        final payload = validPayloads[i];
+        final id = validIds[i];
+        try {
+          await _supabase.from(remoteTable).upsert(payload);
+          await _markSynced(localTable, [id]);
+        } catch (itemError) {
+          AppLogger.error('[Sync][Push] Error en registro individual $id en $remoteTable', itemError);
+          await _markSyncError(localTable, [id], itemError.toString());
+        }
+      }
+    }
   }
 
   RealtimeChannel _subscribe(
-    String table,
+    String localTableName,
+    String remoteTableName,
     Future<void> Function(Map<String, dynamic>) onUpsert,
   ) {
     return _supabase
-        .channel('public:$table')
+        .channel('public:$remoteTableName')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
-          table: table,
+          table: remoteTableName,
           callback: (payload) async {
             if (payload.eventType == PostgresChangeEvent.insert ||
                 payload.eventType == PostgresChangeEvent.update) {
               try {
-                await onUpsert(payload.newRecord);
+                final map = payload.newRecord;
+                if (await _shouldUpdateLocal(localTableName, map)) {
+                  await onUpsert(map);
+                  AppLogger.debug('[Sync][Realtime] Registro actualizado en $localTableName desde web');
+                }
               } catch (e) {
-                debugPrint('[Sync][Realtime] Error en $table: $e');
+                AppLogger.error('[Sync][Realtime] Error en $remoteTableName', e);
               }
             }
           },
@@ -399,12 +517,28 @@ class SyncRepository {
   }
 
   Future<void> _pull(
-    String table,
+    String localTableName,
+    String remoteTableName,
     Future<void> Function(Map<String, dynamic>) onUpsert,
   ) async {
-    final rows = await _supabase.from(table).select();
-    for (final row in rows) {
-      await onUpsert(Map<String, dynamic>.from(row));
+    AppLogger.info('[Sync][Pull] Consultando $remoteTableName -> $localTableName');
+    try {
+      final rows = await _supabase.from(remoteTableName).select();
+      int successCount = 0;
+      for (final row in rows) {
+        try {
+          final map = Map<String, dynamic>.from(row);
+          if (await _shouldUpdateLocal(localTableName, map)) {
+            await onUpsert(map);
+            successCount++;
+          }
+        } catch (itemErr) {
+          AppLogger.error('[Sync][Pull] Fallo al insertar fila en $localTableName: $row', itemErr);
+        }
+      }
+      AppLogger.info('[Sync][Pull] $successCount filas sincronizadas en $localTableName');
+    } catch (e, st) {
+      AppLogger.error('[Sync][Pull] Fallo general al descargar de $remoteTableName', e, st);
     }
   }
 
@@ -413,6 +547,18 @@ class SyncRepository {
     final escapedIds = ids.map((id) => "'$id'").join(',');
     await _db.customStatement(
       "UPDATE $tableName SET sync_status = 'synced', updated_at = CURRENT_TIMESTAMP WHERE id IN ($escapedIds)",
+    );
+  }
+
+  Future<void> _markSyncError(
+    String tableName,
+    List<String> ids,
+    String errorMessage,
+  ) async {
+    if (ids.isEmpty) return;
+    final escapedIds = ids.map((id) => "'$id'").join(',');
+    await _db.customStatement(
+      "UPDATE $tableName SET sync_status = 'sync_error', updated_at = CURRENT_TIMESTAMP WHERE id IN ($escapedIds)",
     );
   }
 

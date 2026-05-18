@@ -2,16 +2,19 @@ targets:
   $default:
     builders:
       drift_dev:
+        options:
+          store_date_time_values_as_text: true
         generate_for:
           - lib/core/db/**
       riverpod_generator:
         generate_for:
           - lib/core/**
           - lib/features/auth/**
+          - lib/features/sync/**
           - lib/features/inventory/data/providers/bodega_provider.dart
       source_gen|combining_builder:
         generate_for:
           - lib/core/**
           - lib/features/auth/**
+          - lib/features/sync/**
           - lib/features/inventory/data/providers/bodega_provider.dart
-          - lib/features/auth/**
