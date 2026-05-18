@@ -105,52 +105,73 @@ class _WarehouseTransferScreenState
                         loading: () =>
                             const LinearProgressIndicator(minHeight: 2),
                         error: (err, _) => Text('Error cargando bodegas: $err'),
-                        data: (bodegas) => Column(
-                          children: [
-                            DropdownButtonFormField<String>(
-                              initialValue: _selectedOriginWarehouseId,
-                              decoration: const InputDecoration(
-                                labelText: 'Bodega de ORIGEN',
-                                border: OutlineInputBorder(),
+                        data: (bodegas) {
+                          final destinationBodegas = _destinationWarehouses(
+                            bodegas,
+                          );
+                          _syncDestinationSelection(destinationBodegas);
+
+                          return Column(
+                            children: [
+                              DropdownButtonFormField<String>(
+                                initialValue: _selectedOriginWarehouseId,
+                                decoration: const InputDecoration(
+                                  labelText: 'Bodega de ORIGEN',
+                                  border: OutlineInputBorder(),
+                                ),
+                                items: bodegas
+                                    .map(
+                                      (b) => DropdownMenuItem(
+                                        value: b.serverId,
+                                        child: Text(b.nombre),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (val) {
+                                  setState(() {
+                                    _selectedOriginWarehouseId = val;
+                                    _transferItems.clear();
+                                  });
+                                },
                               ),
-                              items: bodegas
-                                  .map(
-                                    (b) => DropdownMenuItem(
-                                      value: b.serverId,
-                                      child: Text(b.nombre),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (val) {
-                                setState(() {
-                                  _selectedOriginWarehouseId = val;
-                                  _transferItems.clear();
-                                });
-                              },
-                            ),
-                            const SizedBox(height: 16),
-                            DropdownButtonFormField<String>(
-                              initialValue: _selectedDestinationWarehouseId,
-                              decoration: const InputDecoration(
-                                labelText: 'Bodega de DESTINO',
-                                border: OutlineInputBorder(),
+                              const SizedBox(height: 16),
+                              DropdownButtonFormField<String>(
+                                initialValue: _selectedDestinationWarehouseId,
+                                decoration: const InputDecoration(
+                                  labelText: 'Bodega de DESTINO',
+                                  border: OutlineInputBorder(),
+                                ),
+                                items: destinationBodegas
+                                    .map(
+                                      (b) => DropdownMenuItem(
+                                        value: b.serverId,
+                                        child: Text(b.nombre),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: destinationBodegas.isEmpty
+                                    ? null
+                                    : (val) {
+                                        setState(
+                                          () =>
+                                              _selectedDestinationWarehouseId =
+                                                  val,
+                                        );
+                                      },
                               ),
-                              items: bodegas
-                                  .map(
-                                    (b) => DropdownMenuItem(
-                                      value: b.serverId,
-                                      child: Text(b.nombre),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (val) {
-                                setState(
-                                  () => _selectedDestinationWarehouseId = val,
-                                );
-                              },
-                            ),
-                          ],
-                        ),
+                              if (destinationBodegas.isEmpty) ...[
+                                const SizedBox(height: 8),
+                                const Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    'No hay bodegas disponibles para destino.',
+                                    style: TextStyle(color: Colors.redAccent),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -212,6 +233,39 @@ class _WarehouseTransferScreenState
         ],
       ),
     );
+  }
+
+
+
+  List<dynamic> _destinationWarehouses(List<dynamic> bodegas) {
+    final originId = _selectedOriginWarehouseId;
+    if (originId == null || originId.isEmpty) return bodegas;
+
+    return bodegas.where((b) => b.serverId != originId).toList();
+  }
+
+  void _syncDestinationSelection(List<dynamic> destinationBodegas) {
+    final currentDestination = _selectedDestinationWarehouseId;
+    final hasCurrent = destinationBodegas.any((b) => b.serverId == currentDestination);
+
+    if (destinationBodegas.isEmpty) {
+      if (currentDestination != null) {
+        _selectedDestinationWarehouseId = null;
+      }
+      return;
+    }
+
+    if (destinationBodegas.length == 1) {
+      final onlyDestination = destinationBodegas.first.serverId;
+      if (currentDestination != onlyDestination) {
+        _selectedDestinationWarehouseId = onlyDestination;
+      }
+      return;
+    }
+
+    if (!hasCurrent) {
+      _selectedDestinationWarehouseId = null;
+    }
   }
 
   Widget _buildEmptyState() {
@@ -335,6 +389,17 @@ class _WarehouseTransferScreenState
     final destinationWarehouseId = _selectedDestinationWarehouseId;
 
     if (originWarehouseId == null || destinationWarehouseId == null) {
+      return;
+    }
+
+    if (originWarehouseId == destinationWarehouseId) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('La bodega origen y destino no pueden ser iguales.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
       return;
     }
 
