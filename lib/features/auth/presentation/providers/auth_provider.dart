@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/db/models/sesion_activa_drift.dart';
+import 'package:inventario_v2/core/providers/auto_sync_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/core/providers/supabase_provider.dart';
 import 'package:inventario_v2/features/auth/data/repositories/auth_repository.dart';
@@ -80,6 +81,7 @@ class AuthController extends _$AuthController {
       );
 
       _sesionActiva = await db.authDao.getSesionActiva();
+      ref.read(autoSyncProvider.notifier).runFullSync();
       state = const AsyncValue.data(null);
     } catch (e, st) {
       debugPrint('[Auth] Error en createUser: $e');
@@ -131,6 +133,7 @@ class AuthController extends _$AuthController {
 
       _sesionActiva = await db.authDao.getSesionActiva();
       debugPrint('[Auth] Login exitoso: ${_sesionActiva?.usuario.id}');
+      ref.read(autoSyncProvider.notifier).runFullSync();
     } catch (e, stackTrace) {
       debugPrint('[Auth] Error en login: $e');
       state = AsyncError(e, stackTrace);

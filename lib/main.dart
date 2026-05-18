@@ -4,9 +4,13 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:inventario_v2/core/constants/app_constants.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/router/app_router.dart';
+import 'core/theme/app_theme.dart';
+import 'core/services/app_logger.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppLogger().init();
+  AppLogger.info('=== Aplicación Iniciada en main() ===');
 
   // Cargar variables de entorno
   await dotenv.load(fileName: ".env");
@@ -32,7 +36,7 @@ class MyApp extends ConsumerWidget {
 
       routerConfig: appRouter,
 
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.teal),
+      theme: AppTheme.lightTheme,
     );
   }
 }

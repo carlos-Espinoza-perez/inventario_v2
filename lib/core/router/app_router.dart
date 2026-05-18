@@ -37,6 +37,8 @@ import '../../features/auth/presentation/screens/create_company_sreen.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/auth/presentation/screens/user_profile_screen.dart';
 import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
+import '../../features/sync/presentation/screens/sync_status_screen.dart';
+import '../../features/sync/presentation/screens/log_viewer_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -123,6 +125,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/profile',
             builder: (context, state) => const UserProfileScreen(),
+          ),
+          GoRoute(
+            path: '/sync-status',
+            builder: (context, state) => const SyncStatusScreen(),
+          ),
+          GoRoute(
+            path: '/log-viewer',
+            builder: (context, state) => const LogViewerScreen(),
           ),
 
           GoRoute(

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_typography.dart';
 
 class CustomButton extends StatelessWidget {
   final String text;
@@ -10,27 +12,24 @@ class CustomButton extends StatelessWidget {
   final bool isFullWidth;
   final double height;
   final double borderRadius;
-
-  // Atributo opcional por si quieres forzar un color de texto específico
   final Color? forceTextColor;
 
   const CustomButton({
     super.key,
     required this.text,
     required this.onPressed,
-    this.color = Colors.cyan,
+    this.color = AppColors.primary,
     this.isOutlined = false,
     this.icon,
     this.isLoading = false,
     this.isFullWidth = false,
-    this.height = 44.0,
-    this.borderRadius = 32.0,
+    this.height = 48.0,
+    this.borderRadius = 55.0, // pill
     this.forceTextColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    // 1. Lógica de Contraste Inteligente
     Color textColor;
     if (isOutlined) {
       textColor = color;
@@ -38,24 +37,16 @@ class CustomButton extends StatelessWidget {
       if (forceTextColor != null) {
         textColor = forceTextColor!;
       } else {
-        textColor = color.computeLuminance() > 0.5
-            ? Colors.black87
-            : Colors.white;
+        textColor = color.computeLuminance() > 0.5 ? AppColors.textPrimary : AppColors.textInverse;
       }
     }
 
-    // 2. Colores finales
     final Color borderColor = color;
-
-    // 3. Definir la forma
     final OutlinedBorder shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(borderRadius),
-      side: isOutlined
-          ? BorderSide(color: borderColor, width: 1.5)
-          : BorderSide.none,
+      side: isOutlined ? BorderSide(color: borderColor, width: 1.5) : BorderSide.none,
     );
 
-    // 4. Contenido
     Widget content = isLoading
         ? SizedBox(
             height: 20,
@@ -76,12 +67,7 @@ class CustomButton extends StatelessWidget {
               Flexible(
                 child: Text(
                   text,
-                  style: TextStyle(
-                    color: textColor,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                  ),
+                  style: AppTypography.button.copyWith(color: textColor),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -89,56 +75,45 @@ class CustomButton extends StatelessWidget {
             ],
           );
 
-    // 5. Construcción del botón
     Widget buttonWidget;
 
     if (isOutlined) {
       buttonWidget = OutlinedButton(
         onPressed: isLoading ? null : onPressed,
-        style:
-            OutlinedButton.styleFrom(
-              // En .styleFrom se pasa directo (Correcto)
-              splashFactory: InkRipple.splashFactory,
-              foregroundColor: color,
-              side: BorderSide(color: borderColor, width: 1.5),
-              shape: shape,
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-            ).copyWith(
-              overlayColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.pressed)) {
-                  return color.withValues(alpha: 0.1);
-                }
-                return null;
-              }),
-            ),
+        style: OutlinedButton.styleFrom(
+          splashFactory: InkRipple.splashFactory,
+          foregroundColor: color,
+          side: BorderSide(color: borderColor, width: 1.5),
+          shape: shape,
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 24),
+        ).copyWith(
+          overlayColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.pressed)) {
+              return color.withValues(alpha: 0.1);
+            }
+            return null;
+          }),
+        ),
         child: content,
       );
     } else {
       buttonWidget = ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ButtonStyle(
-          // --- CORRECCIÓN AQUÍ ---
-          // splashFactory NO lleva MaterialStateProperty.all()
           splashFactory: InkRipple.splashFactory,
-          // -----------------------
-
-          // Fondo forzado
           backgroundColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.disabled)) {
-              return Colors.grey.shade300;
+              return AppColors.border;
             }
             return color;
           }),
-
           foregroundColor: WidgetStateProperty.all(textColor),
-          elevation: WidgetStateProperty.all(2),
+          elevation: WidgetStateProperty.all(1),
           shape: WidgetStateProperty.all(shape),
-          shadowColor: WidgetStateProperty.all(color.withValues(alpha: 0.4)),
+          shadowColor: WidgetStateProperty.all(color.withValues(alpha: 0.3)),
           padding: WidgetStateProperty.all(
-            const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+            const EdgeInsets.symmetric(vertical: 10, horizontal: 24),
           ),
-
-          // Configuración de la ola
           overlayColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.pressed)) {
               return textColor.withValues(alpha: 0.2);

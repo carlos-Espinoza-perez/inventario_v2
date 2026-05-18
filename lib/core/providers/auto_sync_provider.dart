@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/core/providers/supabase_provider.dart';
 import 'package:inventario_v2/core/repositories/sync_repository.dart';
+import 'package:inventario_v2/core/services/app_logger.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'auto_sync_provider.g.dart';
@@ -69,17 +69,36 @@ class AutoSync extends _$AutoSync {
       }
     });
 
-    Future.microtask(runFullSync);
+    final sesion = await db.authDao.getSesionActiva();
+    if (sesion != null) {
+      Future.microtask(runFullSync);
+    } else {
+      AppLogger.info('[AutoSync] Inicializado en espera (sin sesión activa local).');
+    }
     return const SyncState();
   }
 
   Future<void> runFullSync() async {
     final currentState = state.value;
-    if (currentState?.isSyncing == true) return;
+    if (currentState?.isSyncing == true) {
+      AppLogger.debug('[AutoSync] Full Sync omitido: ya está en progreso.');
+      return;
+    }
+
+    final db = ref.read(driftDatabaseProvider);
+    final sesion = await db.authDao.getSesionActiva();
+    if (sesion == null) {
+      AppLogger.debug('[AutoSync] Full Sync omitido: no hay sesión activa.');
+      return;
+    }
 
     final connectivity = await Connectivity().checkConnectivity();
-    if (connectivity.contains(ConnectivityResult.none)) return;
+    if (connectivity.contains(ConnectivityResult.none)) {
+      AppLogger.warn('[AutoSync] Full Sync omitido: sin conexión a internet.');
+      return;
+    }
 
+    AppLogger.info('[AutoSync] === INICIANDO SINCRONIZACIÓN COMPLETA ===');
     try {
       state = AsyncData(
         (currentState ?? const SyncState()).copyWith(
@@ -89,9 +108,12 @@ class AutoSync extends _$AutoSync {
       );
 
       final repo = await ref.read(syncRepositoryProvider.future);
+      AppLogger.info('[AutoSync] 1. Subiendo cambios locales...');
       await repo.pushCambiosLocales();
+      AppLogger.info('[AutoSync] 2. Descargando cambios remotos...');
       await repo.pullRemoteChanges();
 
+      AppLogger.info('[AutoSync] === SINCRONIZACIÓN COMPLETA FINALIZADA CON ÉXITO ===');
       state = AsyncData(
         (currentState ?? const SyncState()).copyWith(
           isSyncing: false,
@@ -99,8 +121,8 @@ class AutoSync extends _$AutoSync {
           lastSync: DateTime.now(),
         ),
       );
-    } catch (e) {
-      debugPrint('[AutoSync] Error en Full Sync: $e');
+    } catch (e, st) {
+      AppLogger.error('[AutoSync] Fallo en Full Sync', e, st);
       state = AsyncData(
         (currentState ?? const SyncState()).copyWith(
           isSyncing: false,
@@ -167,15 +189,21 @@ class AutoSync extends _$AutoSync {
     final currentState = state.value;
     if (currentState == null || currentState.isSyncing) return;
 
+    final db = ref.read(driftDatabaseProvider);
+    final sesion = await db.authDao.getSesionActiva();
+    if (sesion == null) return;
+
     final connectivity = await Connectivity().checkConnectivity();
     if (connectivity.contains(ConnectivityResult.none)) return;
 
+    AppLogger.info('[AutoSync] === Disparando Push de Cambios Locales Inmediato ===');
     try {
       state = AsyncData(
         currentState.copyWith(isSyncing: true, lastError: null),
       );
       final repo = await ref.read(syncRepositoryProvider.future);
       await repo.pushCambiosLocales();
+      AppLogger.info('[AutoSync] === Push Inmediato Finalizado con Éxito ===');
       state = AsyncData(
         currentState.copyWith(
           isSyncing: false,
@@ -183,8 +211,8 @@ class AutoSync extends _$AutoSync {
           lastSync: DateTime.now(),
         ),
       );
-    } catch (e) {
-      debugPrint('[AutoSync] Error en push automatico: $e');
+    } catch (e, st) {
+      AppLogger.error('[AutoSync] Error en push automático', e, st);
       state = AsyncData(
         currentState.copyWith(isSyncing: false, lastError: e.toString()),
       );
