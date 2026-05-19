@@ -2,7 +2,7 @@ name: Auto Codex from Issue
 
 on:
   issues:
-    types: [labeled]
+    types: [opened, labeled, edited]
 
 permissions:
   contents: read
@@ -13,7 +13,7 @@ jobs:
     name: Request Codex fix
     runs-on: ubuntu-latest
     if: >-
-      github.event.label.name == 'ai-ready' &&
+      contains(github.event.issue.labels.*.name, 'ai-ready') &&
       !contains(github.event.issue.labels.*.name, 'ai-working') &&
       !contains(github.event.issue.labels.*.name, 'ai-failed')
 
@@ -44,42 +44,44 @@ jobs:
             const issue = context.payload.issue;
             const issueNumber = issue.number;
             const issueUrl = issue.html_url;
-            const body = `@codex
 
-Trabaja automáticamente sobre este issue: ${issueUrl}
-
-Repositorio: ${owner}/${repo}
-Issue: #${issueNumber}
-
-Lee primero AGENTS.md y respeta sus reglas.
-
-Objetivo:
-- Resolver únicamente el problema descrito en este issue.
-- No mezclar varios bugs o mejoras en el mismo PR.
-- Crear una rama nueva desde main.
-- Crear un Pull Request hacia main.
-- No hacer merge directo.
-
-Reglas obligatorias:
-1. No modificar sincronización, Drift, Supabase, permisos, autenticación o base de datos salvo que el issue lo pida explícitamente.
-2. Si falta información crítica, comenta en el issue y no cambies código.
-3. Si el cambio supera 5 archivos o 300 líneas, justifícalo y marca el PR como needs-human-review.
-4. Ejecuta antes de finalizar:
-   - flutter pub get
-   - flutter analyze
-   - flutter test
-5. Si Flutter no está disponible, configura el entorno antes de continuar.
-6. Si GitHub Actions falla después de crear el PR, corrige en la misma rama y no abras otro PR.
-7. Cuando el PR genere APK correctamente, deja el PR listo para revisión humana.
-
-Formato mínimo del PR:
-- Closes #${issueNumber}
-- Causa encontrada
-- Solución aplicada
-- Archivos modificados
-- Validaciones realizadas
-- Riesgos pendientes
-`;
+            const body = [
+              '@codex',
+              '',
+              `Trabaja automaticamente sobre este issue: ${issueUrl}`,
+              '',
+              `Repositorio: ${owner}/${repo}`,
+              `Issue: #${issueNumber}`,
+              '',
+              'Lee primero AGENTS.md y respeta sus reglas.',
+              '',
+              'Objetivo:',
+              '- Resolver unicamente el problema descrito en este issue.',
+              '- No mezclar varios bugs o mejoras en el mismo PR.',
+              '- Crear una rama nueva desde main.',
+              '- Crear un Pull Request hacia main.',
+              '- No hacer merge directo.',
+              '',
+              'Reglas obligatorias:',
+              '1. No modificar sincronizacion, Drift, Supabase, permisos, autenticacion o base de datos salvo que el issue lo pida explicitamente.',
+              '2. Si falta informacion critica, comenta en el issue y no cambies codigo.',
+              '3. Si el cambio supera 5 archivos o 300 lineas, justificalo y marca el PR como needs-human-review.',
+              '4. Ejecuta antes de finalizar:',
+              '   - flutter pub get',
+              '   - flutter analyze',
+              '   - flutter test',
+              '5. Si Flutter no esta disponible, configura el entorno antes de continuar.',
+              '6. Si GitHub Actions falla despues de crear el PR, corrige en la misma rama y no abras otro PR.',
+              '7. Cuando el PR genere APK correctamente, deja el PR listo para revision humana.',
+              '',
+              'Formato minimo del PR:',
+              `- Closes #${issueNumber}`,
+              '- Causa encontrada',
+              '- Solucion aplicada',
+              '- Archivos modificados',
+              '- Validaciones realizadas',
+              '- Riesgos pendientes'
+            ].join('\n');
 
             await github.rest.issues.createComment({
               owner,
