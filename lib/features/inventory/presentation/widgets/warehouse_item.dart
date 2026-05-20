@@ -3,8 +3,14 @@ import 'package:flutter/material.dart';
 class WarehouseItem extends StatelessWidget {
   final String name;
   final VoidCallback onTap;
+  final VoidCallback? onManageUsers;
 
-  const WarehouseItem({super.key, required this.name, required this.onTap});
+  const WarehouseItem({
+    super.key,
+    required this.name,
+    required this.onTap,
+    this.onManageUsers,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -61,12 +67,49 @@ class WarehouseItem extends StatelessWidget {
                   ),
                 ),
 
-                // Flecha a la derecha
-                Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  size: 16,
-                  color: Colors.grey[400],
-                ),
+                // Acción de la derecha
+                if (onManageUsers == null)
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 16,
+                    color: Colors.grey[400],
+                  )
+                else
+                  PopupMenuButton<String>(
+                    icon: Icon(
+                      Icons.more_vert_rounded,
+                      color: Colors.grey[600],
+                    ),
+                    onSelected: (value) {
+                      if (value == 'inventory') {
+                        onTap();
+                      } else if (value == 'users') {
+                        onManageUsers!();
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'inventory',
+                        child: Row(
+                          children: [
+                            Icon(Icons.inventory_2_outlined, size: 18),
+                            SizedBox(width: 8),
+                            Text('Ver inventario'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'users',
+                        child: Row(
+                          children: [
+                            Icon(Icons.groups_2_outlined, size: 18),
+                            SizedBox(width: 8),
+                            Text('Gestionar usuarios'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),

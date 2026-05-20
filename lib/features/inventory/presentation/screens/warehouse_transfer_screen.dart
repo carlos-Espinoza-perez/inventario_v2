@@ -471,6 +471,13 @@ class _TransferItemCardState extends State<_TransferItemCard> {
   late final TextEditingController _costCtrl;
   late final TextEditingController _priceCtrl;
 
+  String _formatNum(double val) {
+    if (val % 1 == 0) {
+      return val.toInt().toString();
+    }
+    return val.toString();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -478,12 +485,10 @@ class _TransferItemCardState extends State<_TransferItemCard> {
       text: ((widget.item['cantidad'] as num?)?.toDouble() ?? 1.0)
           .toStringAsFixed(0),
     );
-    _costCtrl = TextEditingController(
-      text: ((widget.item['cost'] as num?)?.toDouble() ?? 0.0).toString(),
-    );
-    _priceCtrl = TextEditingController(
-      text: ((widget.item['price'] as num?)?.toDouble() ?? 0.0).toString(),
-    );
+    final double cost = (widget.item['cost'] as num?)?.toDouble() ?? 0.0;
+    final double price = (widget.item['price'] as num?)?.toDouble() ?? 0.0;
+    _costCtrl = TextEditingController(text: _formatNum(cost));
+    _priceCtrl = TextEditingController(text: _formatNum(price));
   }
 
   @override
@@ -508,7 +513,8 @@ class _TransferItemCardState extends State<_TransferItemCard> {
             children: [
               CircleAvatar(
                 backgroundColor: Colors.orange.shade50,
-                child: Text(widget.item['size']?.toString() ?? 'G'),
+                foregroundColor: Colors.orange.shade700,
+                child: const Icon(Icons.inventory_2_outlined, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -523,9 +529,39 @@ class _TransferItemCardState extends State<_TransferItemCard> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      'SKU: ${widget.item['qr'] ?? widget.item['productId']}',
-                      style: const TextStyle(fontSize: 12),
+                    Row(
+                      children: [
+                        Text(
+                          'SKU: ${widget.item['qr'] ?? widget.item['productId']}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        if (widget.item['size'] != null &&
+                            widget.item['size'].toString().trim().isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 1.5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: widget.item['size'].toString() == 'General'
+                                  ? Colors.grey[100]
+                                  : Colors.blue[50],
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              widget.item['size'].toString(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: widget.item['size'].toString() == 'General'
+                                    ? Colors.grey[600]
+                                    : Colors.blue[700],
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     Text(
                       'Disponible: ${((widget.item['availableStock'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}',

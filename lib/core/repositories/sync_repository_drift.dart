@@ -586,7 +586,6 @@ class SyncRepository {
     'id': id,
     'fecha_registro': createdAt.toIso8601String(),
     'ultima_actualizacion': updatedAt.toIso8601String(),
-    'sync_status': status,
   };
 
   DateTime _date(dynamic value) => value == null
@@ -653,7 +652,6 @@ class SyncRepository {
     'empresa_id': r.empresaId,
     'nombre': r.nombre,
     'direccion': r.direccion,
-    'descripcion': r.descripcion,
     'es_punto_venta': r.esPuntoVenta,
     'usuario_registro_id': r.usuarioRegistroId,
     'estado': r.estado,
@@ -676,20 +674,24 @@ class SyncRepository {
     'estado': r.estado,
     'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
   };
-  Map<String, dynamic> _cajaSesionToJson(CajaSesione r) => {
-    ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
-    'caja_id': r.cajaId,
-    'usuario_apertura_id': r.usuarioAperturaId,
-    'usuario_cierre_id': r.usuarioCierreId,
-    'fecha_apertura': r.fechaApertura.toIso8601String(),
-    'fecha_cierre': r.fechaCierre?.toIso8601String(),
-    'monto_inicial': r.montoInicial,
-    'total_ventas_sistema': r.totalVentasSistema,
-    'total_efectivo_real': r.totalEfectivoReal,
-    'diferencia': r.diferencia,
-    'estado_sesion': r.estadoSesion,
-    'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
-  };
+  Map<String, dynamic> _cajaSesionToJson(CajaSesione r) {
+    final map = {
+      ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
+      'caja_id': r.cajaId,
+      'usuario_apertura_id': r.usuarioAperturaId,
+      'usuario_cierre_id': r.usuarioCierreId,
+      'fecha_apertura': r.fechaApertura.toIso8601String(),
+      'fecha_cierre': r.fechaCierre?.toIso8601String(),
+      'monto_inicial': r.montoInicial,
+      'total_ventas_sistema': r.totalVentasSistema,
+      'total_efectivo_real': r.totalEfectivoReal,
+      'diferencia': r.diferencia,
+      'estado_sesion': r.estadoSesion,
+      'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
+    };
+    map.remove('fecha_registro');
+    return map;
+  }
   Map<String, dynamic> _cajaMovimientoExtraToJson(CajaMovimientosExtra r) => {
     ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
     'caja_sesion_id': r.cajaSesionId,
@@ -724,7 +726,6 @@ class SyncRepository {
     'ultimo_precio_venta': r.ultimoPrecioVenta,
     'imagen_url': r.imagenUrl,
     'imagen_local': r.imagenLocal,
-    'embedding': r.embedding,
     'usuario_registro_id': r.usuarioRegistroId,
     'estado': r.estado,
     'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
@@ -751,7 +752,6 @@ class SyncRepository {
     'precio_venta': r.precioVenta,
     'costo_promedio': r.costoPromedio,
     'actualizado_por': r.actualizadoPor,
-    'estado': r.estado,
     'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
   };
   Map<String, dynamic> _clienteToJson(Cliente r) => {
@@ -767,25 +767,31 @@ class SyncRepository {
     'estado': r.estado,
     'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
   };
-  Map<String, dynamic> _movimientoToJson(Movimiento r) => {
-    ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
-    'empresa_id': r.empresaId,
-    'bodega_origen_id': r.bodegaOrigenId,
-    'bodega_destino_id': r.bodegaDestinoId,
-    'tipo_movimiento': r.tipoMovimiento,
-    'estado_movimiento': r.estadoMovimiento,
-    'descripcion': r.descripcion,
-    'usuario_registro_id': r.usuarioRegistroId,
-    'estado': r.estado,
-    'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
-  };
+  Map<String, dynamic> _movimientoToJson(Movimiento r) {
+    String tipoMovimiento = r.tipoMovimiento;
+    if (tipoMovimiento.isNotEmpty) {
+      tipoMovimiento = tipoMovimiento[0].toUpperCase() + tipoMovimiento.substring(1);
+    }
+    
+    return {
+      ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
+      'empresa_id': r.empresaId,
+      'bodega_origen_id': r.bodegaOrigenId,
+      'bodega_destino_id': r.bodegaDestinoId,
+      'tipo_movimiento': tipoMovimiento,
+      'estado_movimiento': r.estadoMovimiento,
+      'descripcion': r.descripcion,
+      'usuario_registro_id': r.usuarioRegistroId,
+      'estado': r.estado,
+      'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
+    };
+  }
   Map<String, dynamic> _detalleMovimientoToJson(DetalleMovimiento r) => {
     ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
     'movimiento_producto_id': r.movimientoId,
     'producto_id': r.productoId,
     'cantidad': r.cantidad,
     'costo_proveedor': r.costoProveedor,
-    'cargos_adicionales_json': r.cargosAdicionalesJson,
     'costo_unitario_final': r.costoUnitarioFinal,
     'variantes_json': r.variantesJson,
     'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
@@ -954,7 +960,7 @@ class SyncRepository {
         totalEfectivoReal: Value(_double(j['total_efectivo_real'])),
         diferencia: Value(_double(j['diferencia'])),
         estadoSesion: _text(j['estado_sesion']) ?? 'abierta',
-        createdAt: Value(_date(j['fecha_registro'])),
+        createdAt: Value(_date(j['fecha_registro'] ?? j['fecha_apertura'])),
         updatedAt: Value(_date(j['ultima_actualizacion'])),
         fechaEliminacion: Value(
           j['fecha_eliminacion'] == null ? null : _date(j['fecha_eliminacion']),

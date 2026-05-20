@@ -222,6 +222,15 @@ class _WarehouseInventoryScreenState
                   itemCount: filteredProducts.length,
                   itemBuilder: (context, index) {
                     final prod = filteredProducts[index];
+                    final tallas = products
+                        .where((p) =>
+                            p.productoId == prod.productoId &&
+                            p.talla != 'General' &&
+                            p.talla.trim().isNotEmpty)
+                        .map((p) => p.talla)
+                        .toSet()
+                        .toList();
+
                     return _ProductCard(
                       productId: prod.productoId, // Pasar ID
                       nombre: prod.nombre,
@@ -232,6 +241,8 @@ class _WarehouseInventoryScreenState
                       categoria: prod.categoria,
                       imageUrl: prod.imagen,
                       warehouseId: widget.warehouseId,
+                      tallaActual: prod.talla,
+                      tallasDisponibles: tallas,
                     );
                   },
                 );
@@ -325,6 +336,8 @@ class _ProductCard extends StatelessWidget {
   final String categoria;
   final String? imageUrl;
   final String warehouseId;
+  final String tallaActual;
+  final List<String> tallasDisponibles;
 
   const _ProductCard({
     required this.productId,
@@ -336,7 +349,17 @@ class _ProductCard extends StatelessWidget {
     required this.categoria,
     this.imageUrl,
     required this.warehouseId,
+    required this.tallaActual,
+    required this.tallasDisponibles,
   });
+
+  String _formatTallas(List<String> tallas) {
+    if (tallas.length <= 3) {
+      return tallas.join(' · ');
+    } else {
+      return '${tallas.take(3).join(' · ')} · ...';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -377,7 +400,7 @@ class _ProductCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // SKU y Categoría
+                      // SKU y Talla
                       Row(
                         children: [
                           Flexible(
@@ -402,18 +425,31 @@ class _ProductCard extends StatelessWidget {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              categoria,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey[500],
+                          if (tallaActual != 'General') ...[
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue[50],
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  tallaActual,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.blue[700],
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
+                          ],
                         ],
                       ),
                       const SizedBox(height: 6),
@@ -429,6 +465,17 @@ class _ProductCard extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
+
+                      if (tallasDisponibles.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          "Tallas: ${_formatTallas(tallasDisponibles)}",
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
 
                       const SizedBox(height: 8),
 

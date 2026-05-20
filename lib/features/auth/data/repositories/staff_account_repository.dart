@@ -1,6 +1,5 @@
 import 'package:drift/drift.dart';
 import 'package:inventario_v2/core/db/models/sesion_activa_drift.dart';
-import 'package:inventario_v2/core/utils/password_hasher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:inventario_v2/core/db/app_database.dart';
@@ -15,7 +14,6 @@ class StaffAccountRepository {
     required SessionUserDrift currentUser,
     required String nombre,
     required String correo,
-    required String passwordTemporal,
     required String rolId,
     required Set<String> bodegaIds,
   }) async {
@@ -26,8 +24,6 @@ class StaffAccountRepository {
         'admin_user_id': currentUser.serverId,
         'nombre_completo': nombre,
         'correo': correo,
-        'password_temporal': passwordTemporal,
-        'password_hash': PasswordHasher.hashPassword(passwordTemporal),
         'rol_id': rolId,
         'bodega_ids': bodegaIds.toList(),
       },

@@ -84,6 +84,41 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 16),
+            CustomCard(
+              padding: const EdgeInsets.all(16),
+              onTap: () => context.push('/staff-management'),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.people_outline, color: Colors.blue.shade700, size: 28),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Gestión de Personal",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          "Añadir, invitar o editar accesos de empleados",
+                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
+                ],
+              ),
+            ),
             const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,

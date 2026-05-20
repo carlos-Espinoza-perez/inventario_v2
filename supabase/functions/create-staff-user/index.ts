@@ -31,8 +31,6 @@ serve(async (req) => {
     const adminUserId = body.admin_user_id as string
     const nombreCompleto = body.nombre_completo as string
     const correo = body.correo as string
-    const passwordTemporal = body.password_temporal as string
-    const passwordHash = body.password_hash as string
     const rolId = body.rol_id as string
     const bodegaIds = (body.bodega_ids ?? []) as string[]
 
@@ -41,7 +39,6 @@ serve(async (req) => {
       !adminUserId ||
       !nombreCompleto ||
       !correo ||
-      !passwordTemporal ||
       !rolId
     ) {
       return json({ error: 'Missing required fields' }, 400)
@@ -63,18 +60,16 @@ serve(async (req) => {
     }
 
     const { data: authUser, error: createAuthError } =
-      await adminClient.auth.admin.createUser({
-        email: correo,
-        password: passwordTemporal,
-        email_confirm: true,
-        user_metadata: {
+      await adminClient.auth.admin.inviteUserByEmail(correo, {
+        data: {
           name: nombreCompleto,
           empresa_id: empresaId,
+          must_change_password: true,
         },
       })
 
     if (createAuthError || !authUser.user) {
-      return json({ error: createAuthError?.message ?? 'Could not create auth user' }, 400)
+      return json({ error: createAuthError?.message ?? 'Could not invite user' }, 400)
     }
 
     const { data: profileData, error: profileError } = await adminClient.rpc(
@@ -85,7 +80,7 @@ serve(async (req) => {
         p_rol_id: rolId,
         p_nombre_completo: nombreCompleto,
         p_correo: correo,
-        p_password_hash: passwordHash,
+        p_password_hash: null,
         p_usuario_registro_id: adminUserId,
         p_bodega_ids: bodegaIds,
       },

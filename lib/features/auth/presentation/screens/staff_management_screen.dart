@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:inventario_v2/core/constants/permission_codes.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/db/models/auth_admin_models.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
@@ -55,24 +53,21 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
   Widget build(BuildContext context) {
     final dataAsync = ref.watch(staffAdminDataProvider);
     final authorization = ref.watch(authorizationStateProvider).value;
-    final canCreate = authorization?.can(PermissionCode.staffCreate) ?? false;
-    final canUpdate = authorization?.can(PermissionCode.staffUpdate) ?? false;
-    final canDelete = authorization?.can(PermissionCode.staffDelete) ?? false;
-    final canReadRoles = authorization?.can(PermissionCode.roleRead) ?? false;
+    
+    const canUpdate = true;
+    const canDelete = true;
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      floatingActionButton: canCreate
-          ? FloatingActionButton.extended(
-              onPressed: () => dataAsync.whenData(_showUserDialog),
-              backgroundColor: Colors.cyan.shade800,
-              icon: const Icon(Icons.person_add_alt_1, color: Colors.white),
-              label: const Text(
-                'Nuevo personal',
-                style: TextStyle(color: Colors.white),
-              ),
-            )
-          : null,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => dataAsync.whenData(_showUserDialog),
+        backgroundColor: Colors.cyan.shade800,
+        icon: const Icon(Icons.person_add_alt_1, color: Colors.white),
+        label: const Text(
+          'Nuevo personal',
+          style: TextStyle(color: Colors.white),
+        ),
+      ),
       body: dataAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(child: Text('Error: $err')),
@@ -92,9 +87,8 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
                 totalUsers: data.users.length,
                 totalRoles: data.roles.length,
                 totalWarehouses: data.warehouses.length,
-                onManageRoles: canReadRoles
-                    ? () => context.push('/role-management')
-                    : null,
+                // TODO: Implementar vista de gestión de roles
+                onManageRoles: null,
               ),
               const SizedBox(height: 16),
               const Text(
@@ -197,7 +191,6 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
   }) async {
     final nameCtrl = TextEditingController(text: existing?.nombreCompleto ?? '');
     final emailCtrl = TextEditingController(text: existing?.correo ?? '');
-    final passwordCtrl = TextEditingController();
     String? selectedRoleId =
         existing?.rolId ?? (data.roles.isNotEmpty ? data.roles.first.id : null);
     final selectedWarehouses = data.assignments
@@ -205,8 +198,11 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
         .map((assignment) => assignment.bodegaId)
         .toSet();
 
+    bool isSaving = false;
+
     await showDialog<void>(
       context: context,
+      barrierDismissible: false, // Prevent dismissing while saving
       builder: (ctx) => StatefulBuilder(
         builder: (context, setLocalState) => AlertDialog(
           title: Text(existing == null ? 'Nuevo personal' : 'Editar personal'),
@@ -222,25 +218,17 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
                     decoration: const InputDecoration(
                       labelText: 'Nombre completo',
                     ),
+                    enabled: !isSaving,
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: emailCtrl,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Correo de acceso',
+                      helperText: existing == null ? 'Se enviará una invitación a este correo.' : null,
                     ),
+                    enabled: existing == null && !isSaving,
                   ),
-                  if (existing == null) ...[
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: passwordCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Contrasena temporal',
-                        helperText:
-                            'La persona podra entrar con esta contrasena inicial.',
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     initialValue: selectedRoleId,
@@ -253,9 +241,11 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
                           ),
                         )
                         .toList(),
-                    onChanged: (value) {
-                      setLocalState(() => selectedRoleId = value);
-                    },
+                    onChanged: isSaving
+                        ? null
+                        : (value) {
+                            setLocalState(() => selectedRoleId = value);
+                          },
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -272,15 +262,18 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
                       contentPadding: EdgeInsets.zero,
                       value: selectedWarehouses.contains(warehouse.id),
                       title: Text(warehouse.nombre),
-                      onChanged: (checked) {
-                        setLocalState(() {
-                          if (checked == true) {
-                            selectedWarehouses.add(warehouse.id);
-                          } else {
-                            selectedWarehouses.remove(warehouse.id);
-                          }
-                        });
-                      },
+                      enabled: !isSaving,
+                      onChanged: isSaving
+                          ? null
+                          : (checked) {
+                              setLocalState(() {
+                                if (checked == true) {
+                                  selectedWarehouses.add(warehouse.id);
+                                } else {
+                                  selectedWarehouses.remove(warehouse.id);
+                                }
+                              });
+                            },
                     ),
                   ),
                 ],
@@ -288,27 +281,36 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancelar'),
-            ),
+            if (!isSaving)
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancelar'),
+              ),
             ElevatedButton(
-              onPressed: () async {
-                await _saveUser(
-                  existing: existing,
-                  name: nameCtrl.text.trim(),
-                  email: emailCtrl.text.trim(),
-                  temporaryPassword: passwordCtrl.text.trim(),
-                  roleId: selectedRoleId,
-                  warehouseIds: selectedWarehouses,
-                );
-                if (ctx.mounted) Navigator.pop(ctx);
-              },
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      setLocalState(() => isSaving = true);
+                      await _saveUser(
+                        existing: existing,
+                        name: nameCtrl.text.trim(),
+                        email: emailCtrl.text.trim(),
+                        roleId: selectedRoleId,
+                        warehouseIds: selectedWarehouses,
+                      );
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.cyan.shade800,
                 foregroundColor: Colors.white,
               ),
-              child: const Text('Guardar'),
+              child: isSaving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Guardar'),
             ),
           ],
         ),
@@ -320,7 +322,6 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
     required Usuario? existing,
     required String name,
     required String email,
-    required String temporaryPassword,
     required String? roleId,
     required Set<String> warehouseIds,
   }) async {
@@ -331,10 +332,10 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
       return;
     }
 
-    if (existing == null && (email.isEmpty || temporaryPassword.isEmpty)) {
+    if (existing == null && email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Correo y contrasena temporal son obligatorios'),
+          content: Text('El correo es obligatorio'),
         ),
       );
       return;
@@ -355,7 +356,6 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
           currentUser: currentUser,
           nombre: name,
           correo: email,
-          passwordTemporal: temporaryPassword,
           rolId: roleId,
           bodegaIds: warehouseIds,
         );
@@ -381,7 +381,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
         SnackBar(
           content: Text(
             existing == null
-                ? 'Personal creado correctamente'
+                ? 'Personal invitado correctamente'
                 : 'Personal actualizado correctamente',
           ),
         ),

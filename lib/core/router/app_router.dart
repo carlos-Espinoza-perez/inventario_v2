@@ -39,6 +39,10 @@ import '../../features/auth/presentation/screens/user_profile_screen.dart';
 import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../../features/sync/presentation/screens/sync_status_screen.dart';
 import '../../features/sync/presentation/screens/log_viewer_screen.dart';
+import '../../features/auth/presentation/screens/force_password_change_screen.dart';
+import '../../core/providers/supabase_provider.dart';
+
+import '../../features/auth/presentation/screens/staff_management_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -84,6 +88,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // 4. LÓGICA LOGUEADO (Carga terminó, hay usuario)
       if (estaLogueado) {
+        final supabase = ref.read(supabaseClientProvider);
+        final mustChangePassword = supabase.auth.currentUser?.userMetadata?['must_change_password'] == true;
+        final isForcePasswordRoute = state.matchedLocation == '/force-password-change';
+
+        if (mustChangePassword && !isForcePasswordRoute) {
+          return '/force-password-change';
+        }
+
+        if (!mustChangePassword && isForcePasswordRoute) {
+          return '/dashboard';
+        }
+
         // Si intenta ver el splash o el login estando ya autenticado,
         // lo mandamos al Dashboard.
         if (isSplash || isAuthRoute) {
@@ -107,6 +123,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/create-user',
         builder: (_, _) => const CreateUserScreen(),
       ),
+      GoRoute(
+        path: '/force-password-change',
+        builder: (_, _) => const ForcePasswordChangeScreen(),
+      ),
 
       ShellRoute(
         builder: (context, state, child) {
@@ -125,6 +145,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/profile',
             builder: (context, state) => const UserProfileScreen(),
+          ),
+          GoRoute(
+            path: '/staff-management',
+            builder: (context, state) => const StaffManagementScreen(),
           ),
           GoRoute(
             path: '/sync-status',

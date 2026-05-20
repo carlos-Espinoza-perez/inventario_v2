@@ -519,6 +519,49 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
     });
   }
 
+  Future<void> replaceWarehouseUserAssignments({
+    required String warehouseId,
+    required String currentUserId,
+    required Set<String> userIds,
+  }) async {
+    final now = DateTime.now();
+    await transaction(() async {
+      final currentAssignments =
+          await (select(bodegasUsuarios)
+                ..where((tbl) => tbl.bodegaId.equals(warehouseId)))
+              .get();
+
+      for (final assignment in currentAssignments) {
+        await (update(
+          bodegasUsuarios,
+        )..where((tbl) => tbl.id.equals(assignment.id))).write(
+          BodegasUsuariosCompanion(
+            estado: const Value(false),
+            fechaEliminacion: Value(now),
+            updatedAt: Value(now),
+            syncStatus: const Value('pending_update'),
+          ),
+        );
+      }
+
+      for (final userId in userIds) {
+        await into(bodegasUsuarios).insertOnConflictUpdate(
+          BodegasUsuariosCompanion.insert(
+            id: const Uuid().v4(),
+            usuarioId: userId,
+            bodegaId: warehouseId,
+            usuarioRegistroId: Value(currentUserId),
+            estado: const Value(true),
+            createdAt: Value(now),
+            updatedAt: Value(now),
+            fechaEliminacion: const Value.absent(),
+            syncStatus: const Value('pending_insert'),
+          ),
+        );
+      }
+    });
+  }
+
   Future<void> deactivateUser(String userId) async {
     final now = DateTime.now();
     await (update(usuarios)..where((tbl) => tbl.id.equals(userId))).write(
