@@ -8,6 +8,7 @@ import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/core/providers/supabase_provider.dart';
 import 'package:inventario_v2/features/auth/data/repositories/auth_repository.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 part 'auth_provider.g.dart';
 
@@ -150,6 +151,9 @@ class AuthController extends _$AuthController {
     try {
       await supabase.auth.signOut();
     } catch (_) {}
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('active_user_id');
 
     await db.authDao.clearSesion();
 

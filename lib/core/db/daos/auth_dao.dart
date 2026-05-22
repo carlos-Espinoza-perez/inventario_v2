@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../app_database.dart';
@@ -26,13 +27,20 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
   AuthDao(super.db);
 
   Expression<bool> _isPending(GeneratedColumn<String> column) {
-    return column.equals('pending_insert') | column.equals('pending_update');
+    return column.equals('pending_insert') | column.equals('pending_update') | column.equals('sync_error');
   }
 
-  Future<Usuario?> getUsuarioActual() {
+  Future<String?> getActiveUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('active_user_id');
+  }
+
+  Future<Usuario?> getUsuarioActual() async {
+    final activeUserId = await getActiveUserId();
+    if (activeUserId == null) return null;
+
     return (select(usuarios)
-          ..where((tbl) => tbl.estado.equals(true))
-          ..orderBy([(tbl) => OrderingTerm.desc(tbl.updatedAt)])
+          ..where((tbl) => tbl.estado.equals(true) & tbl.id.equals(activeUserId))
           ..limit(1))
         .getSingleOrNull();
   }
@@ -107,13 +115,18 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
     );
   }
 
-  Stream<SesionActivaDrift?> watchSesionActiva() {
+  Stream<SesionActivaDrift?> watchSesionActiva() async* {
+    final activeUserId = await getActiveUserId();
+    if (activeUserId == null) {
+      yield null;
+      return;
+    }
+
     final query = select(usuarios)
-      ..where((tbl) => tbl.estado.equals(true))
-      ..orderBy([(tbl) => OrderingTerm.desc(tbl.updatedAt)])
+      ..where((tbl) => tbl.estado.equals(true) & tbl.id.equals(activeUserId))
       ..limit(1);
 
-    return query.watchSingleOrNull().asyncMap((_) => getSesionActiva());
+    yield* query.watchSingleOrNull().asyncMap((_) => getSesionActiva());
   }
 
   Future<void> replaceSesionActiva({
@@ -189,6 +202,22 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
       return;
     }
 
+    final role = await (select(roles)..where((tbl) => tbl.id.equals(user.rolId))).getSingleOrNull();
+    final isAdmin = role?.userAdmin ?? false;
+
+    if (isAdmin) {
+      final warehousesQuery = select(bodegas)
+        ..where((tbl) => tbl.estado.equals(true) & tbl.empresaId.equals(user.empresaId))
+        ..orderBy([(tbl) => OrderingTerm.asc(tbl.nombre)]);
+
+      if (query.trim().isNotEmpty) {
+        warehousesQuery.where((tbl) => tbl.nombre.like('%${query.trim()}%'));
+      }
+
+      yield* warehousesQuery.watch();
+      return;
+    }
+
     final userWarehouseStream = select(bodegasUsuarios)
       ..where((tbl) => tbl.usuarioId.equals(user.id) & tbl.estado.equals(true));
 
@@ -200,7 +229,7 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
       }
 
       final warehousesQuery = select(bodegas)
-        ..where((tbl) => tbl.estado.equals(true) & tbl.id.isIn(ids.toList()))
+        ..where((tbl) => tbl.estado.equals(true) & tbl.id.isIn(ids.toList()) & tbl.empresaId.equals(user.empresaId))
         ..orderBy([(tbl) => OrderingTerm.asc(tbl.nombre)]);
 
       if (query.trim().isNotEmpty) {
@@ -221,6 +250,16 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
     final user = await getUsuarioActual();
     if (user == null) return <String>{};
 
+    final role = await (select(roles)..where((tbl) => tbl.id.equals(user.rolId))).getSingleOrNull();
+    final isAdmin = role?.userAdmin ?? false;
+
+    if (isAdmin) {
+      final all = await (select(bodegas)
+            ..where((tbl) => tbl.estado.equals(true) & tbl.empresaId.equals(user.empresaId)))
+          .get();
+      return all.map((b) => b.id).toSet();
+    }
+
     final relaciones =
         await (select(bodegasUsuarios)..where(
               (tbl) => tbl.usuarioId.equals(user.id) & tbl.estado.equals(true),
@@ -230,11 +269,18 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
     if (relaciones.isEmpty) {
       final all = await (select(
         bodegas,
-      )..where((tbl) => tbl.estado.equals(true))).get();
+      )..where((tbl) => tbl.estado.equals(true) & tbl.empresaId.equals(user.empresaId))).get();
       return all.map((b) => b.id).toSet();
     }
 
-    return relaciones.map((r) => r.bodegaId).toSet();
+    final ids = relaciones.map((r) => r.bodegaId).toList();
+    if (ids.isEmpty) return <String>{};
+
+    final matchingBodegas = await (select(bodegas)
+          ..where((tbl) => tbl.id.isIn(ids) & tbl.estado.equals(true) & tbl.empresaId.equals(user.empresaId)))
+        .get();
+
+    return matchingBodegas.map((b) => b.id).toSet();
   }
 
   Future<void> createBodegaForCurrentUser({

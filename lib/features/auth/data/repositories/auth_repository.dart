@@ -3,6 +3,7 @@ import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/db/daos/auth_dao.dart';
 import 'package:inventario_v2/core/utils/password_hasher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthRepository {
   final SupabaseClient _supabase;
@@ -67,6 +68,9 @@ class AuthRepository {
         throw Exception('No se pudo iniciar sesión');
       }
 
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('active_user_id', user.id);
+
       final userData = await _supabase
           .from('usuario')
           .select('*, empresa(*), rol(*)')
@@ -127,6 +131,9 @@ class AuthRepository {
     if (!isPasswordValid) {
       throw Exception('Contraseña incorrecta.');
     }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('active_user_id', user.id);
   }
 
   EmpresasCompanion _empresaCompanionFromJson(Map<String, dynamic> json) {
