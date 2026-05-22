@@ -53,6 +53,7 @@ class SyncRepository {
       'bodegas_usuarios',
       await _db.authDao.getPendingBodegasUsuarios(),
       _bodegaUsuarioToJson,
+      onConflict: 'usuario_id, bodega_id',
     );
     await _push(
       'caja',
@@ -436,8 +437,9 @@ class SyncRepository {
     String remoteTable,
     String localTable,
     List<T> rows,
-    Map<String, dynamic> Function(T row) toJson,
-  ) async {
+    Map<String, dynamic> Function(T row) toJson, {
+    String? onConflict,
+  }) async {
     if (rows.isEmpty) return;
     AppLogger.info('[Sync][Push] Iniciando subida para $remoteTable ($localTable): ${rows.length} registros pendientes');
 
@@ -468,7 +470,7 @@ class SyncRepository {
     if (validPayloads.isEmpty) return;
 
     try {
-      await _supabase.from(remoteTable).upsert(validPayloads);
+      await _supabase.from(remoteTable).upsert(validPayloads, onConflict: onConflict);
       await _markSynced(localTable, validIds);
       AppLogger.info('[Sync][Push] Lote exitoso para $remoteTable: ${validIds.length} registros guardados');
     } catch (batchError) {
@@ -477,7 +479,7 @@ class SyncRepository {
         final payload = validPayloads[i];
         final id = validIds[i];
         try {
-          await _supabase.from(remoteTable).upsert(payload);
+          await _supabase.from(remoteTable).upsert(payload, onConflict: onConflict);
           await _markSynced(localTable, [id]);
         } catch (itemError) {
           AppLogger.error('[Sync][Push] Error en registro individual $id en $remoteTable', itemError);
@@ -566,7 +568,7 @@ class SyncRepository {
     final id = json['id']?.toString();
     if (!UuidValidator.isValidUUID(id)) return false;
     for (final entry in json.entries) {
-      if (!entry.key.endsWith('_id')) continue;
+      if (!entry.key.endsWith('_id') || entry.key == 'referencia_venta_id') continue;
       final value = entry.value?.toString();
       if (value != null &&
           value.isNotEmpty &&
@@ -643,7 +645,6 @@ class SyncRepository {
     'password_hash': r.passwordHash,
     'pin_offline': r.pinOffline,
     'usuario_registro_id': r.usuarioRegistroId,
-    'bodega_default_id': r.bodegaDefaultId,
     'estado': r.estado,
     'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
   };
@@ -725,7 +726,6 @@ class SyncRepository {
     'ultimo_costo': r.ultimoCosto,
     'ultimo_precio_venta': r.ultimoPrecioVenta,
     'imagen_url': r.imagenUrl,
-    'imagen_local': r.imagenLocal,
     'usuario_registro_id': r.usuarioRegistroId,
     'estado': r.estado,
     'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
@@ -742,18 +742,22 @@ class SyncRepository {
     'estado': r.estado,
     'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
   };
-  Map<String, dynamic> _inventarioToJson(Inventario r) => {
-    ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
-    'producto_variante_id': r.productoVarianteId,
-    'bodega_id': r.bodegaId,
-    'cantidad_actual': r.cantidadActual,
-    'cantidad_reservada': r.cantidadReservada,
-    'ubicacion_pasillo': r.ubicacionPasillo,
-    'precio_venta': r.precioVenta,
-    'costo_promedio': r.costoPromedio,
-    'actualizado_por': r.actualizadoPor,
-    'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
-  };
+  Map<String, dynamic> _inventarioToJson(Inventario r) {
+    final map = {
+      ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
+      'producto_variante_id': r.productoVarianteId,
+      'bodega_id': r.bodegaId,
+      'cantidad_actual': r.cantidadActual,
+      'cantidad_reservada': r.cantidadReservada,
+      'ubicacion_pasillo': r.ubicacionPasillo,
+      'precio_venta': r.precioVenta,
+      'costo_promedio': r.costoPromedio,
+      'actualizado_por': r.actualizadoPor,
+      'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
+    };
+    map.remove('fecha_registro');
+    return map;
+  }
   Map<String, dynamic> _clienteToJson(Cliente r) => {
     ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
     'empresa_id': r.empresaId,
@@ -770,7 +774,7 @@ class SyncRepository {
   Map<String, dynamic> _movimientoToJson(Movimiento r) {
     String tipoMovimiento = r.tipoMovimiento;
     if (tipoMovimiento.isNotEmpty) {
-      tipoMovimiento = tipoMovimiento[0].toUpperCase() + tipoMovimiento.substring(1);
+      tipoMovimiento = tipoMovimiento.toLowerCase();
     }
     
     return {
@@ -786,16 +790,20 @@ class SyncRepository {
       'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
     };
   }
-  Map<String, dynamic> _detalleMovimientoToJson(DetalleMovimiento r) => {
-    ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
-    'movimiento_producto_id': r.movimientoId,
-    'producto_id': r.productoId,
-    'cantidad': r.cantidad,
-    'costo_proveedor': r.costoProveedor,
-    'costo_unitario_final': r.costoUnitarioFinal,
-    'variantes_json': r.variantesJson,
-    'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
-  };
+  Map<String, dynamic> _detalleMovimientoToJson(DetalleMovimiento r) {
+    final map = {
+      ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
+      'movimiento_producto_id': r.movimientoId,
+      'producto_id': r.productoId,
+      'cantidad': r.cantidad,
+      'costo_proveedor': r.costoProveedor,
+      'costo_unitario_final': r.costoUnitarioFinal,
+      'variantes_json': r.variantesJson,
+      'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
+    };
+    map.remove('fecha_registro');
+    return map;
+  }
   Map<String, dynamic> _ventaToJson(Venta r) => {
     ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
     'empresa_id': r.empresaId,
