@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:inventario_v2/core/constants/permission_codes.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/db/models/auth_admin_models.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
@@ -54,8 +56,8 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
     final dataAsync = ref.watch(staffAdminDataProvider);
     final authorization = ref.watch(authorizationStateProvider).value;
     
-    const canUpdate = true;
-    const canDelete = true;
+    final canUpdate = authorization?.can(PermissionCode.staffUpdate) ?? false;
+    final canDelete = authorization?.can(PermissionCode.staffDelete) ?? false;
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -87,8 +89,9 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
                 totalUsers: data.users.length,
                 totalRoles: data.roles.length,
                 totalWarehouses: data.warehouses.length,
-                // TODO: Implementar vista de gestión de roles
-                onManageRoles: null,
+                onManageRoles: (authorization?.can(PermissionCode.roleRead) ?? false)
+                    ? () => context.push('/role-management')
+                    : null,
               ),
               const SizedBox(height: 16),
               const Text(
@@ -160,6 +163,18 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
                     trailing: Wrap(
                       spacing: 4,
                       children: [
+                        if (canUpdate && user.id != authorization?.user?.id)
+                          IconButton(
+                            icon: const Icon(Icons.lock_reset_outlined),
+                            tooltip: 'Resetear contraseña',
+                            onPressed: () => _resetPassword(user),
+                          ),
+                        if (canUpdate && user.passwordHash == null && user.correo != null)
+                          IconButton(
+                            icon: const Icon(Icons.email_outlined),
+                            tooltip: 'Re-enviar invitación',
+                            onPressed: () => _resendInvitation(user),
+                          ),
                         if (canUpdate)
                           IconButton(
                             icon: const Icon(Icons.edit_outlined),
@@ -384,6 +399,187 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
                 ? 'Personal invitado correctamente'
                 : 'Personal actualizado correctamente',
           ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString()),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
+  }
+
+  Future<void> _resetPassword(Usuario user) async {
+    // Diálogo de confirmación
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Resetear contraseña'),
+        content: Text(
+          '¿Resetear la contraseña de ${user.nombreCompleto}?\n\n'
+          'Se generará una contraseña temporal que deberás comunicarle. '
+          'Al iniciar sesión, se le pedirá que la cambie.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange.shade700,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Resetear'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    final auth = ref.read(authControllerProvider.notifier);
+    final currentUser = auth.usuarioActual ?? await auth.getUser();
+    if (currentUser == null || !mounted) return;
+
+    try {
+      final repository = StaffAccountRepository(
+        ref.read(supabaseClientProvider),
+        ref.read(driftDatabaseProvider),
+      );
+
+      final tempPassword = await repository.resetStaffPassword(
+        targetUserId: user.id,
+        empresaId: currentUser.empresaId,
+      );
+
+      if (!mounted) return;
+
+      // Mostrar diálogo con la contraseña temporal
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green.shade600),
+              const SizedBox(width: 10),
+              const Expanded(child: Text('Contraseña reseteada')),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'La nueva contraseña temporal de ${user.nombreCompleto} es:',
+                style: const TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: SelectableText(
+                  tempPassword,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 2,
+                    fontFamily: 'monospace',
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.amber.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.amber.shade700, size: 20),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Comunica esta contraseña al usuario. '
+                        'Se le pedirá cambiarla al iniciar sesión.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.cyan.shade800,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString()),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
+  }
+
+  Future<void> _resendInvitation(Usuario user) async {
+    final dataAsync = ref.read(staffAdminDataProvider);
+    final data = dataAsync.value;
+    if (data == null) return;
+
+    final auth = ref.read(authControllerProvider.notifier);
+    final currentUser = auth.usuarioActual ?? await auth.getUser();
+    if (currentUser == null || !mounted) return;
+
+    final assignments = data.assignments
+        .where((a) => a.usuarioId == user.id)
+        .map((a) => a.bodegaId)
+        .toSet();
+
+    try {
+      final repository = StaffAccountRepository(
+        ref.read(supabaseClientProvider),
+        ref.read(driftDatabaseProvider),
+      );
+
+      await repository.resendInvitation(
+        correo: user.correo!,
+        empresaId: currentUser.empresaId,
+        adminUserId: currentUser.serverId,
+        nombre: user.nombreCompleto,
+        rolId: user.rolId,
+        bodegaIds: assignments,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Invitación re-enviada a ${user.correo}'),
+          backgroundColor: Colors.green.shade600,
         ),
       );
     } catch (error) {

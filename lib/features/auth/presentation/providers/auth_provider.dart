@@ -9,6 +9,7 @@ import 'package:inventario_v2/core/providers/supabase_provider.dart';
 import 'package:inventario_v2/features/auth/data/repositories/auth_repository.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 part 'auth_provider.g.dart';
 
@@ -28,17 +29,79 @@ class EmpresaDraft {
 class AuthController extends _$AuthController {
   EmpresaDraft? _draft;
   SesionActivaDrift? _sesionActiva;
+  String? _linkError;
 
   SessionUserDrift? get usuarioActual => _sesionActiva?.userView;
   SesionActivaDrift? get sesionActiva => _sesionActiva;
+  String? get linkError => _linkError;
 
   @override
   FutureOr<void> build() async {
     await checkAuthStatus();
+
+    final supabase = ref.read(supabaseClientProvider);
+    final subscription = supabase.auth.onAuthStateChange.listen(
+      (data) async {
+        final AuthChangeEvent event = data.event;
+        final Session? session = data.session;
+
+        if (event == AuthChangeEvent.initialSession ||
+            event == AuthChangeEvent.signedIn ||
+            event == AuthChangeEvent.passwordRecovery) {
+          if (session != null &&
+              (_sesionActiva == null ||
+                  _sesionActiva!.usuario.id != session.user.id)) {
+            state = const AsyncLoading();
+            try {
+              final db = ref.read(driftDatabaseProvider);
+              final repo = AuthRepository(supabase, db);
+              await repo.syncSupabaseUserToLocal(session.user.id);
+              _sesionActiva = await db.authDao.getSesionActiva();
+              ref.read(autoSyncProvider.notifier).runFullSync();
+              state = const AsyncData(null);
+            } catch (e) {
+              debugPrint('[Auth] Error syncing session on auth event: $e');
+              _linkError = e.toString();
+              await logout();
+              state = const AsyncData(null);
+            }
+          }
+        } else if (event == AuthChangeEvent.signedOut) {
+          if (_sesionActiva != null) {
+            await logout();
+          }
+        }
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (error is AuthException &&
+            (error.statusCode == 'otp_expired' ||
+                error.code == 'otp_expired' ||
+                error.message.toLowerCase().contains('expired'))) {
+          _linkError = 'otp_expired';
+        } else {
+          _linkError = error.toString();
+        }
+        state = const AsyncData(null); // Refresca las rutas
+      },
+    );
+
+    ref.onDispose(() {
+      subscription.cancel();
+    });
   }
 
   void setEmpresaDraft(EmpresaDraft empresaDraft) {
     _draft = empresaDraft;
+  }
+
+  void clearLinkError() {
+    _linkError = null;
+    state = const AsyncData(null);
+  }
+
+  void setLinkError(String error) {
+    _linkError = error;
+    state = const AsyncData(null);
   }
 
   FutureOr<void> createUser(
@@ -147,6 +210,12 @@ class AuthController extends _$AuthController {
   Future<void> logout() async {
     final db = ref.read(driftDatabaseProvider);
     final supabase = ref.read(supabaseClientProvider);
+
+    try {
+      await ref.read(autoSyncProvider.notifier).runFullSync();
+    } catch (e) {
+      debugPrint('[Auth] No se pudo sincronizar antes de cerrar sesion: $e');
+    }
 
     try {
       await supabase.auth.signOut();

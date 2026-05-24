@@ -33,7 +33,7 @@ class SalesDao extends BaseDao with _$SalesDaoMixin {
   SalesDao(super.db);
 
   Expression<bool> _isPending(GeneratedColumn<String> column) {
-    return column.equals('pending_insert') | column.equals('pending_update');
+    return column.equals('pending_insert') | column.equals('pending_update') | column.equals('sync_error');
   }
 
   Future<void> upsertCliente(ClientesCompanion cliente) {

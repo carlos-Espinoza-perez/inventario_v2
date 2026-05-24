@@ -27,7 +27,9 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
   AuthDao(super.db);
 
   Expression<bool> _isPending(GeneratedColumn<String> column) {
-    return column.equals('pending_insert') | column.equals('pending_update') | column.equals('sync_error');
+    return column.equals('pending_insert') |
+        column.equals('pending_update') |
+        column.equals('sync_error');
   }
 
   Future<String?> getActiveUserId() async {
@@ -40,7 +42,9 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
     if (activeUserId == null) return null;
 
     return (select(usuarios)
-          ..where((tbl) => tbl.estado.equals(true) & tbl.id.equals(activeUserId))
+          ..where(
+            (tbl) => tbl.estado.equals(true) & tbl.id.equals(activeUserId),
+          )
           ..limit(1))
         .getSingleOrNull();
   }
@@ -139,19 +143,13 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
   }) async {
     try {
       await transaction(() async {
-        await delete(cajaSesiones).go();
-        await delete(cajas).go();
-        await delete(accesosRol).go();
-        await delete(roles).go();
-        await delete(bodegasUsuarios).go();
-        await delete(bodegas).go();
-        await delete(usuarios).go();
-        await delete(empresas).go();
-
         await into(empresas).insertOnConflictUpdate(empresa);
         await into(roles).insertOnConflictUpdate(rol);
         await into(usuarios).insertOnConflictUpdate(usuario);
 
+        await (delete(
+          accesosRol,
+        )..where((tbl) => tbl.rolId.equals(rol.id.value))).go();
         for (final permiso in permisos) {
           await into(accesosRol).insertOnConflictUpdate(permiso);
         }
@@ -175,23 +173,15 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
 
   Future<void> clearSesion() async {
     try {
-      await transaction(() async {
-        await delete(cajaSesiones).go();
-        await delete(cajas).go();
-        await delete(accesosRol).go();
-        await delete(roles).go();
-        await delete(bodegasUsuarios).go();
-        await delete(bodegas).go();
-        await delete(usuarios).go();
-        await delete(empresas).go();
-      });
+      // La sesion activa vive en SharedPreferences. No borramos tablas al cerrar
+      // sesion porque empresas/usuarios tienen cascadas hacia inventario, ventas
+      // y movimientos; eliminar esos registros destruye el cache offline antes
+      // de que la sincronizacion pueda confirmar que todo llego a Supabase.
+      return;
     } on DaoException {
       rethrow;
     } catch (e, st) {
-      Error.throwWithStackTrace(
-        DaoException('clearSesion falló: $e'),
-        st,
-      );
+      Error.throwWithStackTrace(DaoException('clearSesion falló: $e'), st);
     }
   }
 
@@ -202,12 +192,17 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
       return;
     }
 
-    final role = await (select(roles)..where((tbl) => tbl.id.equals(user.rolId))).getSingleOrNull();
+    final role = await (select(
+      roles,
+    )..where((tbl) => tbl.id.equals(user.rolId))).getSingleOrNull();
     final isAdmin = role?.userAdmin ?? false;
 
     if (isAdmin) {
       final warehousesQuery = select(bodegas)
-        ..where((tbl) => tbl.estado.equals(true) & tbl.empresaId.equals(user.empresaId))
+        ..where(
+          (tbl) =>
+              tbl.estado.equals(true) & tbl.empresaId.equals(user.empresaId),
+        )
         ..orderBy([(tbl) => OrderingTerm.asc(tbl.nombre)]);
 
       if (query.trim().isNotEmpty) {
@@ -229,7 +224,12 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
       }
 
       final warehousesQuery = select(bodegas)
-        ..where((tbl) => tbl.estado.equals(true) & tbl.id.isIn(ids.toList()) & tbl.empresaId.equals(user.empresaId))
+        ..where(
+          (tbl) =>
+              tbl.estado.equals(true) &
+              tbl.id.isIn(ids.toList()) &
+              tbl.empresaId.equals(user.empresaId),
+        )
         ..orderBy([(tbl) => OrderingTerm.asc(tbl.nombre)]);
 
       if (query.trim().isNotEmpty) {
@@ -250,13 +250,19 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
     final user = await getUsuarioActual();
     if (user == null) return <String>{};
 
-    final role = await (select(roles)..where((tbl) => tbl.id.equals(user.rolId))).getSingleOrNull();
+    final role = await (select(
+      roles,
+    )..where((tbl) => tbl.id.equals(user.rolId))).getSingleOrNull();
     final isAdmin = role?.userAdmin ?? false;
 
     if (isAdmin) {
-      final all = await (select(bodegas)
-            ..where((tbl) => tbl.estado.equals(true) & tbl.empresaId.equals(user.empresaId)))
-          .get();
+      final all =
+          await (select(bodegas)..where(
+                (tbl) =>
+                    tbl.estado.equals(true) &
+                    tbl.empresaId.equals(user.empresaId),
+              ))
+              .get();
       return all.map((b) => b.id).toSet();
     }
 
@@ -267,18 +273,27 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
             .get();
 
     if (relaciones.isEmpty) {
-      final all = await (select(
-        bodegas,
-      )..where((tbl) => tbl.estado.equals(true) & tbl.empresaId.equals(user.empresaId))).get();
+      final all =
+          await (select(bodegas)..where(
+                (tbl) =>
+                    tbl.estado.equals(true) &
+                    tbl.empresaId.equals(user.empresaId),
+              ))
+              .get();
       return all.map((b) => b.id).toSet();
     }
 
     final ids = relaciones.map((r) => r.bodegaId).toList();
     if (ids.isEmpty) return <String>{};
 
-    final matchingBodegas = await (select(bodegas)
-          ..where((tbl) => tbl.id.isIn(ids) & tbl.estado.equals(true) & tbl.empresaId.equals(user.empresaId)))
-        .get();
+    final matchingBodegas =
+        await (select(bodegas)..where(
+              (tbl) =>
+                  tbl.id.isIn(ids) &
+                  tbl.estado.equals(true) &
+                  tbl.empresaId.equals(user.empresaId),
+            ))
+            .get();
 
     return matchingBodegas.map((b) => b.id).toSet();
   }
@@ -415,26 +430,25 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
     );
   }
 
-  Future<RoleManagementDataDrift> getRoleManagementData(String empresaId) async {
+  Future<RoleManagementDataDrift> getRoleManagementData(
+    String empresaId,
+  ) async {
     final rolesList = await getActiveRolesByEmpresa(empresaId);
     final roleIds = rolesList.map((role) => role.id).toList();
     final accesses = roleIds.isEmpty
         ? <AccesosRolData>[]
-        : await (select(accesosRol)
-              ..where(
-                (tbl) =>
-                    tbl.rolId.isIn(roleIds) & tbl.estado.equals(true),
+        : await (select(accesosRol)..where(
+                (tbl) => tbl.rolId.isIn(roleIds) & tbl.estado.equals(true),
               ))
-            .get();
+              .get();
     return RoleManagementDataDrift(roles: rolesList, accesses: accesses);
   }
 
   Future<Set<String>> getRolePermissionCodes(String roleId) async {
     final accesses =
-        await (select(accesosRol)
-              ..where(
-                (tbl) => tbl.rolId.equals(roleId) & tbl.estado.equals(true),
-              ))
+        await (select(accesosRol)..where(
+              (tbl) => tbl.rolId.equals(roleId) & tbl.estado.equals(true),
+            ))
             .get();
     return accesses.map((item) => item.codigoAcceso).toSet();
   }
@@ -445,13 +459,12 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
     String? excludeRoleId,
   }) async {
     final result =
-        await (select(roles)
-              ..where(
-                (tbl) =>
-                    tbl.empresaId.equals(empresaId) &
-                    tbl.nombre.equals(name) &
-                    tbl.estado.equals(true),
-              ))
+        await (select(roles)..where(
+              (tbl) =>
+                  tbl.empresaId.equals(empresaId) &
+                  tbl.nombre.equals(name) &
+                  tbl.estado.equals(true),
+            ))
             .get();
 
     for (final role in result) {
@@ -485,7 +498,9 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
         syncStatus: Value(roleId == null ? 'pending_insert' : 'pending_update'),
       ),
     );
-    return (select(roles)..where((tbl) => tbl.id.equals(resolvedId))).getSingle();
+    return (select(
+      roles,
+    )..where((tbl) => tbl.id.equals(resolvedId))).getSingle();
   }
 
   Future<void> deactivateRole(String roleId) async {
@@ -529,10 +544,9 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
   }) async {
     final now = DateTime.now();
     await transaction(() async {
-      final currentAssignments =
-          await (select(bodegasUsuarios)
-                ..where((tbl) => tbl.usuarioId.equals(userId)))
-              .get();
+      final currentAssignments = await (select(
+        bodegasUsuarios,
+      )..where((tbl) => tbl.usuarioId.equals(userId))).get();
 
       for (final assignment in currentAssignments) {
         await (update(
@@ -572,10 +586,9 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
   }) async {
     final now = DateTime.now();
     await transaction(() async {
-      final currentAssignments =
-          await (select(bodegasUsuarios)
-                ..where((tbl) => tbl.bodegaId.equals(warehouseId)))
-              .get();
+      final currentAssignments = await (select(
+        bodegasUsuarios,
+      )..where((tbl) => tbl.bodegaId.equals(warehouseId))).get();
 
       for (final assignment in currentAssignments) {
         await (update(

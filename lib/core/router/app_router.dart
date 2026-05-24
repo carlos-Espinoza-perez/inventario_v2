@@ -40,9 +40,14 @@ import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../../features/sync/presentation/screens/sync_status_screen.dart';
 import '../../features/sync/presentation/screens/log_viewer_screen.dart';
 import '../../features/auth/presentation/screens/force_password_change_screen.dart';
+import '../../features/auth/presentation/screens/invalid_link_screen.dart';
 import '../../core/providers/supabase_provider.dart';
 
 import '../../features/auth/presentation/screens/staff_management_screen.dart';
+import '../../features/auth/presentation/screens/role_management_screen.dart';
+import '../../features/auth/presentation/screens/admin_hub_screen.dart';
+import '../../core/router/permission_guard.dart';
+import '../../core/constants/permission_codes.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -61,36 +66,57 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final estaLogueado = usuario != null;
 
       final isSplash = state.matchedLocation == '/splash';
+      final isLoginCallback =
+          state.uri.host == 'login-callback' ||
+          state.matchedLocation == '/login-callback';
 
-      // Agrupamos login y registro como "rutas de autenticación"
+      // Agrupamos login y registro como "rutas de autenticacion"
       final isAuthRoute =
           state.matchedLocation == '/login' ||
           state.matchedLocation == '/create-company' ||
-          state.matchedLocation == '/create-user';
+          state.matchedLocation == '/create-user' ||
+          isLoginCallback;
 
-      // 2. LÓGICA DE CARGA (Prioridad Alta)
-      // Si está cargando, DEBE estar en el splash.
-      if (isLoading) {
-        if (!isSplash) return '/splash';
-        return null; // Si ya está en splash, quedarse ahí.
+      // 2. LOGICA DE ENLACES DE ERROR (Deep Link Expired)
+      if (notifier.linkError != null) {
+        if (state.matchedLocation != '/invalid-link') {
+          return '/invalid-link';
+        }
+        return null; // Quedarse en la pantalla de error
       }
 
-      // 3. LÓGICA NO LOGUEADO (Carga terminó, no hay usuario)
+      // Supabase Flutter procesa el deep link internamente mediante app_links.
+      // El router solo mantiene al usuario en splash mientras llega el evento signedIn.
+      if (isLoginCallback) {
+        return isSplash ? null : '/splash';
+      }
+
+      // 3. LOGICA DE CARGA (Prioridad Alta)
+      // Si esta cargando, DEBE estar en el splash.
+      if (isLoading) {
+        if (!isSplash) return '/splash';
+        return null; // Si ya esta en splash, quedarse ahi.
+      }
+
+      // 3. LOGICA NO LOGUEADO (Carga termino, no hay usuario)
       if (!estaLogueado) {
-        // Si viene del Splash (terminó de cargar) O intenta entrar a una ruta protegida
+        // Si viene del Splash (termino de cargar) O intenta entrar a una ruta protegida
         // lo mandamos al Login.
         if (isSplash || !isAuthRoute) {
           return '/login';
         }
-        // Si ya está en login o registro, lo dejamos ahí.
+        // Si ya esta en login o registro, lo dejamos ahi.
         return null;
       }
 
-      // 4. LÓGICA LOGUEADO (Carga terminó, hay usuario)
+      // 4. LOGICA LOGUEADO (Carga termino, hay usuario)
       if (estaLogueado) {
         final supabase = ref.read(supabaseClientProvider);
-        final mustChangePassword = supabase.auth.currentUser?.userMetadata?['must_change_password'] == true;
-        final isForcePasswordRoute = state.matchedLocation == '/force-password-change';
+        final mustChangePassword =
+            supabase.auth.currentUser?.userMetadata?['must_change_password'] ==
+            true;
+        final isForcePasswordRoute =
+            state.matchedLocation == '/force-password-change';
 
         if (mustChangePassword && !isForcePasswordRoute) {
           return '/force-password-change';
@@ -113,6 +139,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     },
 
     routes: [
+      GoRoute(
+        path: '/invalid-link',
+        builder: (_, _) => const InvalidLinkScreen(),
+      ),
       GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(
@@ -126,6 +156,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/force-password-change',
         builder: (_, _) => const ForcePasswordChangeScreen(),
+      ),
+      GoRoute(
+        path: '/login-callback',
+        builder: (_, _) =>
+            const Scaffold(body: Center(child: CircularProgressIndicator())),
       ),
 
       ShellRoute(
@@ -148,7 +183,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/staff-management',
-            builder: (context, state) => const StaffManagementScreen(),
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.staffRead,
+              child: StaffManagementScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/admin',
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.staffRead,
+              child: AdminHubScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/role-management',
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.roleRead,
+              child: RoleManagementScreen(),
+            ),
           ),
           GoRoute(
             path: '/sync-status',
@@ -161,124 +213,201 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
           GoRoute(
             path: '/warehouse',
-            builder: (context, state) => const WarehouseScreen(),
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.warehouseRead,
+              child: WarehouseScreen(),
+            ),
           ),
           GoRoute(
             path: '/warehouse-create',
-            builder: (context, state) => const WarehouseCreateScreen(),
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.warehouseCreate,
+              child: WarehouseCreateScreen(),
+            ),
           ),
           GoRoute(
             path: '/warehouse-inventory/:warehouseId',
-            builder: (context, state) => WarehouseInventoryScreen(
-              warehouseId: state.pathParameters['warehouseId']!,
+            builder: (context, state) => PermissionGuard(
+              requiredPermission: PermissionCode.warehouseRead,
+              child: WarehouseInventoryScreen(
+                warehouseId: state.pathParameters['warehouseId']!,
+              ),
             ),
           ),
           GoRoute(
             path: '/warehouse-history/:warehouseId',
-            builder: (context, state) => WarehouseHistoryScreen(
-              warehouseId: state.pathParameters['warehouseId']!,
+            builder: (context, state) => PermissionGuard(
+              requiredPermission: PermissionCode.warehouseRead,
+              child: WarehouseHistoryScreen(
+                warehouseId: state.pathParameters['warehouseId']!,
+              ),
             ),
           ),
           GoRoute(
             path: '/movement-detail/:movementId',
-            builder: (context, state) => MovementDetailScreen(
-              movementId: state.pathParameters['movementId']!,
+            builder: (context, state) => PermissionGuard(
+              requiredPermission: PermissionCode.warehouseRead,
+              child: MovementDetailScreen(
+                movementId: state.pathParameters['movementId']!,
+              ),
             ),
           ),
           GoRoute(
             path: '/product-detail/:productId',
-            builder: (context, state) => ProductDetailScreen(
-              productId: state.pathParameters['productId']!,
-              bodegaId: state.uri.queryParameters['bodegaId'],
+            builder: (context, state) => PermissionGuard(
+              requiredPermission: PermissionCode.productRead,
+              child: ProductDetailScreen(
+                productId: state.pathParameters['productId']!,
+                bodegaId: state.uri.queryParameters['bodegaId'],
+              ),
             ),
           ),
           GoRoute(
             path: '/product-create',
-            builder: (context, state) => const ProductCreateScreen(),
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.productCreate,
+              child: ProductCreateScreen(),
+            ),
           ),
           GoRoute(
             path: '/magic-camera',
-            builder: (context, state) => const MagicCameraScreen(),
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.productCreate,
+              child: MagicCameraScreen(),
+            ),
           ),
           GoRoute(
             path: '/barcode-scanner',
-            builder: (context, state) => BarcodeScannerScreen(
-              bodegaId: state.uri.queryParameters['bodegaId'],
+            builder: (context, state) => PermissionGuard(
+              requiredPermission: PermissionCode.warehouseRead,
+              child: BarcodeScannerScreen(
+                bodegaId: state.uri.queryParameters['bodegaId'],
+              ),
             ),
           ),
           GoRoute(
             path: '/batch-entry/:bodegaId',
-            builder: (context, state) => WarehouseEntryScreen(
-              bodegaId: state.pathParameters['bodegaId']!,
+            builder: (context, state) => PermissionGuard(
+              requiredPermission: PermissionCode.warehouseUpdate,
+              child: WarehouseEntryScreen(
+                bodegaId: state.pathParameters['bodegaId']!,
+              ),
             ),
           ),
           GoRoute(
             path: '/warehouse-transfer/:bodegaId',
-            builder: (context, state) => WarehouseTransferScreen(
-              bodegaOrigenId: state.pathParameters['bodegaId'] ?? '',
+            builder: (context, state) => PermissionGuard(
+              requiredPermission: PermissionCode.warehouseUpdate,
+              child: WarehouseTransferScreen(
+                bodegaOrigenId: state.pathParameters['bodegaId'] ?? '',
+              ),
             ),
           ),
           GoRoute(
             path: '/product-list',
-            builder: (context, state) => const ProductListScreen(),
-          ),
-
-          // Modulo de POS
-          GoRoute(path: '/pos', builder: (context, state) => const PosScreen()),
-          GoRoute(
-            path: '/sales',
-            builder: (context, state) => const SalesDashboardScreen(),
-          ),
-          GoRoute(
-            path: '/sales-detail/:saleId',
-            builder: (context, state) =>
-                SaleDetailScreen(saleId: state.pathParameters['saleId']!),
-          ),
-          GoRoute(
-            path: '/cash-register',
-            builder: (context, state) => const CashRegisterScreen(),
-          ),
-          GoRoute(
-            path: '/cash-register-history',
-            builder: (context, state) => const CashRegisterHistoryScreen(),
-          ),
-          GoRoute(
-            path: '/cash-register-detail/:sessionId',
-            builder: (context, state) => CashRegisterDetailScreen(
-              sessionId: state.pathParameters['sessionId']!,
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.productRead,
+              child: ProductListScreen(),
             ),
           ),
 
-          // Módulo de Asistente IA
+          // Modulo de POS
+          GoRoute(
+            path: '/pos',
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.saleCreate,
+              child: PosScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/sales',
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.saleRead,
+              child: SalesDashboardScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/sales-detail/:saleId',
+            builder: (context, state) => PermissionGuard(
+              requiredPermission: PermissionCode.saleRead,
+              child: SaleDetailScreen(saleId: state.pathParameters['saleId']!),
+            ),
+          ),
+          GoRoute(
+            path: '/cash-register',
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.saleCreate,
+              child: CashRegisterScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/cash-register-history',
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.saleRead,
+              child: CashRegisterHistoryScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/cash-register-detail/:sessionId',
+            builder: (context, state) => PermissionGuard(
+              requiredPermission: PermissionCode.saleRead,
+              child: CashRegisterDetailScreen(
+                sessionId: state.pathParameters['sessionId']!,
+              ),
+            ),
+          ),
+
+          // Modulo de Asistente IA
           GoRoute(
             path: '/assistant',
-            builder: (context, state) => const AssistantScreen(),
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.dashboardRead,
+              child: AssistantScreen(),
+            ),
           ),
 
           // Modulo de Reportes
           GoRoute(
             path: '/reports',
-            builder: (context, state) => const ReportsDashboardScreen(),
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.reportRead,
+              child: ReportsDashboardScreen(),
+            ),
           ),
           GoRoute(
             path: '/reports/sales',
-            builder: (context, state) => const SalesReportScreen(),
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.reportRead,
+              child: SalesReportScreen(),
+            ),
           ),
           GoRoute(
             path: '/reports/inventory',
-            builder: (context, state) => const InventoryReportScreen(),
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.reportRead,
+              child: InventoryReportScreen(),
+            ),
           ),
           GoRoute(
             path: '/reports/financial',
-            builder: (context, state) => const FinancialReportScreen(),
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.reportRead,
+              child: FinancialReportScreen(),
+            ),
           ),
           GoRoute(
             path: '/reports/receivables',
-            builder: (context, state) => const ReceivablesReportScreen(),
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.reportRead,
+              child: ReceivablesReportScreen(),
+            ),
           ),
           GoRoute(
             path: '/reports/cash-history',
-            builder: (context, state) => const CashFlowReportScreen(),
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.reportRead,
+              child: CashFlowReportScreen(),
+            ),
           ),
         ],
       ),
