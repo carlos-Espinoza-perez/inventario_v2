@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:inventario_v2/core/providers/supabase_provider.dart';
+import 'package:inventario_v2/core/utils/error_handler.dart';
 import 'package:inventario_v2/features/auth/presentation/providers/auth_provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ForcePasswordChangeScreen extends ConsumerStatefulWidget {
   const ForcePasswordChangeScreen({super.key});
 
   @override
-  ConsumerState<ForcePasswordChangeScreen> createState() => _ForcePasswordChangeScreenState();
+  ConsumerState<ForcePasswordChangeScreen> createState() =>
+      _ForcePasswordChangeScreenState();
 }
 
-class _ForcePasswordChangeScreenState extends ConsumerState<ForcePasswordChangeScreen> {
+class _ForcePasswordChangeScreenState
+    extends ConsumerState<ForcePasswordChangeScreen> {
   final _formKey = GlobalKey<FormState>();
   final _passwordCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
@@ -33,44 +34,25 @@ class _ForcePasswordChangeScreenState extends ConsumerState<ForcePasswordChangeS
     setState(() => _isLoading = true);
 
     try {
-      final supabase = ref.read(supabaseClientProvider);
-      
-      // Actualizar la contraseña y quitar el flag must_change_password
-      await supabase.auth.updateUser(
-        UserAttributes(
-          password: _passwordCtrl.text,
-          data: {'must_change_password': false},
-        ),
-      );
+      await ref
+          .read(authControllerProvider.notifier)
+          .completePasswordChange(_passwordCtrl.text);
 
       if (!mounted) return;
-      
-      // Forzar al AuthController a notificar cambios para que el Router nos deje pasar
-      ref.invalidate(authControllerProvider);
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Contraseña actualizada correctamente.'),
+          content: Text('Contrasena actualizada correctamente.'),
           backgroundColor: Colors.green,
         ),
       );
-      
-      // El router nos sacará de aquí automáticamente si re-evalua,
-      // pero por si acaso, lo enviamos al dashboard manualmente:
+
       context.go('/dashboard');
-    } on AuthException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.message),
-          backgroundColor: Colors.red.shade700,
-        ),
-      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error inesperado: $e'),
+          content: Text(ErrorHandler.humanize(e)),
           backgroundColor: Colors.red.shade700,
         ),
       );
@@ -86,14 +68,14 @@ class _ForcePasswordChangeScreenState extends ConsumerState<ForcePasswordChangeS
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('Actualiza tu contraseña'),
+        title: const Text('Actualiza tu contrasena'),
         centerTitle: true,
-        automaticallyImplyLeading: false, // No puede salir sin cambiar
+        automaticallyImplyLeading: false,
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => ref.read(authControllerProvider.notifier).logout(),
-          )
+          ),
         ],
       ),
       body: Center(
@@ -103,7 +85,9 @@ class _ForcePasswordChangeScreenState extends ConsumerState<ForcePasswordChangeS
             constraints: const BoxConstraints(maxWidth: 400),
             child: Card(
               elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(32),
                 child: Form(
@@ -118,7 +102,7 @@ class _ForcePasswordChangeScreenState extends ConsumerState<ForcePasswordChangeS
                       ),
                       const SizedBox(height: 24),
                       const Text(
-                        'Por motivos de seguridad, debes cambiar tu contraseña temporal antes de continuar.',
+                        'Por motivos de seguridad, debes cambiar tu contrasena antes de continuar.',
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 16, color: Colors.black87),
                       ),
@@ -127,17 +111,24 @@ class _ForcePasswordChangeScreenState extends ConsumerState<ForcePasswordChangeS
                         controller: _passwordCtrl,
                         obscureText: _obscurePass,
                         decoration: InputDecoration(
-                          labelText: 'Nueva Contraseña',
+                          labelText: 'Nueva contrasena',
                           prefixIcon: const Icon(Icons.lock_outline),
                           suffixIcon: IconButton(
-                            icon: Icon(_obscurePass ? Icons.visibility : Icons.visibility_off),
-                            onPressed: () => setState(() => _obscurePass = !_obscurePass),
+                            icon: Icon(
+                              _obscurePass
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                            ),
+                            onPressed: () =>
+                                setState(() => _obscurePass = !_obscurePass),
                           ),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                         validator: (value) {
                           if (value == null || value.length < 6) {
-                            return 'La contraseña debe tener al menos 6 caracteres';
+                            return 'La contrasena debe tener al menos 6 caracteres';
                           }
                           return null;
                         },
@@ -147,17 +138,25 @@ class _ForcePasswordChangeScreenState extends ConsumerState<ForcePasswordChangeS
                         controller: _confirmCtrl,
                         obscureText: _obscureConfirm,
                         decoration: InputDecoration(
-                          labelText: 'Confirmar Contraseña',
+                          labelText: 'Confirmar contrasena',
                           prefixIcon: const Icon(Icons.lock_outline),
                           suffixIcon: IconButton(
-                            icon: Icon(_obscureConfirm ? Icons.visibility : Icons.visibility_off),
-                            onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                            icon: Icon(
+                              _obscureConfirm
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                            ),
+                            onPressed: () => setState(
+                              () => _obscureConfirm = !_obscureConfirm,
+                            ),
                           ),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                         validator: (value) {
                           if (value != _passwordCtrl.text) {
-                            return 'Las contraseñas no coinciden';
+                            return 'Las contrasenas no coinciden';
                           }
                           return null;
                         },
@@ -185,8 +184,11 @@ class _ForcePasswordChangeScreenState extends ConsumerState<ForcePasswordChangeS
                                   ),
                                 )
                               : const Text(
-                                  'Actualizar y Continuar',
-                                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                  'Actualizar y continuar',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                         ),
                       ),

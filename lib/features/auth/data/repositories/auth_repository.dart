@@ -3,6 +3,7 @@ import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/db/daos/auth_dao.dart';
 import 'package:inventario_v2/core/utils/password_hasher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthRepository {
   final SupabaseClient _supabase;
@@ -67,10 +68,50 @@ class AuthRepository {
         throw Exception('No se pudo iniciar sesión');
       }
 
+      await syncSupabaseUserToLocal(user.id);
+    } on AuthException catch (e) {
+      throw AuthException(e.message);
+    } catch (e) {
+      throw Exception('Error en Login Online: $e');
+    }
+  }
+
+  Future<void> signInOffline(String email, String password) async {
+    final user =
+        await (_db.select(_db.usuarios)
+              ..where((tbl) => tbl.correo.equals(email))
+              ..limit(1))
+            .getSingleOrNull();
+
+    if (user == null) {
+      throw Exception(
+        'No hay datos guardados para este usuario. Conéctate a internet para el primer inicio.',
+      );
+    }
+
+    if (user.passwordHash == null) {
+      throw Exception('Seguridad no sincronizada. Inicia sesión con internet.');
+    }
+
+    final isPasswordValid = PasswordHasher.checkPassword(
+      password,
+      user.passwordHash!,
+    );
+
+    if (!isPasswordValid) {
+      throw Exception('Contraseña incorrecta.');
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('active_user_id', user.id);
+  }
+
+  Future<void> syncSupabaseUserToLocal(String userId) async {
+    try {
       final userData = await _supabase
           .from('usuario')
           .select('*, empresa(*), rol(*)')
-          .eq('id', user.id)
+          .eq('id', userId)
           .single();
 
       final jsonEmpresa = Map<String, dynamic>.from(userData['empresa'] as Map);
@@ -96,36 +137,11 @@ class AuthRepository {
         rol: _rolCompanionFromJson(jsonRol),
         permisos: permisos,
       );
-    } on AuthException catch (e) {
-      throw AuthException(e.message);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('active_user_id', userId);
     } catch (e) {
-      throw Exception('Error en Login Online: $e');
-    }
-  }
-
-  Future<void> signInOffline(String email, String password) async {
-    final user = await (_db.select(_db.usuarios)
-          ..where((tbl) => tbl.correo.equals(email))
-          ..limit(1))
-        .getSingleOrNull();
-
-    if (user == null) {
-      throw Exception(
-        'No hay datos guardados para este usuario. Conéctate a internet para el primer inicio.',
-      );
-    }
-
-    if (user.passwordHash == null) {
-      throw Exception('Seguridad no sincronizada. Inicia sesión con internet.');
-    }
-
-    final isPasswordValid = PasswordHasher.checkPassword(
-      password,
-      user.passwordHash!,
-    );
-
-    if (!isPasswordValid) {
-      throw Exception('Contraseña incorrecta.');
+      throw Exception('Error syncing session data from Supabase: $e');
     }
   }
 
@@ -158,8 +174,12 @@ class AuthRepository {
       correo: Value(json['correo'] as String?),
       passwordHash: Value(json['password_hash'] as String?),
       pinOffline: Value(json['pin_offline'] as String?),
-      usuarioRegistroId: Value(json['usuario_registro_id'] as String?),
-      bodegaDefaultId: Value(json['bodega_default_id'] as String?),
+      // The invited user's creator/default warehouse may not be part of this
+      // first-login local snapshot, so keeping those remote FK values can break
+      // SQLite inserts. They are audit/default references, not required to open
+      // the session.
+      usuarioRegistroId: const Value(null),
+      bodegaDefaultId: const Value(null),
       estado: Value(json['estado'] as bool? ?? true),
       createdAt: Value(
         _parseDateTime(json['fecha_registro']) ?? DateTime.now(),
@@ -196,7 +216,7 @@ class AuthRepository {
       id: json['id'] as String,
       rolId: json['rol_id'] as String,
       codigoAcceso: json['codigo_acceso'] as String? ?? '',
-      usuarioRegistroId: Value(json['usuario_registro_id'] as String?),
+      usuarioRegistroId: const Value(null),
       estado: Value(json['estado'] as bool? ?? true),
       createdAt: Value(
         _parseDateTime(json['fecha_registro']) ?? DateTime.now(),

@@ -31,7 +31,7 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
   InventoryDao(super.db);
 
   Expression<bool> _isPending(GeneratedColumn<String> column) {
-    return column.equals('pending_insert') | column.equals('pending_update');
+    return column.equals('pending_insert') | column.equals('pending_update') | column.equals('sync_error');
   }
 
   Future<void> upsertCategoria(CategoriasCompanion categoria) {

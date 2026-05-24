@@ -58,6 +58,9 @@ app.*.map.json
 *.env
 !.env.example
 
+# Supabase CLI local state
+supabase/.temp/
+
 # AI/Agent metadata
 .claude/
 .cursorrules

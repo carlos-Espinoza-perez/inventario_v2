@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inventario_v2/core/utils/error_handler.dart';
 import 'package:inventario_v2/features/auth/presentation/providers/auth_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class FormLogin extends ConsumerStatefulWidget {
   const FormLogin({super.key});
@@ -36,6 +37,98 @@ class FormLoginState extends ConsumerState<FormLogin> {
     }
   }
 
+  Future<void> _showResetPasswordDialog(BuildContext context) async {
+    final emailForReset = _emailCtrl.text.trim();
+
+    if (emailForReset.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Ingresa tu correo primero para recuperar tu contraseña.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Recuperar contraseña'),
+        content: Text(
+          'Se enviará un enlace de recuperación a:\n\n$emailForReset\n\n¿Deseas continuar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Enviar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !context.mounted) return;
+
+    try {
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        emailForReset,
+        redirectTo: 'io.supabase.inventario://login-callback/',
+      );
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_outline, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Se envió un enlace de recuperación a $emailForReset',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.green.shade600,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          margin: const EdgeInsets.all(16),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    } on AuthException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.message}'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'No se pudo enviar el correo. Verifica tu conexión.',
+          ),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
@@ -45,6 +138,7 @@ class FormLoginState extends ConsumerState<FormLogin> {
       if (next is AsyncError) {
         final mensajeAmigable = ErrorHandler.humanize(next.error);
 
+        if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -71,7 +165,10 @@ class FormLoginState extends ConsumerState<FormLogin> {
       }
 
       if (next is AsyncData && !next.isLoading) {
-        context.go('/dashboard');
+        final auth = ref.read(authControllerProvider.notifier);
+        if (auth.usuarioActual != null && context.mounted) {
+          context.go('/dashboard');
+        }
       }
     });
 
@@ -148,12 +245,15 @@ class FormLoginState extends ConsumerState<FormLogin> {
           const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerRight,
-            child: Text(
-              "¿Olvidaste tu contraseña?",
-              style: TextStyle(
-                color: Colors.teal,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
+            child: GestureDetector(
+              onTap: () => _showResetPasswordDialog(context),
+              child: const Text(
+                "¿Olvidaste tu contraseña?",
+                style: TextStyle(
+                  color: Colors.teal,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
               ),
             ),
           ),

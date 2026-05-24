@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:inventario_v2/features/auth/presentation/providers/authorization_provider.dart';
+import 'package:inventario_v2/core/constants/permission_codes.dart';
 
 class _MenuButton extends StatelessWidget {
   const _MenuButton({
@@ -47,11 +50,12 @@ class _MenuButton extends StatelessWidget {
   }
 }
 
-class BottomAppBarDashboard extends StatelessWidget {
+class BottomAppBarDashboard extends ConsumerWidget {
   const BottomAppBarDashboard({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authorizationStateProvider).value;
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -68,33 +72,38 @@ class BottomAppBarDashboard extends StatelessWidget {
         child: Row(
           children: [
             const Spacer(),
-            _MenuButton(
-              icon: Icons.inventory_2_outlined,
-              text: 'Inventario',
-              onTap: () {
-                debugPrint("Inventario");
-                context.push('/warehouse');
-              },
-            ),
+            if (authState?.can(PermissionCode.warehouseRead) ?? false) ...[
+              _MenuButton(
+                icon: Icons.inventory_2_outlined,
+                text: 'Inventario',
+                onTap: () {
+                  debugPrint("Inventario");
+                  context.push('/warehouse');
+                },
+              ),
+              const Spacer(),
+            ],
+            if (authState?.can(PermissionCode.saleRead) ?? false) ...[
+              _MenuButton(
+                icon: Icons.point_of_sale_outlined,
+                text: 'Ventas',
+                onTap: () {
+                  context.push('/sales');
+                },
+              ),
+              const Spacer(),
+            ],
             const Spacer(),
-            _MenuButton(
-              icon: Icons.point_of_sale_outlined,
-              text: 'Ventas',
-              onTap: () {
-                context.push('/sales');
-              },
-            ),
-            const Spacer(),
-            const Spacer(),
-            const Spacer(),
-            _MenuButton(
-              icon: Icons.bar_chart_rounded,
-              text: 'Reportes',
-              onTap: () {
-                context.push('/reports');
-              },
-            ),
-            const Spacer(),
+            if (authState?.can(PermissionCode.reportRead) ?? false) ...[
+              _MenuButton(
+                icon: Icons.bar_chart_rounded,
+                text: 'Reportes',
+                onTap: () {
+                  context.push('/reports');
+                },
+              ),
+              const Spacer(),
+            ],
             _MenuButton(
               icon: Icons.auto_awesome_rounded,
               text: 'IA',

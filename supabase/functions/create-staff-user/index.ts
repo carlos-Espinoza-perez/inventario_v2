@@ -61,6 +61,7 @@ serve(async (req) => {
 
     const { data: authUser, error: createAuthError } =
       await adminClient.auth.admin.inviteUserByEmail(correo, {
+        redirectTo: 'io.supabase.inventario://login-callback/',
         data: {
           name: nombreCompleto,
           empresa_id: empresaId,

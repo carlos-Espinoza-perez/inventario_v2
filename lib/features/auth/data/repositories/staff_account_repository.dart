@@ -112,4 +112,71 @@ class StaffAccountRepository {
 
     return userJson['id'] as String;
   }
+
+  /// Resetea la contraseña de un usuario staff.
+  /// Retorna la contraseña temporal generada.
+  /// Solo puede ser invocado por un admin de la misma empresa.
+  Future<String> resetStaffPassword({
+    required String targetUserId,
+    required String empresaId,
+  }) async {
+    final response = await _supabase.functions.invoke(
+      'reset-staff-password',
+      body: {
+        'target_user_id': targetUserId,
+        'empresa_id': empresaId,
+      },
+    );
+
+    if (response.status != 200) {
+      final data = response.data;
+      throw Exception(
+        data is Map<String, dynamic>
+            ? (data['error'] ?? 'No se pudo resetear la contraseña')
+            : 'No se pudo resetear la contraseña',
+      );
+    }
+
+    final data = response.data;
+    if (data is! Map<String, dynamic> || data['temp_password'] == null) {
+      throw Exception('Respuesta inválida al resetear contraseña');
+    }
+
+    return data['temp_password'] as String;
+  }
+
+  /// Re-envía la invitación a un usuario staff que no ha activado su cuenta.
+  /// Usa la misma Edge Function de creación que re-invita por email.
+  Future<void> resendInvitation({
+    required String correo,
+    required String empresaId,
+    required String adminUserId,
+    required String nombre,
+    required String rolId,
+    required Set<String> bodegaIds,
+  }) async {
+    // Reutiliza la Edge Function create-staff-user
+    // que internamente llama a inviteUserByEmail.
+    // Si el usuario ya existe, Supabase re-envía la invitación.
+    final response = await _supabase.functions.invoke(
+      'create-staff-user',
+      body: {
+        'empresa_id': empresaId,
+        'admin_user_id': adminUserId,
+        'nombre_completo': nombre,
+        'correo': correo,
+        'rol_id': rolId,
+        'bodega_ids': bodegaIds.toList(),
+      },
+    );
+
+    if (response.status != 200 && response.status != 201) {
+      final data = response.data;
+      throw Exception(
+        data is Map<String, dynamic>
+            ? (data['error'] ?? 'No se pudo re-enviar la invitación')
+            : 'No se pudo re-enviar la invitación',
+      );
+    }
+  }
 }

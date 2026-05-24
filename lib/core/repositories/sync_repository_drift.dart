@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
@@ -53,6 +54,7 @@ class SyncRepository {
       'bodegas_usuarios',
       await _db.authDao.getPendingBodegasUsuarios(),
       _bodegaUsuarioToJson,
+      onConflict: 'usuario_id, bodega_id',
     );
     await _push(
       'caja',
@@ -217,9 +219,7 @@ class SyncRepository {
       _subscribe(
         'inventarios',
         'inventario_producto',
-        (j) => _db
-            .into(_db.inventarios)
-            .insertOnConflictUpdate(_inventarioFromJson(j)),
+        _upsertInventarioFromJson,
       ),
       _subscribe(
         'clientes',
@@ -340,19 +340,7 @@ class SyncRepository {
     await _pull(
       'inventarios',
       'inventario_producto',
-      (j) async {
-        final productoId = _text(j['producto_id']);
-        if (productoId != null && j['producto_variante_id'] == null) {
-          final variante = await (_db.select(_db.productoVariantes)
-                ..where((t) => t.productoId.equals(productoId))
-                ..limit(1))
-              .getSingleOrNull();
-          if (variante != null) {
-            j['producto_variante_id'] = variante.id;
-          }
-        }
-        await _db.into(_db.inventarios).insertOnConflictUpdate(_inventarioFromJson(j));
-      },
+      _upsertInventarioFromJson,
     );
     await _pull(
       'clientes',
@@ -394,6 +382,23 @@ class SyncRepository {
     );
   }
 
+  Future<void> _upsertInventarioFromJson(Map<String, dynamic> j) async {
+    final productoId = _text(j['producto_id']);
+    if (productoId != null && j['producto_variante_id'] == null) {
+      final variante =
+          await (_db.select(_db.productoVariantes)
+                ..where((t) => t.productoId.equals(productoId))
+                ..limit(1))
+              .getSingleOrNull();
+      if (variante != null) {
+        j['producto_variante_id'] = variante.id;
+      }
+    }
+    await _db
+        .into(_db.inventarios)
+        .insertOnConflictUpdate(_inventarioFromJson(j));
+  }
+
   Future<bool> _shouldUpdateLocal(
     String tableName,
     Map<String, dynamic> remoteJson,
@@ -401,9 +406,11 @@ class SyncRepository {
     final id = remoteJson['id']?.toString();
     if (id == null || id.isEmpty) return true;
 
-    final res = await _db.customSelect(
-      "SELECT sync_status, updated_at FROM $tableName WHERE id = '$id' LIMIT 1",
-    ).getSingleOrNull();
+    final res = await _db
+        .customSelect(
+          "SELECT sync_status, updated_at FROM $tableName WHERE id = '$id' LIMIT 1",
+        )
+        .getSingleOrNull();
 
     if (res == null) return true;
 
@@ -413,19 +420,23 @@ class SyncRepository {
     }
 
     final localUpdatedAtStr = res.read<String>('updated_at');
-    final localUpdatedAt = DateTime.tryParse(localUpdatedAtStr) ??
+    final localUpdatedAt =
+        DateTime.tryParse(localUpdatedAtStr) ??
         DateTime.fromMillisecondsSinceEpoch(0);
 
-    final remoteUpdatedAtStr = remoteJson['ultima_actualizacion']?.toString() ??
+    final remoteUpdatedAtStr =
+        remoteJson['ultima_actualizacion']?.toString() ??
         remoteJson['fecha_registro']?.toString();
     final remoteUpdatedAt = remoteUpdatedAtStr != null
         ? DateTime.tryParse(remoteUpdatedAtStr) ??
-            DateTime.fromMillisecondsSinceEpoch(0)
+              DateTime.fromMillisecondsSinceEpoch(0)
         : DateTime.fromMillisecondsSinceEpoch(0);
 
     if (localUpdatedAt.isAfter(remoteUpdatedAt) ||
         localUpdatedAt.isAtSameMomentAs(remoteUpdatedAt)) {
-      AppLogger.debug('[Sync] Preservando edicion local offline para $tableName ($id)');
+      AppLogger.debug(
+        '[Sync] Preservando edicion local offline para $tableName ($id)',
+      );
       return false;
     }
 
@@ -436,10 +447,13 @@ class SyncRepository {
     String remoteTable,
     String localTable,
     List<T> rows,
-    Map<String, dynamic> Function(T row) toJson,
-  ) async {
+    FutureOr<Map<String, dynamic>> Function(T row) toJson, {
+    String? onConflict,
+  }) async {
     if (rows.isEmpty) return;
-    AppLogger.info('[Sync][Push] Iniciando subida para $remoteTable ($localTable): ${rows.length} registros pendientes');
+    AppLogger.info(
+      '[Sync][Push] Iniciando subida para $remoteTable ($localTable): ${rows.length} registros pendientes',
+    );
 
     final validPayloads = <Map<String, dynamic>>[];
     final validIds = <String>[];
@@ -448,7 +462,7 @@ class SyncRepository {
     for (final row in rows) {
       final id = ((row as dynamic).id ?? '').toString();
       try {
-        final json = toJson(row);
+        final json = await toJson(row);
         if (_isValidPayload(json)) {
           validPayloads.add(json);
           validIds.add(id);
@@ -456,31 +470,48 @@ class SyncRepository {
           invalidIds.add(id);
         }
       } catch (e) {
+        AppLogger.error(
+          '[Sync][Push] Error construyendo payload local $id para $remoteTable',
+          e,
+        );
         invalidIds.add(id);
       }
     }
 
     if (invalidIds.isNotEmpty) {
-      AppLogger.warn('[Sync][Push] Encontrados ${invalidIds.length} payloads o UUIDs invalidos en $localTable');
+      AppLogger.warn(
+        '[Sync][Push] Encontrados ${invalidIds.length} payloads o UUIDs invalidos en $localTable',
+      );
       await _markSyncError(localTable, invalidIds, 'Payload o UUID invalido');
     }
 
     if (validPayloads.isEmpty) return;
 
     try {
-      await _supabase.from(remoteTable).upsert(validPayloads);
+      await _supabase
+          .from(remoteTable)
+          .upsert(validPayloads, onConflict: onConflict);
       await _markSynced(localTable, validIds);
-      AppLogger.info('[Sync][Push] Lote exitoso para $remoteTable: ${validIds.length} registros guardados');
+      AppLogger.info(
+        '[Sync][Push] Lote exitoso para $remoteTable: ${validIds.length} registros guardados',
+      );
     } catch (batchError) {
-      AppLogger.warn('[Sync][Push] Fallo upsert en lote para $remoteTable: $batchError. Reintentando individualmente...');
+      AppLogger.warn(
+        '[Sync][Push] Fallo upsert en lote para $remoteTable: $batchError. Reintentando individualmente...',
+      );
       for (var i = 0; i < validPayloads.length; i++) {
         final payload = validPayloads[i];
         final id = validIds[i];
         try {
-          await _supabase.from(remoteTable).upsert(payload);
+          await _supabase
+              .from(remoteTable)
+              .upsert(payload, onConflict: onConflict);
           await _markSynced(localTable, [id]);
         } catch (itemError) {
-          AppLogger.error('[Sync][Push] Error en registro individual $id en $remoteTable', itemError);
+          AppLogger.error(
+            '[Sync][Push] Error en registro individual $id en $remoteTable',
+            itemError,
+          );
           await _markSyncError(localTable, [id], itemError.toString());
         }
       }
@@ -505,10 +536,15 @@ class SyncRepository {
                 final map = payload.newRecord;
                 if (await _shouldUpdateLocal(localTableName, map)) {
                   await onUpsert(map);
-                  AppLogger.debug('[Sync][Realtime] Registro actualizado en $localTableName desde web');
+                  AppLogger.debug(
+                    '[Sync][Realtime] Registro actualizado en $localTableName desde web',
+                  );
                 }
               } catch (e) {
-                AppLogger.error('[Sync][Realtime] Error en $remoteTableName', e);
+                AppLogger.error(
+                  '[Sync][Realtime] Error en $remoteTableName',
+                  e,
+                );
               }
             }
           },
@@ -521,7 +557,9 @@ class SyncRepository {
     String remoteTableName,
     Future<void> Function(Map<String, dynamic>) onUpsert,
   ) async {
-    AppLogger.info('[Sync][Pull] Consultando $remoteTableName -> $localTableName');
+    AppLogger.info(
+      '[Sync][Pull] Consultando $remoteTableName -> $localTableName',
+    );
     try {
       final rows = await _supabase.from(remoteTableName).select();
       int successCount = 0;
@@ -533,12 +571,21 @@ class SyncRepository {
             successCount++;
           }
         } catch (itemErr) {
-          AppLogger.error('[Sync][Pull] Fallo al insertar fila en $localTableName: $row', itemErr);
+          AppLogger.error(
+            '[Sync][Pull] Fallo al insertar fila en $localTableName: $row',
+            itemErr,
+          );
         }
       }
-      AppLogger.info('[Sync][Pull] $successCount filas sincronizadas en $localTableName');
+      AppLogger.info(
+        '[Sync][Pull] $successCount filas sincronizadas en $localTableName',
+      );
     } catch (e, st) {
-      AppLogger.error('[Sync][Pull] Fallo general al descargar de $remoteTableName', e, st);
+      AppLogger.error(
+        '[Sync][Pull] Fallo general al descargar de $remoteTableName',
+        e,
+        st,
+      );
     }
   }
 
@@ -566,7 +613,9 @@ class SyncRepository {
     final id = json['id']?.toString();
     if (!UuidValidator.isValidUUID(id)) return false;
     for (final entry in json.entries) {
-      if (!entry.key.endsWith('_id')) continue;
+      if (!entry.key.endsWith('_id') || entry.key == 'referencia_venta_id') {
+        continue;
+      }
       final value = entry.value?.toString();
       if (value != null &&
           value.isNotEmpty &&
@@ -643,7 +692,6 @@ class SyncRepository {
     'password_hash': r.passwordHash,
     'pin_offline': r.pinOffline,
     'usuario_registro_id': r.usuarioRegistroId,
-    'bodega_default_id': r.bodegaDefaultId,
     'estado': r.estado,
     'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
   };
@@ -692,6 +740,7 @@ class SyncRepository {
     map.remove('fecha_registro');
     return map;
   }
+
   Map<String, dynamic> _cajaMovimientoExtraToJson(CajaMovimientosExtra r) => {
     ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
     'caja_sesion_id': r.cajaSesionId,
@@ -725,8 +774,6 @@ class SyncRepository {
     'ultimo_costo': r.ultimoCosto,
     'ultimo_precio_venta': r.ultimoPrecioVenta,
     'imagen_url': r.imagenUrl,
-    'imagen_local': r.imagenLocal,
-    'usuario_registro_id': r.usuarioRegistroId,
     'estado': r.estado,
     'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
   };
@@ -742,18 +789,35 @@ class SyncRepository {
     'estado': r.estado,
     'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
   };
-  Map<String, dynamic> _inventarioToJson(Inventario r) => {
-    ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
-    'producto_variante_id': r.productoVarianteId,
-    'bodega_id': r.bodegaId,
-    'cantidad_actual': r.cantidadActual,
-    'cantidad_reservada': r.cantidadReservada,
-    'ubicacion_pasillo': r.ubicacionPasillo,
-    'precio_venta': r.precioVenta,
-    'costo_promedio': r.costoPromedio,
-    'actualizado_por': r.actualizadoPor,
-    'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
-  };
+  Future<Map<String, dynamic>> _inventarioToJson(Inventario r) async {
+    final variante =
+        await (_db.select(_db.productoVariantes)
+              ..where((tbl) => tbl.id.equals(r.productoVarianteId))
+              ..limit(1))
+            .getSingleOrNull();
+
+    if (variante == null) {
+      throw StateError(
+        'No existe la variante local ${r.productoVarianteId} para inventario ${r.id}',
+      );
+    }
+
+    final map = {
+      ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
+      'producto_id': variante.productoId,
+      'bodega_id': r.bodegaId,
+      'cantidad_actual': r.cantidadActual,
+      'cantidad_reservada': r.cantidadReservada,
+      'ubicacion_pasillo': r.ubicacionPasillo,
+      'precio_venta': r.precioVenta,
+      'costo_promedio': r.costoPromedio,
+      'actualizado_por': r.actualizadoPor,
+      'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
+    };
+    map.remove('fecha_registro');
+    return map;
+  }
+
   Map<String, dynamic> _clienteToJson(Cliente r) => {
     ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
     'empresa_id': r.empresaId,
@@ -768,11 +832,8 @@ class SyncRepository {
     'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
   };
   Map<String, dynamic> _movimientoToJson(Movimiento r) {
-    String tipoMovimiento = r.tipoMovimiento;
-    if (tipoMovimiento.isNotEmpty) {
-      tipoMovimiento = tipoMovimiento[0].toUpperCase() + tipoMovimiento.substring(1);
-    }
-    
+    final tipoMovimiento = _tipoMovimientoToRemote(r.tipoMovimiento);
+
     return {
       ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
       'empresa_id': r.empresaId,
@@ -786,44 +847,78 @@ class SyncRepository {
       'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
     };
   }
-  Map<String, dynamic> _detalleMovimientoToJson(DetalleMovimiento r) => {
-    ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
-    'movimiento_producto_id': r.movimientoId,
-    'producto_id': r.productoId,
-    'cantidad': r.cantidad,
-    'costo_proveedor': r.costoProveedor,
-    'costo_unitario_final': r.costoUnitarioFinal,
-    'variantes_json': r.variantesJson,
-    'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
-  };
-  Map<String, dynamic> _ventaToJson(Venta r) => {
-    ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
-    'empresa_id': r.empresaId,
-    'cliente_id': r.clienteId,
-    'usuario_id': r.usuarioId,
-    'caja_sesion_id': r.cajaSesionId,
-    'tipo_venta': r.tipoVenta,
-    'estado_pago': r.estadoPago,
-    'total_venta': r.totalVenta,
-    'total_pagado': r.totalPagado,
-    'saldo_pendiente': r.saldoPendiente,
-    'fecha_venta': r.fechaVenta.toIso8601String(),
-    'fecha_vencimiento': r.fechaVencimiento?.toIso8601String(),
-    'estado': r.estado,
-    'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
-  };
-  Map<String, dynamic> _detalleVentaToJson(DetalleVenta r) => {
-    ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
-    'venta_id': r.ventaId,
-    'producto_id': r.productoId,
-    'producto_variante_id': r.productoVarianteId,
-    'cantidad': r.cantidad,
-    'precio_unitario': r.precioUnitario,
-    'descuento': r.descuento,
-    'sub_total': r.subTotal,
-    'costo_historico_compra': r.costoHistoricoCompra,
-    'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
-  };
+
+  String _tipoMovimientoToRemote(String value) {
+    final normalized = value.trim().toLowerCase();
+    return switch (normalized) {
+      'entrada' => 'compra',
+      'salida' => 'ajuste',
+      'traslado' => 'traslado',
+      'ajuste' => 'ajuste',
+      'compra' => 'compra',
+      _ => normalized,
+    };
+  }
+
+  String _tipoMovimientoFromRemote(String? value) {
+    final normalized = value?.trim().toLowerCase() ?? '';
+    return switch (normalized) {
+      'compra' => 'entrada',
+      _ => normalized,
+    };
+  }
+
+  Map<String, dynamic> _detalleMovimientoToJson(DetalleMovimiento r) {
+    final map = {
+      ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
+      'movimiento_producto_id': r.movimientoId,
+      'producto_id': r.productoId,
+      'cantidad': r.cantidad,
+      'costo_proveedor': r.costoProveedor,
+      'costo_unitario_final': r.costoUnitarioFinal,
+      'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
+    };
+    map.remove('fecha_registro');
+    return map;
+  }
+
+  Map<String, dynamic> _ventaToJson(Venta r) {
+    final map = {
+      ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
+      'empresa_id': r.empresaId,
+      'cliente_id': r.clienteId,
+      'usuario_registro_id': r.usuarioId,
+      'caja_sesion_id': r.cajaSesionId,
+      'tipo_venta': r.tipoVenta,
+      'estado_pago': r.estadoPago,
+      'total_venta': r.totalVenta,
+      'total_pagado': r.totalPagado,
+      'saldo_pendiente': r.saldoPendiente,
+      'fecha_venta': r.fechaVenta.toIso8601String(),
+      'fecha_vencimiento': r.fechaVencimiento?.toIso8601String(),
+      'estado': r.estado,
+      'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
+    };
+    map.remove('fecha_registro');
+    return map;
+  }
+
+  Map<String, dynamic> _detalleVentaToJson(DetalleVenta r) {
+    final map = {
+      ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
+      'venta_id': r.ventaId,
+      'producto_id': r.productoId,
+      'cantidad': r.cantidad,
+      'precio_unitario': r.precioUnitario,
+      'descuento': r.descuento,
+      'sub_total': r.subTotal,
+      'costo_historico_compra': r.costoHistoricoCompra,
+      'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
+    };
+    map.remove('fecha_registro');
+    return map;
+  }
+
   Map<String, dynamic> _pagoVentaToJson(PagosVenta r) => {
     ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
     'venta_id': r.ventaId,
@@ -833,7 +928,6 @@ class SyncRepository {
     'referencia': r.referencia,
     'usuario_registro_id': r.usuarioRegistroId,
     'estado': r.estado,
-    'fecha_registro_pago': r.fechaRegistro.toIso8601String(),
     'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
   };
 
@@ -845,7 +939,7 @@ class SyncRepository {
         ruc: Value(_text(j['ruc'])),
         configuracion: Value(_json(j['configuracion'])),
         estado: Value(_bool(j['estado'])),
-        usuarioRegistroId: Value(_text(j['usuario_registro_id'])),
+        usuarioRegistroId: const Value(null),
         createdAt: Value(_date(j['fecha_registro'])),
         updatedAt: Value(_date(j['ultima_actualizacion'])),
         fechaEliminacion: Value(
@@ -858,7 +952,7 @@ class SyncRepository {
     empresaId: _text(j['empresa_id']) ?? '',
     nombre: _text(j['nombre']) ?? 'Sin nombre',
     userAdmin: Value(_bool(j['user_admin'], false)),
-    usuarioRegistroId: Value(_text(j['usuario_registro_id'])),
+    usuarioRegistroId: const Value(null),
     estado: Value(_bool(j['estado'])),
     createdAt: Value(_date(j['fecha_registro'])),
     updatedAt: Value(_date(j['ultima_actualizacion'])),
@@ -872,7 +966,7 @@ class SyncRepository {
         id: _text(j['id']) ?? '',
         rolId: _text(j['rol_id']) ?? '',
         codigoAcceso: _text(j['codigo_acceso']) ?? '',
-        usuarioRegistroId: Value(_text(j['usuario_registro_id'])),
+        usuarioRegistroId: const Value(null),
         estado: Value(_bool(j['estado'])),
         createdAt: Value(_date(j['fecha_registro'])),
         updatedAt: Value(_date(j['ultima_actualizacion'])),
@@ -890,8 +984,8 @@ class SyncRepository {
         correo: Value(_text(j['correo'])),
         passwordHash: Value(_text(j['password_hash'])),
         pinOffline: Value(_text(j['pin_offline'])),
-        usuarioRegistroId: Value(_text(j['usuario_registro_id'])),
-        bodegaDefaultId: Value(_text(j['bodega_default_id'])),
+        usuarioRegistroId: const Value(null),
+        bodegaDefaultId: const Value(null),
         estado: Value(_bool(j['estado'])),
         createdAt: Value(_date(j['fecha_registro'])),
         updatedAt: Value(_date(j['ultima_actualizacion'])),
@@ -908,7 +1002,7 @@ class SyncRepository {
         direccion: Value(_text(j['direccion'])),
         descripcion: Value(_text(j['descripcion'])),
         esPuntoVenta: Value(_bool(j['es_punto_venta'], false)),
-        usuarioRegistroId: Value(_text(j['usuario_registro_id'])),
+        usuarioRegistroId: const Value(null),
         estado: Value(_bool(j['estado'])),
         createdAt: Value(_date(j['fecha_registro'])),
         updatedAt: Value(_date(j['ultima_actualizacion'])),
@@ -922,7 +1016,7 @@ class SyncRepository {
         id: _text(j['id']) ?? '',
         usuarioId: _text(j['usuario_id']) ?? '',
         bodegaId: _text(j['bodega_id']) ?? '',
-        usuarioRegistroId: Value(_text(j['usuario_registro_id'])),
+        usuarioRegistroId: const Value(null),
         estado: Value(_bool(j['estado'])),
         createdAt: Value(_date(j['fecha_registro'])),
         updatedAt: Value(_date(j['ultima_actualizacion'])),
@@ -936,7 +1030,7 @@ class SyncRepository {
     empresaId: _text(j['empresa_id']) ?? '',
     bodegaId: _text(j['bodega_id']) ?? '',
     nombre: _text(j['nombre']) ?? 'Caja',
-    usuarioRegistroId: Value(_text(j['usuario_registro_id'])),
+    usuarioRegistroId: const Value(null),
     estado: Value(_bool(j['estado'])),
     createdAt: Value(_date(j['fecha_registro'])),
     updatedAt: Value(_date(j['ultima_actualizacion'])),
@@ -950,7 +1044,7 @@ class SyncRepository {
         id: _text(j['id']) ?? '',
         cajaId: _text(j['caja_id']) ?? '',
         usuarioAperturaId: _text(j['usuario_apertura_id']) ?? '',
-        usuarioCierreId: Value(_text(j['usuario_cierre_id'])),
+        usuarioCierreId: const Value(null),
         fechaApertura: _date(j['fecha_apertura']),
         fechaCierre: Value(
           j['fecha_cierre'] == null ? null : _date(j['fecha_cierre']),
@@ -976,7 +1070,7 @@ class SyncRepository {
     tipo: _text(j['tipo']) ?? 'egreso',
     motivo: Value(_text(j['motivo'])),
     monto: Value(_double(j['monto'])),
-    usuarioRegistroId: Value(_text(j['usuario_registro_id'])),
+    usuarioRegistroId: const Value(null),
     estado: Value(_bool(j['estado'])),
     createdAt: Value(_date(j['fecha_registro'])),
     updatedAt: Value(_date(j['ultima_actualizacion'])),
@@ -992,7 +1086,7 @@ class SyncRepository {
         nombre: _text(j['nombre']) ?? 'Sin nombre',
         categoriaPadreId: Value(_text(j['categoria_padre_id'])),
         especificacionJson: Value(_json(j['especificacion'])),
-        usuarioRegistroId: Value(_text(j['usuario_registro_id'])),
+        usuarioRegistroId: const Value(null),
         estado: Value(_bool(j['estado'])),
         createdAt: Value(_date(j['fecha_registro'])),
         updatedAt: Value(_date(j['ultima_actualizacion'])),
@@ -1018,7 +1112,7 @@ class SyncRepository {
         imagenUrl: Value(_text(j['imagen_url'])),
         imagenLocal: Value(_text(j['imagen_local'])),
         embedding: Value(_text(j['embedding'])),
-        usuarioRegistroId: Value(_text(j['usuario_registro_id'])),
+        usuarioRegistroId: const Value(null),
         estado: Value(_bool(j['estado'])),
         createdAt: Value(_date(j['fecha_registro'])),
         updatedAt: Value(_date(j['ultima_actualizacion'])),
@@ -1041,7 +1135,7 @@ class SyncRepository {
     costoEspecifico: Value(
       j['costo_especifico'] == null ? null : _double(j['costo_especifico']),
     ),
-    usuarioRegistroId: Value(_text(j['usuario_registro_id'])),
+    usuarioRegistroId: const Value(null),
     estado: Value(_bool(j['estado'])),
     createdAt: Value(_date(j['fecha_registro'])),
     updatedAt: Value(_date(j['ultima_actualizacion'])),
@@ -1060,7 +1154,7 @@ class SyncRepository {
         ubicacionPasillo: Value(_text(j['ubicacion_pasillo'])),
         precioVenta: Value(_double(j['precio_venta'])),
         costoPromedio: Value(_double(j['costo_promedio'])),
-        actualizadoPor: Value(_text(j['actualizado_por'])),
+        actualizadoPor: const Value(null),
         estado: Value(_bool(j['estado'])),
         createdAt: Value(_date(j['fecha_registro'])),
         updatedAt: Value(_date(j['ultima_actualizacion'])),
@@ -1079,7 +1173,7 @@ class SyncRepository {
         direccion: Value(_text(j['direccion'])),
         montoCreditoMaximo: Value(_double(j['monto_credito_maximo'])),
         saldoDeudorActual: Value(_double(j['saldo_deudor_actual'])),
-        usuarioRegistroId: Value(_text(j['usuario_registro_id'])),
+        usuarioRegistroId: const Value(null),
         estado: Value(_bool(j['estado'])),
         createdAt: Value(_date(j['fecha_registro'])),
         updatedAt: Value(_date(j['ultima_actualizacion'])),
@@ -1092,12 +1186,12 @@ class SyncRepository {
       MovimientosCompanion.insert(
         id: _text(j['id']) ?? '',
         empresaId: _text(j['empresa_id']) ?? '',
-        tipoMovimiento: _text(j['tipo_movimiento']) ?? '',
+        tipoMovimiento: _tipoMovimientoFromRemote(_text(j['tipo_movimiento'])),
         estadoMovimiento: _text(j['estado_movimiento']) ?? 'aprobado',
         bodegaOrigenId: Value(_text(j['bodega_origen_id'])),
         bodegaDestinoId: Value(_text(j['bodega_destino_id'])),
         descripcion: Value(_text(j['descripcion'])),
-        usuarioRegistroId: Value(_text(j['usuario_registro_id'])),
+        usuarioRegistroId: const Value(null),
         estado: Value(_bool(j['estado'])),
         createdAt: Value(_date(j['fecha_registro'])),
         updatedAt: Value(_date(j['ultima_actualizacion'])),
@@ -1175,7 +1269,7 @@ class SyncRepository {
         metodoPago:
             _text(j['metodo_de_pago']) ?? _text(j['metodo_pago']) ?? 'efectivo',
         referencia: Value(_text(j['referencia'])),
-        usuarioRegistroId: Value(_text(j['usuario_registro_id'])),
+        usuarioRegistroId: const Value(null),
         estado: Value(_bool(j['estado'])),
         fechaRegistro: _date(j['fecha_registro_pago'] ?? j['fecha_registro']),
         createdAt: Value(_date(j['fecha_registro'])),

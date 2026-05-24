@@ -8,6 +8,8 @@ import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/core/providers/supabase_provider.dart';
 import 'package:inventario_v2/features/auth/data/repositories/auth_repository.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 part 'auth_provider.g.dart';
 
@@ -27,17 +29,133 @@ class EmpresaDraft {
 class AuthController extends _$AuthController {
   EmpresaDraft? _draft;
   SesionActivaDrift? _sesionActiva;
+  String? _linkError;
+  String? _sessionSyncError;
+  bool _passwordRecoveryPending = false;
+  bool _isLoggingOut = false;
 
   SessionUserDrift? get usuarioActual => _sesionActiva?.userView;
   SesionActivaDrift? get sesionActiva => _sesionActiva;
+  String? get linkError => _linkError;
+  String? get sessionSyncError => _sessionSyncError;
+  bool get passwordRecoveryPending => _passwordRecoveryPending;
+  bool get isLoggingOut => _isLoggingOut;
 
   @override
   FutureOr<void> build() async {
     await checkAuthStatus();
+
+    final supabase = ref.read(supabaseClientProvider);
+    final subscription = supabase.auth.onAuthStateChange.listen(
+      (data) async {
+        final AuthChangeEvent event = data.event;
+        final Session? session = data.session;
+
+        if (event == AuthChangeEvent.passwordRecovery) {
+          _passwordRecoveryPending = session != null;
+          _linkError = null;
+          state = const AsyncData(null);
+        }
+
+        if (event == AuthChangeEvent.initialSession ||
+            event == AuthChangeEvent.signedIn ||
+            event == AuthChangeEvent.passwordRecovery) {
+          if (session != null &&
+              (_sesionActiva == null ||
+                  _sesionActiva!.usuario.id != session.user.id)) {
+            state = const AsyncLoading();
+            try {
+              await _syncSessionFromSupabaseUser(session.user.id);
+              state = const AsyncData(null);
+            } catch (e) {
+              debugPrint('[Auth] Error syncing session on auth event: $e');
+              _sessionSyncError = e.toString();
+              _sesionActiva = null;
+              state = AsyncError(e, StackTrace.current);
+            }
+          }
+        } else if (event == AuthChangeEvent.signedOut) {
+          if (_sesionActiva != null) {
+            await logout();
+          }
+        }
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (error is AuthException &&
+            (error.statusCode == 'otp_expired' ||
+                error.code == 'otp_expired' ||
+                error.message.toLowerCase().contains('expired'))) {
+          _linkError = 'otp_expired';
+        } else {
+          _linkError = error.toString();
+        }
+        state = const AsyncData(null); // Refresca las rutas
+      },
+    );
+
+    ref.onDispose(() {
+      subscription.cancel();
+    });
   }
 
   void setEmpresaDraft(EmpresaDraft empresaDraft) {
     _draft = empresaDraft;
+  }
+
+  void clearLinkError() {
+    _linkError = null;
+    state = const AsyncData(null);
+  }
+
+  void setLinkError(String error) {
+    _linkError = error;
+    state = const AsyncData(null);
+  }
+
+  void clearSessionSyncError() {
+    _sessionSyncError = null;
+    state = const AsyncData(null);
+  }
+
+  Future<void> _syncSessionFromSupabaseUser(String userId) async {
+    final supabase = ref.read(supabaseClientProvider);
+    final db = ref.read(driftDatabaseProvider);
+    final repo = AuthRepository(supabase, db);
+
+    await repo.syncSupabaseUserToLocal(userId);
+    _sesionActiva = await db.authDao.getSesionActiva();
+    _sessionSyncError = null;
+    ref.read(autoSyncProvider.notifier).runFullSync();
+  }
+
+  Future<void> completePasswordChange(String password) async {
+    state = const AsyncLoading();
+
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+      final currentUser = supabase.auth.currentUser;
+      if (currentUser == null) {
+        throw Exception(
+          'La sesion de recuperacion expiro. Solicita un nuevo enlace.',
+        );
+      }
+
+      await supabase.auth.updateUser(
+        UserAttributes(
+          password: password,
+          data: {'must_change_password': false},
+        ),
+      );
+
+      await _syncSessionFromSupabaseUser(currentUser.id);
+      _passwordRecoveryPending = false;
+      _linkError = null;
+      state = const AsyncData(null);
+    } catch (e, st) {
+      debugPrint('[Auth] Error al completar cambio de password: $e');
+      state = AsyncError(e, st);
+      rethrow;
+    }
   }
 
   FutureOr<void> createUser(
@@ -134,6 +252,8 @@ class AuthController extends _$AuthController {
       _sesionActiva = await db.authDao.getSesionActiva();
       debugPrint('[Auth] Login exitoso: ${_sesionActiva?.usuario.id}');
       ref.read(autoSyncProvider.notifier).runFullSync();
+      _sessionSyncError = null;
+      _linkError = null;
     } catch (e, stackTrace) {
       debugPrint('[Auth] Error en login: $e');
       state = AsyncError(e, stackTrace);
@@ -144,17 +264,31 @@ class AuthController extends _$AuthController {
   }
 
   Future<void> logout() async {
+    if (_isLoggingOut) return;
+    _isLoggingOut = true;
+
     final db = ref.read(driftDatabaseProvider);
     final supabase = ref.read(supabaseClientProvider);
 
     try {
       await supabase.auth.signOut();
-    } catch (_) {}
 
-    await db.authDao.clearSesion();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('active_user_id');
 
-    _sesionActiva = null;
-    state = const AsyncData(null);
+      await db.authDao.clearSesion();
+
+      _sesionActiva = null;
+      _passwordRecoveryPending = false;
+      _sessionSyncError = null;
+      _linkError = null;
+      state = const AsyncData(null);
+    } catch (e) {
+      debugPrint('[Auth] No se pudo cerrar sesion: $e');
+      rethrow;
+    } finally {
+      _isLoggingOut = false;
+    }
   }
 }
 
