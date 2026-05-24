@@ -52,14 +52,14 @@ import '../../core/constants/permission_codes.dart';
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authControllerProvider);
-  final notifier = ref.read(authControllerProvider.notifier);
-
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/splash',
     refreshListenable: AuthNotifierListenable(ref),
     redirect: (context, state) {
+      final authState = ref.read(authControllerProvider);
+      final notifier = ref.read(authControllerProvider.notifier);
+
       // 1. Definir estados y rutas
       final isLoading = authState.isLoading;
       final usuario = notifier.usuarioActual;
@@ -69,12 +69,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final isLoginCallback =
           state.uri.host == 'login-callback' ||
           state.matchedLocation == '/login-callback';
+      final isForcePasswordRoute =
+          state.matchedLocation == '/force-password-change';
 
       // Agrupamos login y registro como "rutas de autenticacion"
       final isAuthRoute =
           state.matchedLocation == '/login' ||
           state.matchedLocation == '/create-company' ||
           state.matchedLocation == '/create-user' ||
+          isForcePasswordRoute ||
           isLoginCallback;
 
       // 2. LOGICA DE ENLACES DE ERROR (Deep Link Expired)
@@ -91,9 +94,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return isSplash ? null : '/splash';
       }
 
+      // El evento passwordRecovery de Supabase crea una sesion temporal valida
+      // para cambiar password, aunque la sesion local aun no exista en Drift.
+      if (notifier.passwordRecoveryPending) {
+        return isForcePasswordRoute ? null : '/force-password-change';
+      }
+
       // 3. LOGICA DE CARGA (Prioridad Alta)
-      // Si esta cargando, DEBE estar en el splash.
+      // Mantener las pantallas de auth estables durante acciones locales
+      // como login o recuperacion; si las mandamos al splash se reconstruyen
+      // y el usuario pierde lo que habia escrito.
       if (isLoading) {
+        if (isAuthRoute) return null;
         if (!isSplash) return '/splash';
         return null; // Si ya esta en splash, quedarse ahi.
       }
@@ -115,8 +127,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         final mustChangePassword =
             supabase.auth.currentUser?.userMetadata?['must_change_password'] ==
             true;
-        final isForcePasswordRoute =
-            state.matchedLocation == '/force-password-change';
 
         if (mustChangePassword && !isForcePasswordRoute) {
           return '/force-password-change';

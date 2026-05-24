@@ -8,54 +8,39 @@ class InvalidLinkScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final linkError = ref.read(authControllerProvider.notifier).linkError;
+    final isExpired = linkError == 'otp_expired';
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Enlace invalido'),
+        title: const Text('Enlace no disponible'),
         automaticallyImplyLeading: false,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(24),
           child: Column(
             children: [
               const SizedBox(height: 48),
               Icon(Icons.link_off, size: 80, color: Colors.red.shade400),
               const SizedBox(height: 24),
-              Consumer(
-                builder: (context, ref, child) {
-                  final linkError = ref
-                      .read(authControllerProvider.notifier)
-                      .linkError;
-                  final esExpirado = linkError == 'otp_expired';
-
-                  return Column(
-                    children: [
-                      Text(
-                        esExpirado
-                            ? 'Enlace caducado o utilizado'
-                            : 'Error al procesar la invitacion',
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        esExpirado
-                            ? 'El enlace de invitacion o recuperacion que utilizaste ya no es valido. '
-                                  'Por seguridad, estos enlaces son de un solo uso y expiran despues de un tiempo.\n\n'
-                                  'Por favor, solicita a tu administrador que te envie una nueva invitacion.'
-                            : 'Detalle del error:\n$linkError',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: Colors.black87,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  );
-                },
+              Text(
+                isExpired
+                    ? 'Enlace caducado o utilizado'
+                    : 'No pudimos abrir este enlace',
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                isExpired
+                    ? 'Este enlace ya expiro o fue utilizado. Por seguridad, solicita uno nuevo desde la app o con tu administrador.'
+                    : 'El enlace no se pudo validar. Intenta solicitar uno nuevo. Si el problema continua, contacta al administrador.',
+                style: const TextStyle(fontSize: 16, color: Colors.black87),
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
               SizedBox(

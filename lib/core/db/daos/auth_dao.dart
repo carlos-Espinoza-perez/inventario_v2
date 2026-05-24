@@ -272,16 +272,7 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
             ))
             .get();
 
-    if (relaciones.isEmpty) {
-      final all =
-          await (select(bodegas)..where(
-                (tbl) =>
-                    tbl.estado.equals(true) &
-                    tbl.empresaId.equals(user.empresaId),
-              ))
-              .get();
-      return all.map((b) => b.id).toSet();
-    }
+    if (relaciones.isEmpty) return <String>{};
 
     final ids = relaciones.map((r) => r.bodegaId).toList();
     if (ids.isEmpty) return <String>{};

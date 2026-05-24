@@ -43,7 +43,9 @@ class FormLoginState extends ConsumerState<FormLogin> {
     if (emailForReset.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Ingresa tu correo primero para recuperar tu contraseña.'),
+          content: Text(
+            'Ingresa tu correo primero para recuperar tu contraseña.',
+          ),
           backgroundColor: Colors.orange,
         ),
       );
@@ -77,7 +79,10 @@ class FormLoginState extends ConsumerState<FormLogin> {
     if (confirm != true || !context.mounted) return;
 
     try {
-      await Supabase.instance.client.auth.resetPasswordForEmail(emailForReset);
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        emailForReset,
+        redirectTo: 'io.supabase.inventario://login-callback/',
+      );
 
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -96,7 +101,9 @@ class FormLoginState extends ConsumerState<FormLogin> {
           ),
           backgroundColor: Colors.green.shade600,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
           margin: const EdgeInsets.all(16),
           duration: const Duration(seconds: 5),
         ),
@@ -113,7 +120,9 @@ class FormLoginState extends ConsumerState<FormLogin> {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('No se pudo enviar el correo. Verifica tu conexión.'),
+          content: const Text(
+            'No se pudo enviar el correo. Verifica tu conexión.',
+          ),
           backgroundColor: Colors.red.shade700,
         ),
       );
@@ -129,6 +138,7 @@ class FormLoginState extends ConsumerState<FormLogin> {
       if (next is AsyncError) {
         final mensajeAmigable = ErrorHandler.humanize(next.error);
 
+        if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -155,7 +165,10 @@ class FormLoginState extends ConsumerState<FormLogin> {
       }
 
       if (next is AsyncData && !next.isLoading) {
-        context.go('/dashboard');
+        final auth = ref.read(authControllerProvider.notifier);
+        if (auth.usuarioActual != null && context.mounted) {
+          context.go('/dashboard');
+        }
       }
     });
 
