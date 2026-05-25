@@ -507,13 +507,8 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
   Widget _buildProductList(Map<String, dynamic> data, NumberFormat currency) {
     final items = data['items'] as List;
 
-    return ListView.builder(
-      shrinkWrap:
-          true, // Importante porque está dentro de SingleChildScrollView
-      physics: const NeverScrollableScrollPhysics(), // No scrollea internamente
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
+    return Column(
+      children: items.map((item) {
         final List variaciones = item['variantes'] ?? [];
         final groupedVariations = _groupVariantRows(variaciones);
         final firstVariant = variaciones.isNotEmpty
@@ -522,33 +517,23 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
         final displaySku = _displayCode(
           firstVariant?['sku'] ?? firstVariant?['qr'] ?? item['sku'],
         );
+        final sizeLabel = _productSizeLabel(groupedVariations);
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-          ),
+        return _SoftCard(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(14),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Cuadro de Cantidad
-                  Container(
-                    width: 40,
-                    height: 40,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      "${item['cantidad']}",
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: Colors.blue.shade50,
+                    child: Icon(
+                      Icons.inventory_2_outlined,
+                      color: Colors.blue.shade700,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -560,14 +545,28 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                       children: [
                         Text(
                           item['nombre'],
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        Text(
-                          displaySku,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey[400],
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                            color: Colors.black87,
                           ),
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            _InfoChip(
+                              icon: Icons.straighten_outlined,
+                              text: sizeLabel,
+                            ),
+                            _InfoChip(
+                              icon: Icons.qr_code_2_rounded,
+                              text: displaySku,
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -585,7 +584,11 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                         ),
                       ),
                       Text(
-                        "Costo Unitario: ${currency.format(item['precio_compra'] ?? item['precio_unitario'])}",
+                        "${_formatQuantity(_readNum(item['cantidad']) ?? 0)} unds",
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
+                      Text(
+                        "Unit: ${currency.format(item['precio_compra'] ?? item['precio_unitario'])}",
                         style: TextStyle(fontSize: 10, color: Colors.grey[500]),
                       ),
                     ],
@@ -593,10 +596,7 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                 ],
               ),
               if (groupedVariations.isNotEmpty) ...[
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Divider(height: 1),
-                ),
+                const SizedBox(height: 12),
                 ...groupedVariations.map((variant) {
                   final String tallaStr = _displaySize(
                     variant['talla'] ?? variant['size'],
@@ -616,19 +616,26 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                             ? "${currency.format(item['precio_compra'])} (Est)"
                             : "-");
 
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 4,
-                      horizontal: 4,
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade200),
                     ),
                     child: Row(
                       children: [
-                        Icon(
-                          Icons.check_circle_outline,
-                          size: 14,
-                          color: Colors.blue[300],
+                        CircleAvatar(
+                          radius: 14,
+                          backgroundColor: Colors.white,
+                          child: Icon(
+                            Icons.sell_outlined,
+                            size: 15,
+                            color: Colors.grey[700],
+                          ),
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -641,11 +648,13 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Colors.grey[800],
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                               Text(
                                 codeStr,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: Colors.grey[500],
@@ -657,17 +666,17 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
-                            vertical: 3,
+                            vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.grey[100],
+                            color: Colors.blue.shade50,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             "${_formatQuantity(qty)}x",
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey[700],
+                              color: Colors.blue.shade700,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -678,6 +687,7 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey[700],
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -688,13 +698,15 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
             ],
           ),
         );
-      },
+      }).toList(),
     );
   }
 
   String _displaySize(Object? value) {
     final text = value?.toString().trim();
-    if (text == null || text.isEmpty) return 'General';
+    if (text == null || text.isEmpty || text.toLowerCase() == 'general') {
+      return 'Sin talla especifica';
+    }
     return text;
   }
 
@@ -756,6 +768,21 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
     }).toList();
   }
 
+  String _productSizeLabel(List<Map<String, dynamic>> variants) {
+    final sizes =
+        variants
+            .map((variant) => _displaySize(variant['talla'] ?? variant['size']))
+            .where((size) => size != 'Sin talla especifica')
+            .toSet()
+            .toList()
+          ..sort();
+
+    if (sizes.isEmpty) return 'Sin talla especifica';
+    if (sizes.length == 1) return 'Talla ${sizes.first}';
+    if (sizes.length <= 3) return 'Tallas ${sizes.join(', ')}';
+    return '${sizes.length} tallas';
+  }
+
   // Auxiliar de Colores
   Color _getColorByType(String type) {
     switch (type) {
@@ -768,5 +795,73 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
       default:
         return Colors.grey;
     }
+  }
+}
+
+class _SoftCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry margin;
+
+  const _SoftCard({
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+    this.margin = EdgeInsets.zero,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: margin,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.035),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _InfoChip({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: Colors.grey[700]),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.grey[800],
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

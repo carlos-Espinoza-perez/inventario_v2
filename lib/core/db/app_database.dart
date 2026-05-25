@@ -49,7 +49,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration {
@@ -62,6 +62,14 @@ class AppDatabase extends _$AppDatabase {
         if (from < 5) {
           await m.createTable(assistantEntrySessions);
           await m.createTable(assistantEntrySessionItems);
+          await _createIndexes();
+        }
+        if (from < 6) {
+          await m.addColumn(
+            detalleMovimientos,
+            detalleMovimientos.productoVarianteId,
+          );
+          await _backfillDetalleMovimientoVariantIds();
           await _createIndexes();
         } else if (from != to) {
           await transaction(() async {
@@ -150,6 +158,26 @@ class AppDatabase extends _$AppDatabase {
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_assistant_entry_items_session ON assistant_entry_session_items (session_id)',
     );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_detalle_movimientos_producto_variante_id ON detalle_movimientos (producto_variante_id)',
+    );
+  }
+
+  Future<void> _backfillDetalleMovimientoVariantIds() async {
+    await customStatement(r'''
+      UPDATE detalle_movimientos
+      SET producto_variante_id = (
+        SELECT pv.id
+        FROM producto_variantes pv
+        WHERE pv.producto_id = detalle_movimientos.producto_id
+          AND pv.sku = json_extract(detalle_movimientos.variantes_json, '$[0].sku')
+        LIMIT 1
+      )
+      WHERE producto_variante_id IS NULL
+        AND variantes_json IS NOT NULL
+        AND json_valid(variantes_json)
+        AND json_extract(variantes_json, '$[0].sku') IS NOT NULL
+    ''');
   }
 
   Future<void> replaceEmpresaData(Empresa empresa, Usuario usuario) async {

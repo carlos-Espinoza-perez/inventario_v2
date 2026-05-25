@@ -497,6 +497,12 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
                   movimientos,
                   movimientos.id.equalsExp(detalleMovimientos.movimientoId),
                 ),
+                leftOuterJoin(
+                  productoVariantes,
+                  productoVariantes.id.equalsExp(
+                    detalleMovimientos.productoVarianteId,
+                  ),
+                ),
               ])
               ..where(detalleMovimientos.productoId.equals(productoId))
               ..where(
@@ -508,23 +514,26 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
               ..orderBy([OrderingTerm.desc(movimientos.createdAt)]))
             .get();
 
-    return rows
-        .map(
-          (row) => {
-            'id': row.readTable(movimientos).id,
-            'fecha': row.readTable(movimientos).createdAt,
-            'tipo': row.readTable(movimientos).tipoMovimiento,
-            'descripcion': row.readTable(movimientos).descripcion,
-            'cantidad': row.readTable(detalleMovimientos).cantidad,
-            'costo': row.readTable(detalleMovimientos).costoUnitarioFinal,
-            'variantes': row.readTable(detalleMovimientos).variantesJson == null
-                ? <Map<String, dynamic>>[]
-                : _decodeVariantes(
-                    row.readTable(detalleMovimientos).variantesJson!,
-                  ),
-          },
-        )
-        .toList();
+    return rows.map((row) {
+      final detalle = row.readTable(detalleMovimientos);
+      final variante = row.readTableOrNull(productoVariantes);
+      final variantes = detalle.variantesJson == null
+          ? <Map<String, dynamic>>[]
+          : _decodeVariantes(detalle.variantesJson!);
+      return {
+        'id': row.readTable(movimientos).id,
+        'fecha': row.readTable(movimientos).createdAt,
+        'tipo': row.readTable(movimientos).tipoMovimiento,
+        'descripcion': row.readTable(movimientos).descripcion,
+        'cantidad': detalle.cantidad,
+        'costo': detalle.costoUnitarioFinal,
+        'variantes': _enrichVariantes(
+          variantes: variantes,
+          detalle: detalle,
+          variante: variante,
+        ),
+      };
+    }).toList();
   }
 
   Future<List<Map<String, dynamic>>> getPreciosProductoPorBodega(
@@ -583,6 +592,12 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
                   movimientos,
                   movimientos.id.equalsExp(detalleMovimientos.movimientoId),
                 ),
+                leftOuterJoin(
+                  productoVariantes,
+                  productoVariantes.id.equalsExp(
+                    detalleMovimientos.productoVarianteId,
+                  ),
+                ),
               ])
               ..where(detalleMovimientos.productoId.equals(productoId))
               ..where(movimientos.bodegaDestinoId.equals(bodegaId))
@@ -598,6 +613,7 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
     for (final row in rows) {
       final movimiento = row.readTable(movimientos);
       final detalle = row.readTable(detalleMovimientos);
+      final detalleVariante = row.readTableOrNull(productoVariantes);
       final variantes = detalle.variantesJson == null
           ? const <Map<String, dynamic>>[]
           : _decodeVariantes(detalle.variantesJson!);
@@ -608,9 +624,9 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
           'fecha': movimiento.createdAt,
           'tipo': movimiento.tipoMovimiento,
           'descripcion': movimiento.descripcion,
-          'sku': null,
-          'talla': null,
-          'color': null,
+          'sku': _cleanText(detalleVariante?.sku),
+          'talla': _cleanVariantText(detalleVariante?.talla),
+          'color': _cleanText(detalleVariante?.color),
           'cantidad': detalle.cantidad,
           'precio': precio,
         });
@@ -619,17 +635,21 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
 
       final grouped = <String, Map<String, dynamic>>{};
       for (final variante in variantes) {
-        final sku = _cleanText(
-          variante['sku']?.toString() ?? variante['qr']?.toString(),
-        );
+        final sku =
+            _cleanText(
+              variante['sku']?.toString() ?? variante['qr']?.toString(),
+            ) ??
+            _cleanText(detalleVariante?.sku);
         final varianteReal = sku == null ? null : variantesPorSku[sku];
         final talla =
             _cleanVariantText(
               variante['talla']?.toString() ?? variante['size']?.toString(),
             ) ??
+            _cleanVariantText(detalleVariante?.talla) ??
             _cleanVariantText(varianteReal?.talla);
         final color =
             _cleanText(variante['color']?.toString()) ??
+            _cleanText(detalleVariante?.color) ??
             _cleanText(varianteReal?.color);
         final precio =
             _readDouble(variante['precio']) ??
@@ -688,6 +708,38 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
     } catch (_) {
       return const <Map<String, dynamic>>[];
     }
+  }
+
+  List<Map<String, dynamic>> _enrichVariantes({
+    required List<Map<String, dynamic>> variantes,
+    required DetalleMovimiento detalle,
+    required ProductoVariante? variante,
+  }) {
+    if (variante == null) return variantes;
+
+    if (variantes.isEmpty) {
+      return [
+        {
+          'sku': variante.sku,
+          'talla': variante.talla,
+          'color': variante.color,
+          'cantidad': detalle.cantidad,
+          'precio': detalle.costoUnitarioFinal,
+        },
+      ];
+    }
+
+    return variantes.map((item) {
+      final next = Map<String, dynamic>.from(item);
+      final talla = _cleanVariantText(next['talla']?.toString());
+      final sku = _cleanText(next['sku']?.toString() ?? next['qr']?.toString());
+      final color = _cleanText(next['color']?.toString());
+
+      if (sku == null) next['sku'] = variante.sku;
+      if (talla == null) next['talla'] = variante.talla;
+      if (color == null) next['color'] = variante.color;
+      return next;
+    }).toList();
   }
 
   static String? _cleanText(String? value) {
@@ -904,6 +956,7 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
             id: detalle.id,
             movimientoId: movimientoId,
             productoId: detalle.productoId,
+            productoVarianteId: Value(detalle.productoVarianteId),
             cantidad: detalle.cantidad,
             costoProveedor: Value(detalle.costoProveedor),
             costoUnitarioFinal: Value(detalle.costoUnitarioFinal),

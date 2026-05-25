@@ -11,6 +11,8 @@ mixin _$LogisticsDaoMixin on DatabaseAccessor<AppDatabase> {
   $MovimientosTable get movimientos => attachedDatabase.movimientos;
   $CategoriasTable get categorias => attachedDatabase.categorias;
   $ProductosTable get productos => attachedDatabase.productos;
+  $ProductoVariantesTable get productoVariantes =>
+      attachedDatabase.productoVariantes;
   $DetalleMovimientosTable get detalleMovimientos =>
       attachedDatabase.detalleMovimientos;
 }

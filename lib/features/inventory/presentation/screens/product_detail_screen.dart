@@ -760,7 +760,9 @@ double? _asDouble(Object? value) {
 
 String _displaySize(Object? value) {
   final text = value?.toString().trim();
-  if (text == null || text.isEmpty) return 'General';
+  if (text == null || text.isEmpty || text.toLowerCase() == 'general') {
+    return 'Sin talla especifica';
+  }
   return text;
 }
 
