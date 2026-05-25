@@ -108,7 +108,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
                 const Card(
                   child: Padding(
                     padding: EdgeInsets.all(20),
-                    child: Text('Aun no hay personal adicional registrado.'),
+                    child: Text('Aún no hay personal adicional registrado.'),
                   ),
                 ),
               ...data.users.map((user) {
@@ -172,7 +172,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
                         if (canUpdate && user.id != authorization?.user?.id)
                           IconButton(
                             icon: const Icon(Icons.lock_reset_outlined),
-                            tooltip: 'Resetear contraseÃ±a',
+                            tooltip: 'Restablecer contraseña',
                             onPressed: () => _resetPassword(user),
                           ),
                         if (canUpdate &&
@@ -180,7 +180,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
                             user.correo != null)
                           IconButton(
                             icon: const Icon(Icons.email_outlined),
-                            tooltip: 'Re-enviar invitaciÃ³n',
+                            tooltip: 'Reenviar invitación',
                             onPressed: () => _resendInvitation(user),
                           ),
                         if (canUpdate)
@@ -258,7 +258,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
                       decoration: InputDecoration(
                         labelText: 'Correo de acceso',
                         helperText: existing == null
-                            ? 'Se enviarÃ¡ una invitaciÃ³n a este correo.'
+                            ? 'Se enviará una invitación a este correo.'
                             : null,
                         errorText: emailErrorText,
                       ),
@@ -477,15 +477,15 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
   }
 
   Future<void> _resetPassword(Usuario user) async {
-    // DiÃ¡logo de confirmaciÃ³n
+    // Diálogo de confirmación
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Resetear contraseÃ±a'),
+        title: const Text('Restablecer contraseña'),
         content: Text(
-          'Â¿Resetear la contraseÃ±a de ${user.nombreCompleto}?\n\n'
-          'Se generarÃ¡ una contraseÃ±a temporal que deberÃ¡s comunicarle. '
-          'Al iniciar sesiÃ³n, se le pedirÃ¡ que la cambie.',
+          '¿Restablecer la contraseña de ${user.nombreCompleto}?\n\n'
+          'Se generará una contraseña temporal que deberás comunicarle. '
+          'Al iniciar sesión, se le pedirá que la cambie.',
         ),
         actions: [
           TextButton(
@@ -498,7 +498,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
               backgroundColor: Colors.orange.shade700,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Resetear'),
+            child: const Text('Restablecer'),
           ),
         ],
       ),
@@ -523,7 +523,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
 
       if (!mounted) return;
 
-      // Mostrar diÃ¡logo con la contraseÃ±a temporal
+      // Mostrar diálogo con la contraseña temporal
       await showDialog<void>(
         context: context,
         barrierDismissible: false,
@@ -532,7 +532,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
             children: [
               Icon(Icons.check_circle, color: Colors.green.shade600),
               const SizedBox(width: 10),
-              const Expanded(child: Text('ContraseÃ±a reseteada')),
+              const Expanded(child: Text('Contraseña restablecida')),
             ],
           ),
           content: Column(
@@ -540,7 +540,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'La nueva contraseÃ±a temporal de ${user.nombreCompleto} es:',
+                'La nueva contraseña temporal de ${user.nombreCompleto} es:',
                 style: const TextStyle(fontSize: 14),
               ),
               const SizedBox(height: 16),
@@ -576,13 +576,13 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
                         if (!ctx.mounted) return;
                         ScaffoldMessenger.of(ctx).showSnackBar(
                           const SnackBar(
-                            content: Text('ContraseÃ±a temporal copiada'),
+                            content: Text('Contraseña temporal copiada'),
                             behavior: SnackBarBehavior.floating,
                           ),
                         );
                       },
                       icon: const Icon(Icons.copy, size: 18),
-                      label: const Text('Copiar contraseÃ±a'),
+                      label: const Text('Copiar contraseña'),
                     ),
                   ],
                 ),
@@ -605,8 +605,8 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
                     const SizedBox(width: 8),
                     const Expanded(
                       child: Text(
-                        'Comunica esta contraseÃ±a al usuario. '
-                        'Se le pedirÃ¡ cambiarla al iniciar sesiÃ³n.',
+                        'Comunica esta contraseña al usuario. '
+                        'Se le pedirá cambiarla al iniciar sesión.',
                         style: TextStyle(fontSize: 12),
                       ),
                     ),
@@ -676,7 +676,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('InvitaciÃ³n re-enviada a ${user.correo}'),
+          content: Text('Invitación reenviada a ${user.correo}'),
           backgroundColor: Colors.green.shade600,
         ),
       );
@@ -698,7 +698,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Desactivar personal'),
-        content: Text('Se desactivara a ${user.nombreCompleto}.'),
+        content: Text('Se desactivará a ${user.nombreCompleto}.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -760,7 +760,7 @@ class _SummaryCard extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Administra quien entra al sistema, que puede hacer y en cuales bodegas trabaja.',
+                  'Administra quién entra al sistema, qué puede hacer y en cuáles bodegas trabaja.',
                   style: TextStyle(color: Colors.grey.shade700, height: 1.35),
                 ),
               ),

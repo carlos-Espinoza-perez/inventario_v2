@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/db/models/inventory_requests.dart';
 import 'package:inventario_v2/features/inventory/data/providers/inventario_provider.dart';
-import 'package:inventario_v2/features/inventory/presentation/providers/warehouse_inventory_provider.dart' hide inventarioRepositoryProvider;
+import 'package:inventario_v2/features/inventory/presentation/providers/warehouse_inventory_provider.dart'
+    hide inventarioRepositoryProvider;
 
 final registrarTrasladoUseCaseProvider = Provider((ref) {
   return RegistrarTrasladoUseCase(ref);
@@ -35,14 +36,7 @@ class RegistrarTrasladoUseCase {
       items: transferItems.map(_mapItemToRequest).toList(),
     );
 
-    try {
-      await repository.registrarTraslado(request);
-    } catch (e, st) {
-      Error.throwWithStackTrace(
-        Exception('Error al registrar traslado de inventario: $e'),
-        st,
-      );
-    }
+    await repository.registrarTraslado(request);
 
     _ref.invalidate(warehouseInventoryProvider(originWarehouseId));
     _ref.invalidate(warehouseInventoryProvider(destinationWarehouseId));
@@ -51,6 +45,7 @@ class RegistrarTrasladoUseCase {
   TransferItemRequest _mapItemToRequest(Map<String, dynamic> item) {
     return TransferItemRequest(
       productId: item['productId'] as String,
+      productVariantId: item['productVariantId']?.toString(),
       cantidad: (item['cantidad'] as num?)?.toDouble() ?? 0.0,
       costoProveedor: (item['cost'] as num?)?.toDouble() ?? 0.0,
       costoUnitarioFinal: (item['cost'] as num?)?.toDouble() ?? 0.0,
