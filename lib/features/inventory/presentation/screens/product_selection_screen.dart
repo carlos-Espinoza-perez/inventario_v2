@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import 'package:inventario_v2/core/db/models/product_catalog_models.dart';
+import 'package:inventario_v2/core/db/models/producto_stock_drift.dart';
 import 'package:inventario_v2/features/inventory/data/domain/models/product_with_stock.dart';
 import 'package:inventario_v2/features/inventory/data/providers/categoria_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/codigo_producto_provider.dart';
@@ -114,18 +115,8 @@ class _ProductSelectionScreenState
           );
     } else {
       asyncProducts = ref
-          .watch(productsWithStockProvider(widget.originWarehouseId!))
-          .whenData(
-            (list) => list
-                .map(
-                  (p) => ProductWithStock(
-                    item: p,
-                    cantidad: p.stock,
-                    costoPromedio: p.costoPromedio,
-                  ),
-                )
-                .toList(),
-          );
+          .watch(stockDriftByBodegaProvider(widget.originWarehouseId!))
+          .whenData(_groupStockByProduct);
     }
 
     return Scaffold(
@@ -377,6 +368,59 @@ class _ProductSelectionScreenState
         showCheckmark: false,
       ),
     );
+  }
+
+  List<ProductWithStock> _groupStockByProduct(
+    List<ProductoStockDrift> stockRows,
+  ) {
+    final grouped = <String, ProductWithStock>{};
+
+    for (final row in stockRows) {
+      if (!row.producto.estado ||
+          !row.variante.estado ||
+          !row.inventario.estado) {
+        continue;
+      }
+
+      final productId = row.producto.id;
+      final stock = row.inventario.cantidadActual;
+      final cost = row.inventario.costoPromedio;
+      final current = grouped[productId];
+
+      if (current == null) {
+        grouped[productId] = ProductWithStock(
+          item: ProductCatalogItemDrift(
+            producto: row.producto,
+            variante: row.variante,
+            stock: stock,
+            costoPromedio: cost,
+          ),
+          cantidad: stock,
+          costoPromedio: cost,
+        );
+        continue;
+      }
+
+      final totalStock = current.cantidad + stock;
+      final weightedCost = totalStock > 0
+          ? ((current.costoPromedio * current.cantidad) + (cost * stock)) /
+                totalStock
+          : current.costoPromedio;
+
+      grouped[productId] = ProductWithStock(
+        item: ProductCatalogItemDrift(
+          producto: current.item.producto,
+          variante: current.item.variante,
+          stock: totalStock,
+          costoPromedio: weightedCost,
+        ),
+        cantidad: totalStock,
+        costoPromedio: weightedCost,
+      );
+    }
+
+    return grouped.values.toList()
+      ..sort((a, b) => a.item.nombre.compareTo(b.item.nombre));
   }
 
   Widget _buildProductGridCard(ProductWithStock item, String categoryName) {
@@ -934,13 +978,12 @@ class _VariantSelectorSheetState extends State<_VariantSelectorSheet> {
           ((v['costoPromedio'] ?? v['costo']) as num?)?.toDouble() ?? 0.0;
       final precioEspecifico =
           ((v['precioEspecifico']) as num?)?.toDouble() ?? 0.0;
-      final precioFallback =
-          ((v['precio']) as num?)?.toDouble() ?? 0.0;
+      final precioFallback = ((v['precio']) as num?)?.toDouble() ?? 0.0;
       final precio = precioEspecifico > 0
           ? precioEspecifico
           : precioFallback > 0
-              ? precioFallback
-              : widget.product.precioVenta;
+          ? precioFallback
+          : widget.product.precioVenta;
       final key = '${talla}_#_${costo}_#_$precio';
       grouped.putIfAbsent(key, () => []).add(v);
     }
