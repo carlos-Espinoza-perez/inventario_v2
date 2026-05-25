@@ -54,7 +54,10 @@ class _WarehouseTransferScreenState
         ),
         child: SafeArea(
           child: ElevatedButton(
-            onPressed: (_transferItems.isEmpty || _isLoading)
+            onPressed:
+                (_transferItems.isEmpty ||
+                    _hasInvalidTransferItems ||
+                    _isLoading)
                 ? null
                 : _finalizeTransfer,
             style: ElevatedButton.styleFrom(
@@ -236,8 +239,6 @@ class _WarehouseTransferScreenState
     );
   }
 
-
-
   List<Bodega> _destinationWarehouses(List<Bodega> bodegas) {
     final originId = _selectedOriginWarehouseId;
     if (originId == null || originId.isEmpty) return bodegas;
@@ -376,6 +377,7 @@ class _WarehouseTransferScreenState
     setState(() {
       _transferItems.add({
         'productId': draft.productId,
+        'productVariantId': draft.productVariantId,
         'name': draft.nombre,
         'qr': draft.sku,
         'size': draft.size,
@@ -402,6 +404,15 @@ class _WarehouseTransferScreenState
           content: Text('La bodega origen y destino no pueden ser iguales.'),
           backgroundColor: Colors.orange,
         ),
+      );
+      return;
+    }
+
+    final validationError = _firstTransferValidationError;
+    if (validationError != null) {
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(validationError), backgroundColor: Colors.red),
       );
       return;
     }
@@ -446,9 +457,43 @@ class _WarehouseTransferScreenState
       StockInsuficienteException(:final message) => message,
       ContextoInvalidoException(:final message) => message,
       DaoException(:final message) => message,
-      _ => 'Error en traslado: $error',
+      _ =>
+        'No se pudo registrar el traslado. Verifica los datos e intenta nuevamente.',
     };
   }
+
+  bool get _hasInvalidTransferItems => _firstTransferValidationError != null;
+
+  String? get _firstTransferValidationError {
+    for (final item in _transferItems) {
+      final error = _transferQuantityError(item);
+      if (error != null) return error;
+    }
+    return null;
+  }
+}
+
+String _formatTransferQuantity(double value) {
+  if (value % 1 == 0) return value.toInt().toString();
+  return value.toString();
+}
+
+String? _transferQuantityError(Map<String, dynamic> item) {
+  final input =
+      item['quantityInput']?.toString() ?? item['cantidad']?.toString() ?? '';
+  final normalizedInput = input.trim().replaceAll(',', '.');
+  final quantity = double.tryParse(normalizedInput);
+  final availableStock = (item['availableStock'] as num?)?.toDouble() ?? 0.0;
+
+  if (normalizedInput.isEmpty || quantity == null || quantity <= 0) {
+    return 'Ingresa una cantidad mayor que cero.';
+  }
+
+  if (quantity > availableStock) {
+    return 'Máx: ${_formatTransferQuantity(availableStock)}';
+  }
+
+  return null;
 }
 
 class _TransferItemCard extends StatefulWidget {
@@ -501,6 +546,8 @@ class _TransferItemCardState extends State<_TransferItemCard> {
 
   @override
   Widget build(BuildContext context) {
+    final quantityError = _transferQuantityError(widget.item);
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -536,7 +583,10 @@ class _TransferItemCardState extends State<_TransferItemCard> {
                           style: const TextStyle(fontSize: 12),
                         ),
                         if (widget.item['size'] != null &&
-                            widget.item['size'].toString().trim().isNotEmpty) ...[
+                            widget.item['size']
+                                .toString()
+                                .trim()
+                                .isNotEmpty) ...[
                           const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -553,7 +603,8 @@ class _TransferItemCardState extends State<_TransferItemCard> {
                               widget.item['size'].toString(),
                               style: TextStyle(
                                 fontSize: 10,
-                                color: widget.item['size'].toString() == 'General'
+                                color:
+                                    widget.item['size'].toString() == 'General'
                                     ? Colors.grey[600]
                                     : Colors.blue[700],
                                 fontWeight: FontWeight.bold,
@@ -583,12 +634,16 @@ class _TransferItemCardState extends State<_TransferItemCard> {
                 child: _FieldCell(
                   label: 'Cant.',
                   controller: _qtyCtrl,
+                  errorText: quantityError,
                   onChanged: (value) {
-                    final qty = double.tryParse(value);
+                    widget.item['quantityInput'] = value;
+                    final qty = double.tryParse(
+                      value.trim().replaceAll(',', '.'),
+                    );
                     if (qty != null) {
                       widget.item['cantidad'] = qty;
-                      widget.onChanged();
                     }
+                    widget.onChanged();
                   },
                 ),
               ),
@@ -625,11 +680,13 @@ class _TransferItemCardState extends State<_TransferItemCard> {
 class _FieldCell extends StatelessWidget {
   final String label;
   final TextEditingController controller;
+  final String? errorText;
   final ValueChanged<String> onChanged;
 
   const _FieldCell({
     required this.label,
     required this.controller,
+    this.errorText,
     required this.onChanged,
   });
 
@@ -650,6 +707,7 @@ class _FieldCell extends StatelessWidget {
               vertical: 10,
             ),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            errorText: errorText,
           ),
           onChanged: onChanged,
         ),

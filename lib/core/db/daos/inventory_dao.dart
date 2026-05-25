@@ -1159,8 +1159,8 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
             .getSingleOrNull();
 
     if (inventario == null || inventario.cantidadActual < cantidad) {
-      throw StockInsuficienteException(
-        'Stock insuficiente para el producto $productoId en la bodega $bodegaId.',
+      throw const StockInsuficienteException(
+        'La cantidad no puede superar el stock disponible. Verifica el producto e intenta nuevamente.',
       );
     }
 
