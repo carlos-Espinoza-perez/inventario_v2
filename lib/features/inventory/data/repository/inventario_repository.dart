@@ -71,8 +71,8 @@ class InventarioRepository {
           precioBase: (variantes.precioEspecifico ?? 0) > 0
               ? variantes.precioEspecifico!
               : (producto.precioBase ?? 0) > 0
-                  ? producto.precioBase!
-                  : producto.ultimoPrecioVenta,
+              ? producto.precioBase!
+              : producto.ultimoPrecioVenta,
         );
       }
     }
@@ -102,8 +102,8 @@ class InventarioRepository {
       precioBase: (variante?.precioEspecifico ?? 0) > 0
           ? variante!.precioEspecifico!
           : (producto.precioBase ?? 0) > 0
-              ? producto.precioBase!
-              : producto.ultimoPrecioVenta,
+          ? producto.precioBase!
+          : producto.ultimoPrecioVenta,
     );
   }
 
@@ -114,6 +114,24 @@ class InventarioRepository {
     return _db.inventoryDao.assignBarcodeToProduct(
       productoId: productId,
       barcode: barcode,
+    );
+  }
+
+  Future<ProductoVariante> resolveVariantForEntry({
+    required String productId,
+    required String? sku,
+    required String? talla,
+    required String? color,
+    required double? precioVenta,
+    required double? costo,
+  }) {
+    return _db.inventoryDao.resolveVariantForEntry(
+      productoId: productId,
+      sku: sku,
+      talla: talla,
+      color: color,
+      precioVenta: precioVenta,
+      costo: costo,
     );
   }
 
@@ -197,8 +215,8 @@ class InventarioRepository {
             'costo': (item.variante.costoEspecifico ?? 0) > 0
                 ? item.variante.costoEspecifico!
                 : item.inventario.costoPromedio > 0
-                    ? item.inventario.costoPromedio
-                    : item.producto.ultimoCosto,
+                ? item.inventario.costoPromedio
+                : item.producto.ultimoCosto,
             'sku': item.variante.sku,
             'varianteId': item.variante.id,
           },
@@ -206,8 +224,12 @@ class InventarioRepository {
         .toList();
   }
 
-  double _resolvePrice(double? precioEspecifico, double? precioVenta,
-      double? precioBase, double? ultimoPrecioVenta) {
+  double _resolvePrice(
+    double? precioEspecifico,
+    double? precioVenta,
+    double? precioBase,
+    double? ultimoPrecioVenta,
+  ) {
     if ((precioEspecifico ?? 0) > 0) return precioEspecifico!;
     if ((precioVenta ?? 0) > 0) return precioVenta!;
     if ((precioBase ?? 0) > 0) return precioBase!;

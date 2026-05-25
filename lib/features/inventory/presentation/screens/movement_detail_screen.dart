@@ -515,6 +515,12 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
       itemBuilder: (context, index) {
         final item = items[index];
         final List variaciones = item['variantes'] ?? [];
+        final firstVariant = variaciones.isNotEmpty
+            ? Map<String, dynamic>.from(variaciones.first as Map)
+            : null;
+        final displaySku = _displayCode(
+          firstVariant?['sku'] ?? firstVariant?['qr'] ?? item['sku'],
+        );
 
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
@@ -556,7 +562,7 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                         Text(
-                          item['sku'],
+                          displaySku,
                           style: TextStyle(
                             fontSize: 11,
                             color: Colors.grey[400],
@@ -591,9 +597,14 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                   child: Divider(height: 1),
                 ),
                 ...variaciones.map((v) {
-                  final String tallaStr = v['talla']?.toString() ?? "General";
-                  final num qty = v['cantidad'] ?? 0;
-                  final num? precioEsp = v['precio'];
+                  final variant = Map<String, dynamic>.from(v as Map);
+                  final String tallaStr = _displaySize(
+                    variant['talla'] ?? variant['size'],
+                  );
+                  final num qty = _readNum(variant['cantidad']) ?? 0;
+                  final num? precioEsp = _readNum(
+                    variant['precio'] ?? variant['price'],
+                  );
                   final String precioStr = precioEsp != null
                       ? currency.format(precioEsp)
                       : (item['precio_compra'] != null
@@ -649,6 +660,25 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
         );
       },
     );
+  }
+
+  String _displaySize(Object? value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty) return 'General';
+    return text;
+  }
+
+  String _displayCode(Object? value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty) return 'Sin código';
+    if (text.length <= 22) return text;
+    return '${text.substring(0, 18)}...';
+  }
+
+  num? _readNum(Object? value) {
+    if (value is num) return value;
+    if (value is String) return num.tryParse(value);
+    return null;
   }
 
   // Auxiliar de Colores

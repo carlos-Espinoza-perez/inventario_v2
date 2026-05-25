@@ -32,7 +32,7 @@ class RegistrarEntradaUseCase {
     final request = InventoryEntryRequest(
       destinationWarehouseId: bodegaId,
       descripcion: descripcion.trim(),
-      items: orderLines.map(_mapOrderLineToRequest).toList(),
+      items: await _mapOrderLinesToRequestItems(orderLines),
     );
 
     try {
@@ -45,19 +45,73 @@ class RegistrarEntradaUseCase {
     }
   }
 
-  InventoryEntryItem _mapOrderLineToRequest(Map<String, dynamic> line) {
-    final items = (line['items'] as List?) ?? const [];
-    return InventoryEntryItem(
-      productId: line['productId'] as String,
-      cantidad: items.length.toDouble(),
-      costoProveedor: (line['cost'] as num?)?.toDouble() ?? 0.0,
-      costoUnitarioFinal: (line['cost'] as num?)?.toDouble() ?? 0.0,
-      precioVenta: (line['price'] as num?)?.toDouble(),
-      variantesJson: jsonEncode(
-        items
-            .map((item) => Map<String, dynamic>.from(item as Map))
-            .toList(growable: false),
-      ),
-    );
+  Future<List<InventoryEntryItem>> _mapOrderLinesToRequestItems(
+    List<Map<String, dynamic>> orderLines,
+  ) async {
+    final repository = _ref.read(inventarioRepositoryProvider);
+    final requestItems = <InventoryEntryItem>[];
+
+    for (final line in orderLines) {
+      final productId = line['productId'] as String;
+      final cost = (line['cost'] as num?)?.toDouble() ?? 0.0;
+      final basePrice = (line['price'] as num?)?.toDouble();
+      final items = (line['items'] as List?) ?? const [];
+      final grouped = <String, List<Map<String, dynamic>>>{};
+
+      for (final rawItem in items) {
+        final item = Map<String, dynamic>.from(rawItem as Map);
+        final sku = item['qr']?.toString().trim();
+        final size = item['size']?.toString().trim();
+        final price = _readDouble(item['price']) ?? basePrice ?? 0.0;
+        final key = '${sku ?? ''}|${size ?? ''}|$price';
+        grouped.putIfAbsent(key, () => []).add(item);
+      }
+
+      for (final group in grouped.values) {
+        final first = group.first;
+        final sku = first['qr']?.toString().trim();
+        final size = first['size']?.toString().trim();
+        final price = _readDouble(first['price']) ?? basePrice ?? 0.0;
+        final variant = await repository.resolveVariantForEntry(
+          productId: productId,
+          sku: sku,
+          talla: size,
+          color: first['color']?.toString(),
+          precioVenta: price,
+          costo: cost,
+        );
+
+        requestItems.add(
+          InventoryEntryItem(
+            productId: productId,
+            productVariantId: variant.id,
+            cantidad: group.length.toDouble(),
+            costoProveedor: cost,
+            costoUnitarioFinal: cost,
+            precioVenta: price,
+            sku: variant.sku,
+            talla: variant.talla,
+            color: variant.color,
+            variantesJson: jsonEncode([
+              {
+                'sku': variant.sku,
+                'talla': variant.talla,
+                'color': variant.color,
+                'cantidad': group.length.toDouble(),
+                'precio': price,
+              },
+            ]),
+          ),
+        );
+      }
+    }
+
+    return requestItems;
+  }
+
+  double? _readDouble(Object? value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
   }
 }
