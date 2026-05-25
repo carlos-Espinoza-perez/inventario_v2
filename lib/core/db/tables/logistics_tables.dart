@@ -30,6 +30,11 @@ class DetalleMovimientos extends Table with SyncTable {
       text().references(Movimientos, #id, onDelete: KeyAction.cascade)();
   TextColumn get productoId =>
       text().references(Productos, #id, onDelete: KeyAction.cascade)();
+  TextColumn get productoVarianteId => text().nullable().references(
+    ProductoVariantes,
+    #id,
+    onDelete: KeyAction.setNull,
+  )();
   RealColumn get cantidad => real()();
   RealColumn get costoProveedor => real().withDefault(const Constant(0.0))();
   TextColumn get cargosAdicionalesJson => text().nullable()();

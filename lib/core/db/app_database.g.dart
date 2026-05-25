@@ -14127,6 +14127,20 @@ class $DetalleMovimientosTable extends DetalleMovimientos
       'REFERENCES productos (id) ON DELETE CASCADE',
     ),
   );
+  static const VerificationMeta _productoVarianteIdMeta =
+      const VerificationMeta('productoVarianteId');
+  @override
+  late final GeneratedColumn<String> productoVarianteId =
+      GeneratedColumn<String>(
+        'producto_variante_id',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'REFERENCES producto_variantes (id) ON DELETE SET NULL',
+        ),
+      );
   static const VerificationMeta _cantidadMeta = const VerificationMeta(
     'cantidad',
   );
@@ -14204,6 +14218,7 @@ class $DetalleMovimientosTable extends DetalleMovimientos
     syncStatus,
     movimientoId,
     productoId,
+    productoVarianteId,
     cantidad,
     costoProveedor,
     cargosAdicionalesJson,
@@ -14264,6 +14279,15 @@ class $DetalleMovimientosTable extends DetalleMovimientos
       );
     } else if (isInserting) {
       context.missing(_productoIdMeta);
+    }
+    if (data.containsKey('producto_variante_id')) {
+      context.handle(
+        _productoVarianteIdMeta,
+        productoVarianteId.isAcceptableOrUnknown(
+          data['producto_variante_id']!,
+          _productoVarianteIdMeta,
+        ),
+      );
     }
     if (data.containsKey('cantidad')) {
       context.handle(
@@ -14351,6 +14375,10 @@ class $DetalleMovimientosTable extends DetalleMovimientos
         DriftSqlType.string,
         data['${effectivePrefix}producto_id'],
       )!,
+      productoVarianteId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}producto_variante_id'],
+      ),
       cantidad: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}cantidad'],
@@ -14392,6 +14420,7 @@ class DetalleMovimiento extends DataClass
   final String syncStatus;
   final String movimientoId;
   final String productoId;
+  final String? productoVarianteId;
   final double cantidad;
   final double costoProveedor;
   final String? cargosAdicionalesJson;
@@ -14405,6 +14434,7 @@ class DetalleMovimiento extends DataClass
     required this.syncStatus,
     required this.movimientoId,
     required this.productoId,
+    this.productoVarianteId,
     required this.cantidad,
     required this.costoProveedor,
     this.cargosAdicionalesJson,
@@ -14421,6 +14451,9 @@ class DetalleMovimiento extends DataClass
     map['sync_status'] = Variable<String>(syncStatus);
     map['movimiento_id'] = Variable<String>(movimientoId);
     map['producto_id'] = Variable<String>(productoId);
+    if (!nullToAbsent || productoVarianteId != null) {
+      map['producto_variante_id'] = Variable<String>(productoVarianteId);
+    }
     map['cantidad'] = Variable<double>(cantidad);
     map['costo_proveedor'] = Variable<double>(costoProveedor);
     if (!nullToAbsent || cargosAdicionalesJson != null) {
@@ -14444,6 +14477,9 @@ class DetalleMovimiento extends DataClass
       syncStatus: Value(syncStatus),
       movimientoId: Value(movimientoId),
       productoId: Value(productoId),
+      productoVarianteId: productoVarianteId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(productoVarianteId),
       cantidad: Value(cantidad),
       costoProveedor: Value(costoProveedor),
       cargosAdicionalesJson: cargosAdicionalesJson == null && nullToAbsent
@@ -14471,6 +14507,9 @@ class DetalleMovimiento extends DataClass
       syncStatus: serializer.fromJson<String>(json['syncStatus']),
       movimientoId: serializer.fromJson<String>(json['movimientoId']),
       productoId: serializer.fromJson<String>(json['productoId']),
+      productoVarianteId: serializer.fromJson<String?>(
+        json['productoVarianteId'],
+      ),
       cantidad: serializer.fromJson<double>(json['cantidad']),
       costoProveedor: serializer.fromJson<double>(json['costoProveedor']),
       cargosAdicionalesJson: serializer.fromJson<String?>(
@@ -14495,6 +14534,7 @@ class DetalleMovimiento extends DataClass
       'syncStatus': serializer.toJson<String>(syncStatus),
       'movimientoId': serializer.toJson<String>(movimientoId),
       'productoId': serializer.toJson<String>(productoId),
+      'productoVarianteId': serializer.toJson<String?>(productoVarianteId),
       'cantidad': serializer.toJson<double>(cantidad),
       'costoProveedor': serializer.toJson<double>(costoProveedor),
       'cargosAdicionalesJson': serializer.toJson<String?>(
@@ -14513,6 +14553,7 @@ class DetalleMovimiento extends DataClass
     String? syncStatus,
     String? movimientoId,
     String? productoId,
+    Value<String?> productoVarianteId = const Value.absent(),
     double? cantidad,
     double? costoProveedor,
     Value<String?> cargosAdicionalesJson = const Value.absent(),
@@ -14526,6 +14567,9 @@ class DetalleMovimiento extends DataClass
     syncStatus: syncStatus ?? this.syncStatus,
     movimientoId: movimientoId ?? this.movimientoId,
     productoId: productoId ?? this.productoId,
+    productoVarianteId: productoVarianteId.present
+        ? productoVarianteId.value
+        : this.productoVarianteId,
     cantidad: cantidad ?? this.cantidad,
     costoProveedor: costoProveedor ?? this.costoProveedor,
     cargosAdicionalesJson: cargosAdicionalesJson.present
@@ -14553,6 +14597,9 @@ class DetalleMovimiento extends DataClass
       productoId: data.productoId.present
           ? data.productoId.value
           : this.productoId,
+      productoVarianteId: data.productoVarianteId.present
+          ? data.productoVarianteId.value
+          : this.productoVarianteId,
       cantidad: data.cantidad.present ? data.cantidad.value : this.cantidad,
       costoProveedor: data.costoProveedor.present
           ? data.costoProveedor.value
@@ -14581,6 +14628,7 @@ class DetalleMovimiento extends DataClass
           ..write('syncStatus: $syncStatus, ')
           ..write('movimientoId: $movimientoId, ')
           ..write('productoId: $productoId, ')
+          ..write('productoVarianteId: $productoVarianteId, ')
           ..write('cantidad: $cantidad, ')
           ..write('costoProveedor: $costoProveedor, ')
           ..write('cargosAdicionalesJson: $cargosAdicionalesJson, ')
@@ -14599,6 +14647,7 @@ class DetalleMovimiento extends DataClass
     syncStatus,
     movimientoId,
     productoId,
+    productoVarianteId,
     cantidad,
     costoProveedor,
     cargosAdicionalesJson,
@@ -14616,6 +14665,7 @@ class DetalleMovimiento extends DataClass
           other.syncStatus == this.syncStatus &&
           other.movimientoId == this.movimientoId &&
           other.productoId == this.productoId &&
+          other.productoVarianteId == this.productoVarianteId &&
           other.cantidad == this.cantidad &&
           other.costoProveedor == this.costoProveedor &&
           other.cargosAdicionalesJson == this.cargosAdicionalesJson &&
@@ -14631,6 +14681,7 @@ class DetalleMovimientosCompanion extends UpdateCompanion<DetalleMovimiento> {
   final Value<String> syncStatus;
   final Value<String> movimientoId;
   final Value<String> productoId;
+  final Value<String?> productoVarianteId;
   final Value<double> cantidad;
   final Value<double> costoProveedor;
   final Value<String?> cargosAdicionalesJson;
@@ -14645,6 +14696,7 @@ class DetalleMovimientosCompanion extends UpdateCompanion<DetalleMovimiento> {
     this.syncStatus = const Value.absent(),
     this.movimientoId = const Value.absent(),
     this.productoId = const Value.absent(),
+    this.productoVarianteId = const Value.absent(),
     this.cantidad = const Value.absent(),
     this.costoProveedor = const Value.absent(),
     this.cargosAdicionalesJson = const Value.absent(),
@@ -14660,6 +14712,7 @@ class DetalleMovimientosCompanion extends UpdateCompanion<DetalleMovimiento> {
     this.syncStatus = const Value.absent(),
     required String movimientoId,
     required String productoId,
+    this.productoVarianteId = const Value.absent(),
     required double cantidad,
     this.costoProveedor = const Value.absent(),
     this.cargosAdicionalesJson = const Value.absent(),
@@ -14678,6 +14731,7 @@ class DetalleMovimientosCompanion extends UpdateCompanion<DetalleMovimiento> {
     Expression<String>? syncStatus,
     Expression<String>? movimientoId,
     Expression<String>? productoId,
+    Expression<String>? productoVarianteId,
     Expression<double>? cantidad,
     Expression<double>? costoProveedor,
     Expression<String>? cargosAdicionalesJson,
@@ -14693,6 +14747,8 @@ class DetalleMovimientosCompanion extends UpdateCompanion<DetalleMovimiento> {
       if (syncStatus != null) 'sync_status': syncStatus,
       if (movimientoId != null) 'movimiento_id': movimientoId,
       if (productoId != null) 'producto_id': productoId,
+      if (productoVarianteId != null)
+        'producto_variante_id': productoVarianteId,
       if (cantidad != null) 'cantidad': cantidad,
       if (costoProveedor != null) 'costo_proveedor': costoProveedor,
       if (cargosAdicionalesJson != null)
@@ -14712,6 +14768,7 @@ class DetalleMovimientosCompanion extends UpdateCompanion<DetalleMovimiento> {
     Value<String>? syncStatus,
     Value<String>? movimientoId,
     Value<String>? productoId,
+    Value<String?>? productoVarianteId,
     Value<double>? cantidad,
     Value<double>? costoProveedor,
     Value<String?>? cargosAdicionalesJson,
@@ -14727,6 +14784,7 @@ class DetalleMovimientosCompanion extends UpdateCompanion<DetalleMovimiento> {
       syncStatus: syncStatus ?? this.syncStatus,
       movimientoId: movimientoId ?? this.movimientoId,
       productoId: productoId ?? this.productoId,
+      productoVarianteId: productoVarianteId ?? this.productoVarianteId,
       cantidad: cantidad ?? this.cantidad,
       costoProveedor: costoProveedor ?? this.costoProveedor,
       cargosAdicionalesJson:
@@ -14758,6 +14816,9 @@ class DetalleMovimientosCompanion extends UpdateCompanion<DetalleMovimiento> {
     }
     if (productoId.present) {
       map['producto_id'] = Variable<String>(productoId.value);
+    }
+    if (productoVarianteId.present) {
+      map['producto_variante_id'] = Variable<String>(productoVarianteId.value);
     }
     if (cantidad.present) {
       map['cantidad'] = Variable<double>(cantidad.value);
@@ -14794,6 +14855,7 @@ class DetalleMovimientosCompanion extends UpdateCompanion<DetalleMovimiento> {
           ..write('syncStatus: $syncStatus, ')
           ..write('movimientoId: $movimientoId, ')
           ..write('productoId: $productoId, ')
+          ..write('productoVarianteId: $productoVarianteId, ')
           ..write('cantidad: $cantidad, ')
           ..write('costoProveedor: $costoProveedor, ')
           ..write('cargosAdicionalesJson: $cargosAdicionalesJson, ')
@@ -16622,6 +16684,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('detalle_movimientos', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'producto_variantes',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('detalle_movimientos', kind: UpdateKind.update)],
     ),
     WritePropagation(
       on: TableUpdateQuery.onTableName(
@@ -27629,6 +27698,33 @@ final class $$ProductoVariantesTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$DetalleMovimientosTable, List<DetalleMovimiento>>
+  _detalleMovimientosRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.detalleMovimientos,
+        aliasName: $_aliasNameGenerator(
+          db.productoVariantes.id,
+          db.detalleMovimientos.productoVarianteId,
+        ),
+      );
+
+  $$DetalleMovimientosTableProcessedTableManager get detalleMovimientosRefs {
+    final manager =
+        $$DetalleMovimientosTableTableManager(
+          $_db,
+          $_db.detalleMovimientos,
+        ).filter(
+          (f) => f.productoVarianteId.id.sqlEquals($_itemColumn<String>('id')!),
+        );
+
+    final cache = $_typedResult.readTableOrNull(
+      _detalleMovimientosRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$ProductoVariantesTableFilterComposer
@@ -27782,6 +27878,31 @@ class $$ProductoVariantesTableFilterComposer
           }) => $$DetalleVentasTableFilterComposer(
             $db: $db,
             $table: $db.detalleVentas,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> detalleMovimientosRefs(
+    Expression<bool> Function($$DetalleMovimientosTableFilterComposer f) f,
+  ) {
+    final $$DetalleMovimientosTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.detalleMovimientos,
+      getReferencedColumn: (t) => t.productoVarianteId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DetalleMovimientosTableFilterComposer(
+            $db: $db,
+            $table: $db.detalleMovimientos,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -28048,6 +28169,32 @@ class $$ProductoVariantesTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> detalleMovimientosRefs<T extends Object>(
+    Expression<T> Function($$DetalleMovimientosTableAnnotationComposer a) f,
+  ) {
+    final $$DetalleMovimientosTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.detalleMovimientos,
+          getReferencedColumn: (t) => t.productoVarianteId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DetalleMovimientosTableAnnotationComposer(
+                $db: $db,
+                $table: $db.detalleMovimientos,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$ProductoVariantesTableTableManager
@@ -28068,6 +28215,7 @@ class $$ProductoVariantesTableTableManager
             bool usuarioRegistroId,
             bool inventariosRefs,
             bool detalleVentasRefs,
+            bool detalleMovimientosRefs,
           })
         > {
   $$ProductoVariantesTableTableManager(
@@ -28164,12 +28312,14 @@ class $$ProductoVariantesTableTableManager
                 usuarioRegistroId = false,
                 inventariosRefs = false,
                 detalleVentasRefs = false,
+                detalleMovimientosRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (inventariosRefs) db.inventarios,
                     if (detalleVentasRefs) db.detalleVentas,
+                    if (detalleMovimientosRefs) db.detalleMovimientos,
                   ],
                   addJoins:
                       <
@@ -28264,6 +28414,27 @@ class $$ProductoVariantesTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (detalleMovimientosRefs)
+                        await $_getPrefetchedData<
+                          ProductoVariante,
+                          $ProductoVariantesTable,
+                          DetalleMovimiento
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProductoVariantesTableReferences
+                              ._detalleMovimientosRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProductoVariantesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).detalleMovimientosRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.productoVarianteId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -28289,6 +28460,7 @@ typedef $$ProductoVariantesTableProcessedTableManager =
         bool usuarioRegistroId,
         bool inventariosRefs,
         bool detalleVentasRefs,
+        bool detalleMovimientosRefs,
       })
     >;
 typedef $$InventariosTableCreateCompanionBuilder =
@@ -32944,6 +33116,7 @@ typedef $$DetalleMovimientosTableCreateCompanionBuilder =
       Value<String> syncStatus,
       required String movimientoId,
       required String productoId,
+      Value<String?> productoVarianteId,
       required double cantidad,
       Value<double> costoProveedor,
       Value<String?> cargosAdicionalesJson,
@@ -32960,6 +33133,7 @@ typedef $$DetalleMovimientosTableUpdateCompanionBuilder =
       Value<String> syncStatus,
       Value<String> movimientoId,
       Value<String> productoId,
+      Value<String?> productoVarianteId,
       Value<double> cantidad,
       Value<double> costoProveedor,
       Value<String?> cargosAdicionalesJson,
@@ -33017,6 +33191,28 @@ final class $$DetalleMovimientosTableReferences
       $_db.productos,
     ).filter((f) => f.id.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_productoIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $ProductoVariantesTable _productoVarianteIdTable(_$AppDatabase db) =>
+      db.productoVariantes.createAlias(
+        $_aliasNameGenerator(
+          db.detalleMovimientos.productoVarianteId,
+          db.productoVariantes.id,
+        ),
+      );
+
+  $$ProductoVariantesTableProcessedTableManager? get productoVarianteId {
+    final $_column = $_itemColumn<String>('producto_variante_id');
+    if ($_column == null) return null;
+    final manager = $$ProductoVariantesTableTableManager(
+      $_db,
+      $_db.productoVariantes,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_productoVarianteIdTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
@@ -33120,6 +33316,29 @@ class $$DetalleMovimientosTableFilterComposer
           }) => $$ProductosTableFilterComposer(
             $db: $db,
             $table: $db.productos,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$ProductoVariantesTableFilterComposer get productoVarianteId {
+    final $$ProductoVariantesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.productoVarianteId,
+      referencedTable: $db.productoVariantes,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProductoVariantesTableFilterComposer(
+            $db: $db,
+            $table: $db.productoVariantes,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -33234,6 +33453,29 @@ class $$DetalleMovimientosTableOrderingComposer
     );
     return composer;
   }
+
+  $$ProductoVariantesTableOrderingComposer get productoVarianteId {
+    final $$ProductoVariantesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.productoVarianteId,
+      referencedTable: $db.productoVariantes,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProductoVariantesTableOrderingComposer(
+            $db: $db,
+            $table: $db.productoVariantes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$DetalleMovimientosTableAnnotationComposer
@@ -33332,6 +33574,30 @@ class $$DetalleMovimientosTableAnnotationComposer
     );
     return composer;
   }
+
+  $$ProductoVariantesTableAnnotationComposer get productoVarianteId {
+    final $$ProductoVariantesTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.productoVarianteId,
+          referencedTable: $db.productoVariantes,
+          getReferencedColumn: (t) => t.id,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$ProductoVariantesTableAnnotationComposer(
+                $db: $db,
+                $table: $db.productoVariantes,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
 }
 
 class $$DetalleMovimientosTableTableManager
@@ -33347,7 +33613,11 @@ class $$DetalleMovimientosTableTableManager
           $$DetalleMovimientosTableUpdateCompanionBuilder,
           (DetalleMovimiento, $$DetalleMovimientosTableReferences),
           DetalleMovimiento,
-          PrefetchHooks Function({bool movimientoId, bool productoId})
+          PrefetchHooks Function({
+            bool movimientoId,
+            bool productoId,
+            bool productoVarianteId,
+          })
         > {
   $$DetalleMovimientosTableTableManager(
     _$AppDatabase db,
@@ -33373,6 +33643,7 @@ class $$DetalleMovimientosTableTableManager
                 Value<String> syncStatus = const Value.absent(),
                 Value<String> movimientoId = const Value.absent(),
                 Value<String> productoId = const Value.absent(),
+                Value<String?> productoVarianteId = const Value.absent(),
                 Value<double> cantidad = const Value.absent(),
                 Value<double> costoProveedor = const Value.absent(),
                 Value<String?> cargosAdicionalesJson = const Value.absent(),
@@ -33387,6 +33658,7 @@ class $$DetalleMovimientosTableTableManager
                 syncStatus: syncStatus,
                 movimientoId: movimientoId,
                 productoId: productoId,
+                productoVarianteId: productoVarianteId,
                 cantidad: cantidad,
                 costoProveedor: costoProveedor,
                 cargosAdicionalesJson: cargosAdicionalesJson,
@@ -33403,6 +33675,7 @@ class $$DetalleMovimientosTableTableManager
                 Value<String> syncStatus = const Value.absent(),
                 required String movimientoId,
                 required String productoId,
+                Value<String?> productoVarianteId = const Value.absent(),
                 required double cantidad,
                 Value<double> costoProveedor = const Value.absent(),
                 Value<String?> cargosAdicionalesJson = const Value.absent(),
@@ -33417,6 +33690,7 @@ class $$DetalleMovimientosTableTableManager
                 syncStatus: syncStatus,
                 movimientoId: movimientoId,
                 productoId: productoId,
+                productoVarianteId: productoVarianteId,
                 cantidad: cantidad,
                 costoProveedor: costoProveedor,
                 cargosAdicionalesJson: cargosAdicionalesJson,
@@ -33433,64 +33707,84 @@ class $$DetalleMovimientosTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({movimientoId = false, productoId = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [],
-              addJoins:
-                  <
-                    T extends TableManagerState<
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic
-                    >
-                  >(state) {
-                    if (movimientoId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.movimientoId,
-                                referencedTable:
-                                    $$DetalleMovimientosTableReferences
-                                        ._movimientoIdTable(db),
-                                referencedColumn:
-                                    $$DetalleMovimientosTableReferences
-                                        ._movimientoIdTable(db)
-                                        .id,
-                              )
-                              as T;
-                    }
-                    if (productoId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.productoId,
-                                referencedTable:
-                                    $$DetalleMovimientosTableReferences
-                                        ._productoIdTable(db),
-                                referencedColumn:
-                                    $$DetalleMovimientosTableReferences
-                                        ._productoIdTable(db)
-                                        .id,
-                              )
-                              as T;
-                    }
+          prefetchHooksCallback:
+              ({
+                movimientoId = false,
+                productoId = false,
+                productoVarianteId = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (movimientoId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.movimientoId,
+                                    referencedTable:
+                                        $$DetalleMovimientosTableReferences
+                                            ._movimientoIdTable(db),
+                                    referencedColumn:
+                                        $$DetalleMovimientosTableReferences
+                                            ._movimientoIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (productoId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.productoId,
+                                    referencedTable:
+                                        $$DetalleMovimientosTableReferences
+                                            ._productoIdTable(db),
+                                    referencedColumn:
+                                        $$DetalleMovimientosTableReferences
+                                            ._productoIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (productoVarianteId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.productoVarianteId,
+                                    referencedTable:
+                                        $$DetalleMovimientosTableReferences
+                                            ._productoVarianteIdTable(db),
+                                    referencedColumn:
+                                        $$DetalleMovimientosTableReferences
+                                            ._productoVarianteIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
 
-                    return state;
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [];
                   },
-              getPrefetchedDataCallback: (items) async {
-                return [];
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -33507,7 +33801,11 @@ typedef $$DetalleMovimientosTableProcessedTableManager =
       $$DetalleMovimientosTableUpdateCompanionBuilder,
       (DetalleMovimiento, $$DetalleMovimientosTableReferences),
       DetalleMovimiento,
-      PrefetchHooks Function({bool movimientoId, bool productoId})
+      PrefetchHooks Function({
+        bool movimientoId,
+        bool productoId,
+        bool productoVarianteId,
+      })
     >;
 typedef $$AssistantEntrySessionsTableCreateCompanionBuilder =
     AssistantEntrySessionsCompanion Function({

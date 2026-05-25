@@ -507,41 +507,33 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
   Widget _buildProductList(Map<String, dynamic> data, NumberFormat currency) {
     final items = data['items'] as List;
 
-    return ListView.builder(
-      shrinkWrap:
-          true, // Importante porque está dentro de SingleChildScrollView
-      physics: const NeverScrollableScrollPhysics(), // No scrollea internamente
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
+    return Column(
+      children: items.map((item) {
         final List variaciones = item['variantes'] ?? [];
+        final groupedVariations = _groupVariantRows(variaciones);
+        final firstVariant = variaciones.isNotEmpty
+            ? Map<String, dynamic>.from(variaciones.first as Map)
+            : null;
+        final displaySku = _displayCode(
+          firstVariant?['sku'] ?? firstVariant?['qr'] ?? item['sku'],
+        );
+        final sizeLabel = _productSizeLabel(groupedVariations);
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-          ),
+        return _SoftCard(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(14),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Cuadro de Cantidad
-                  Container(
-                    width: 40,
-                    height: 40,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      "${item['cantidad']}",
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: Colors.blue.shade50,
+                    child: Icon(
+                      Icons.inventory_2_outlined,
+                      color: Colors.blue.shade700,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -553,14 +545,28 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                       children: [
                         Text(
                           item['nombre'],
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        Text(
-                          item['sku'],
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey[400],
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                            color: Colors.black87,
                           ),
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            _InfoChip(
+                              icon: Icons.straighten_outlined,
+                              text: sizeLabel,
+                            ),
+                            _InfoChip(
+                              icon: Icons.qr_code_2_rounded,
+                              text: displaySku,
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -578,57 +584,101 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                         ),
                       ),
                       Text(
-                        "Costo Unitario: ${currency.format(item['precio_compra'] ?? item['precio_unitario'])}",
+                        "${_formatQuantity(_readNum(item['cantidad']) ?? 0)} unds",
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
+                      Text(
+                        "Unit: ${currency.format(item['precio_compra'] ?? item['precio_unitario'])}",
                         style: TextStyle(fontSize: 10, color: Colors.grey[500]),
                       ),
                     ],
                   ),
                 ],
               ),
-              if (variaciones.isNotEmpty) ...[
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Divider(height: 1),
-                ),
-                ...variaciones.map((v) {
-                  final String tallaStr = v['talla']?.toString() ?? "General";
-                  final num qty = v['cantidad'] ?? 0;
-                  final num? precioEsp = v['precio'];
+              if (groupedVariations.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                ...groupedVariations.map((variant) {
+                  final String tallaStr = _displaySize(
+                    variant['talla'] ?? variant['size'],
+                  );
+                  final String colorStr =
+                      variant['color']?.toString().trim() ?? '';
+                  final String codeStr = _displayCode(
+                    variant['sku'] ?? variant['qr'],
+                  );
+                  final num qty = _readNum(variant['cantidad']) ?? 0;
+                  final num? precioEsp = _readNum(
+                    variant['precio'] ?? variant['price'],
+                  );
                   final String precioStr = precioEsp != null
                       ? currency.format(precioEsp)
                       : (item['precio_compra'] != null
                             ? "${currency.format(item['precio_compra'])} (Est)"
                             : "-");
 
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 4,
-                      horizontal: 4,
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade200),
                     ),
                     child: Row(
                       children: [
-                        Icon(
-                          Icons.check_circle_outline,
-                          size: 14,
-                          color: Colors.blue[300],
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            "Talla: $tallaStr",
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[800],
-                              fontWeight: FontWeight.w500,
-                            ),
+                        CircleAvatar(
+                          radius: 14,
+                          backgroundColor: Colors.white,
+                          child: Icon(
+                            Icons.sell_outlined,
+                            size: 15,
+                            color: Colors.grey[700],
                           ),
                         ),
-                        Text(
-                          "${qty}x",
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.bold,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                [
+                                  tallaStr,
+                                  if (colorStr.isNotEmpty) colorStr,
+                                ].join(' - '),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[800],
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                codeStr,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[500],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            "${_formatQuantity(qty)}x",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.blue.shade700,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -637,6 +687,7 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey[700],
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -647,8 +698,89 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
             ],
           ),
         );
-      },
+      }).toList(),
     );
+  }
+
+  String _displaySize(Object? value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty || text.toLowerCase() == 'general') {
+      return 'Sin talla especifica';
+    }
+    return text;
+  }
+
+  String _formatQuantity(num value) {
+    return value.truncateToDouble() == value
+        ? value.toStringAsFixed(0)
+        : value.toStringAsFixed(1);
+  }
+
+  String _displayCode(Object? value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty) return 'Sin código';
+    if (text.length <= 22) return text;
+    return '${text.substring(0, 18)}...';
+  }
+
+  num? _readNum(Object? value) {
+    if (value is num) return value;
+    if (value is String) return num.tryParse(value);
+    return null;
+  }
+
+  List<Map<String, dynamic>> _groupVariantRows(List rows) {
+    final grouped = <String, Map<String, dynamic>>{};
+
+    for (final raw in rows) {
+      if (raw is! Map) continue;
+
+      final row = Map<String, dynamic>.from(raw);
+      final talla = _displaySize(row['talla'] ?? row['size']);
+      final color = row['color']?.toString().trim() ?? '';
+      final price = _readNum(row['precio'] ?? row['price']);
+      final qty = _readNum(row['cantidad'] ?? row['quantity']) ?? 1;
+      final sku = (row['sku'] ?? row['qr'])?.toString().trim();
+      final key = '$talla|$color|${price ?? ''}';
+
+      final current = grouped.putIfAbsent(
+        key,
+        () => {
+          'talla': talla,
+          'color': color.isEmpty ? null : color,
+          'sku': sku,
+          'precio': price,
+          'cantidad': 0.0,
+          'skus': <String>{},
+        },
+      );
+
+      current['cantidad'] = (current['cantidad'] as double) + qty.toDouble();
+      if (sku != null && sku.isNotEmpty) {
+        (current['skus'] as Set<String>).add(sku);
+      }
+    }
+
+    return grouped.values.map((item) {
+      final skus = item['skus'] as Set<String>;
+      final singleSku = skus.isEmpty ? item['sku'] : skus.first;
+      return {...item, 'sku': skus.length <= 1 ? singleSku : 'Varios codigos'};
+    }).toList();
+  }
+
+  String _productSizeLabel(List<Map<String, dynamic>> variants) {
+    final sizes =
+        variants
+            .map((variant) => _displaySize(variant['talla'] ?? variant['size']))
+            .where((size) => size != 'Sin talla especifica')
+            .toSet()
+            .toList()
+          ..sort();
+
+    if (sizes.isEmpty) return 'Sin talla especifica';
+    if (sizes.length == 1) return 'Talla ${sizes.first}';
+    if (sizes.length <= 3) return 'Tallas ${sizes.join(', ')}';
+    return '${sizes.length} tallas';
   }
 
   // Auxiliar de Colores
@@ -663,5 +795,73 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
       default:
         return Colors.grey;
     }
+  }
+}
+
+class _SoftCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry margin;
+
+  const _SoftCard({
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+    this.margin = EdgeInsets.zero,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: margin,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.035),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _InfoChip({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: Colors.grey[700]),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.grey[800],
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

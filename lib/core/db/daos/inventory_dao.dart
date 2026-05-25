@@ -31,7 +31,9 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
   InventoryDao(super.db);
 
   Expression<bool> _isPending(GeneratedColumn<String> column) {
-    return column.equals('pending_insert') | column.equals('pending_update') | column.equals('sync_error');
+    return column.equals('pending_insert') |
+        column.equals('pending_update') |
+        column.equals('sync_error');
   }
 
   Future<void> upsertCategoria(CategoriasCompanion categoria) {
@@ -93,6 +95,100 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
         color: const Value('General'),
         precioEspecifico: Value(producto.precioBase),
         costoEspecifico: Value(producto.ultimoCosto),
+        usuarioRegistroId: Value(context.usuarioId),
+        estado: const Value(true),
+        createdAt: Value(now),
+        updatedAt: Value(now),
+        syncStatus: const Value('pending_insert'),
+      ),
+    );
+
+    return (select(
+      productoVariantes,
+    )..where((tbl) => tbl.id.equals(newId))).getSingle();
+  }
+
+  Future<ProductoVariante> resolveVariantForEntry({
+    required String productoId,
+    required String? sku,
+    required String? talla,
+    required String? color,
+    required double? precioVenta,
+    required double? costo,
+  }) async {
+    final context = await getRequiredContext();
+    final now = DateTime.now();
+    final normalizedSku = _cleanText(sku);
+    final normalizedTalla = _cleanText(talla) ?? 'General';
+    final normalizedColor = _cleanText(color);
+
+    ProductoVariante? existing;
+    if (normalizedSku != null) {
+      existing =
+          await (select(productoVariantes)
+                ..where((tbl) => tbl.sku.equals(normalizedSku))
+                ..where((tbl) => tbl.estado.equals(true))
+                ..limit(1))
+              .getSingleOrNull();
+      if (existing != null && existing.productoId != productoId) {
+        throw ContextoInvalidoException(
+          'El codigo $normalizedSku ya esta asignado a otro producto.',
+        );
+      }
+    }
+
+    existing ??=
+        await (select(productoVariantes)
+              ..where((tbl) => tbl.productoId.equals(productoId))
+              ..where((tbl) => tbl.talla.equals(normalizedTalla))
+              ..where((tbl) => tbl.estado.equals(true))
+              ..limit(1))
+            .getSingleOrNull();
+
+    if (existing != null) {
+      await (update(
+        productoVariantes,
+      )..where((tbl) => tbl.id.equals(existing!.id))).write(
+        ProductoVariantesCompanion(
+          sku: normalizedSku != null
+              ? Value(normalizedSku)
+              : const Value.absent(),
+          talla: Value(normalizedTalla),
+          color: normalizedColor != null
+              ? Value(normalizedColor)
+              : const Value.absent(),
+          precioEspecifico: precioVenta != null && precioVenta > 0
+              ? Value(precioVenta)
+              : const Value.absent(),
+          costoEspecifico: costo != null && costo > 0
+              ? Value(costo)
+              : const Value.absent(),
+          updatedAt: Value(now),
+          syncStatus: const Value('pending_update'),
+        ),
+      );
+
+      return (select(
+        productoVariantes,
+      )..where((tbl) => tbl.id.equals(existing!.id))).getSingle();
+    }
+
+    final newId = const Uuid().v4();
+    final resolvedSku =
+        normalizedSku ?? _generatedVariantSku(productoId, normalizedTalla);
+    await into(productoVariantes).insert(
+      ProductoVariantesCompanion.insert(
+        id: newId,
+        productoId: productoId,
+        sku: resolvedSku,
+        talla: Value(normalizedTalla),
+        color: Value(normalizedColor),
+        precioEspecifico: precioVenta != null && precioVenta > 0
+            ? Value(precioVenta)
+            : const Value.absent(),
+        costoEspecifico: costo != null && costo > 0
+            ? Value(costo)
+            : const Value.absent(),
         usuarioRegistroId: Value(context.usuarioId),
         estado: const Value(true),
         createdAt: Value(now),
@@ -401,6 +497,12 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
                   movimientos,
                   movimientos.id.equalsExp(detalleMovimientos.movimientoId),
                 ),
+                leftOuterJoin(
+                  productoVariantes,
+                  productoVariantes.id.equalsExp(
+                    detalleMovimientos.productoVarianteId,
+                  ),
+                ),
               ])
               ..where(detalleMovimientos.productoId.equals(productoId))
               ..where(
@@ -412,23 +514,26 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
               ..orderBy([OrderingTerm.desc(movimientos.createdAt)]))
             .get();
 
-    return rows
-        .map(
-          (row) => {
-            'id': row.readTable(movimientos).id,
-            'fecha': row.readTable(movimientos).createdAt,
-            'tipo': row.readTable(movimientos).tipoMovimiento,
-            'descripcion': row.readTable(movimientos).descripcion,
-            'cantidad': row.readTable(detalleMovimientos).cantidad,
-            'costo': row.readTable(detalleMovimientos).costoUnitarioFinal,
-            'variantes': row.readTable(detalleMovimientos).variantesJson == null
-                ? <Map<String, dynamic>>[]
-                : _decodeVariantes(
-                    row.readTable(detalleMovimientos).variantesJson!,
-                  ),
-          },
-        )
-        .toList();
+    return rows.map((row) {
+      final detalle = row.readTable(detalleMovimientos);
+      final variante = row.readTableOrNull(productoVariantes);
+      final variantes = detalle.variantesJson == null
+          ? <Map<String, dynamic>>[]
+          : _decodeVariantes(detalle.variantesJson!);
+      return {
+        'id': row.readTable(movimientos).id,
+        'fecha': row.readTable(movimientos).createdAt,
+        'tipo': row.readTable(movimientos).tipoMovimiento,
+        'descripcion': row.readTable(movimientos).descripcion,
+        'cantidad': detalle.cantidad,
+        'costo': detalle.costoUnitarioFinal,
+        'variantes': _enrichVariantes(
+          variantes: variantes,
+          detalle: detalle,
+          variante: variante,
+        ),
+      };
+    }).toList();
   }
 
   Future<List<Map<String, dynamic>>> getPreciosProductoPorBodega(
@@ -477,6 +582,102 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
         .toList();
   }
 
+  Future<List<Map<String, dynamic>>> getHistorialPreciosProductoEnBodega({
+    required String productoId,
+    required String bodegaId,
+  }) async {
+    final rows =
+        await (select(detalleMovimientos).join([
+                innerJoin(
+                  movimientos,
+                  movimientos.id.equalsExp(detalleMovimientos.movimientoId),
+                ),
+                leftOuterJoin(
+                  productoVariantes,
+                  productoVariantes.id.equalsExp(
+                    detalleMovimientos.productoVarianteId,
+                  ),
+                ),
+              ])
+              ..where(detalleMovimientos.productoId.equals(productoId))
+              ..where(movimientos.bodegaDestinoId.equals(bodegaId))
+              ..orderBy([OrderingTerm.desc(movimientos.createdAt)]))
+            .get();
+
+    final variantesProducto = await getVariantesByProductoId(productoId);
+    final variantesPorSku = {
+      for (final variante in variantesProducto) variante.sku: variante,
+    };
+
+    final history = <Map<String, dynamic>>[];
+    for (final row in rows) {
+      final movimiento = row.readTable(movimientos);
+      final detalle = row.readTable(detalleMovimientos);
+      final detalleVariante = row.readTableOrNull(productoVariantes);
+      final variantes = detalle.variantesJson == null
+          ? const <Map<String, dynamic>>[]
+          : _decodeVariantes(detalle.variantesJson!);
+
+      if (variantes.isEmpty) {
+        final precio = detalle.costoUnitarioFinal;
+        history.add({
+          'fecha': movimiento.createdAt,
+          'tipo': movimiento.tipoMovimiento,
+          'descripcion': movimiento.descripcion,
+          'sku': _cleanText(detalleVariante?.sku),
+          'talla': _cleanVariantText(detalleVariante?.talla),
+          'color': _cleanText(detalleVariante?.color),
+          'cantidad': detalle.cantidad,
+          'precio': precio,
+        });
+        continue;
+      }
+
+      final grouped = <String, Map<String, dynamic>>{};
+      for (final variante in variantes) {
+        final sku =
+            _cleanText(
+              variante['sku']?.toString() ?? variante['qr']?.toString(),
+            ) ??
+            _cleanText(detalleVariante?.sku);
+        final varianteReal = sku == null ? null : variantesPorSku[sku];
+        final talla =
+            _cleanVariantText(
+              variante['talla']?.toString() ?? variante['size']?.toString(),
+            ) ??
+            _cleanVariantText(detalleVariante?.talla) ??
+            _cleanVariantText(varianteReal?.talla);
+        final color =
+            _cleanText(variante['color']?.toString()) ??
+            _cleanText(detalleVariante?.color) ??
+            _cleanText(varianteReal?.color);
+        final precio =
+            _readDouble(variante['precio']) ??
+            _readDouble(variante['price']) ??
+            detalle.costoUnitarioFinal;
+        final cantidad = _readDouble(variante['cantidad']) ?? 1.0;
+        final key = '${sku ?? ''}|${talla ?? ''}|${color ?? ''}|$precio';
+        final current = grouped.putIfAbsent(
+          key,
+          () => {
+            'fecha': movimiento.createdAt,
+            'tipo': movimiento.tipoMovimiento,
+            'descripcion': movimiento.descripcion,
+            'sku': sku,
+            'talla': talla,
+            'color': color,
+            'cantidad': 0.0,
+            'precio': precio,
+          },
+        );
+        current['cantidad'] = (current['cantidad'] as double) + cantidad;
+      }
+      history.addAll(grouped.values);
+    }
+
+    return history;
+  }
+
   static double _resolvePrice(
     double? precioEspecifico,
     double precioVenta,
@@ -507,6 +708,65 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
     } catch (_) {
       return const <Map<String, dynamic>>[];
     }
+  }
+
+  List<Map<String, dynamic>> _enrichVariantes({
+    required List<Map<String, dynamic>> variantes,
+    required DetalleMovimiento detalle,
+    required ProductoVariante? variante,
+  }) {
+    if (variante == null) return variantes;
+
+    if (variantes.isEmpty) {
+      return [
+        {
+          'sku': variante.sku,
+          'talla': variante.talla,
+          'color': variante.color,
+          'cantidad': detalle.cantidad,
+          'precio': detalle.costoUnitarioFinal,
+        },
+      ];
+    }
+
+    return variantes.map((item) {
+      final next = Map<String, dynamic>.from(item);
+      final talla = _cleanVariantText(next['talla']?.toString());
+      final sku = _cleanText(next['sku']?.toString() ?? next['qr']?.toString());
+      final color = _cleanText(next['color']?.toString());
+
+      if (sku == null) next['sku'] = variante.sku;
+      if (talla == null) next['talla'] = variante.talla;
+      if (color == null) next['color'] = variante.color;
+      return next;
+    }).toList();
+  }
+
+  static String? _cleanText(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    return trimmed;
+  }
+
+  static String? _cleanVariantText(String? value) {
+    final text = _cleanText(value);
+    if (text == null || text.toLowerCase() == 'general') return null;
+    return text;
+  }
+
+  static double? _readDouble(Object? value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  static String _generatedVariantSku(String productoId, String talla) {
+    final productPart = productoId.length >= 8
+        ? productoId.substring(0, 8)
+        : productoId;
+    final sizePart = talla.replaceAll(RegExp(r'\s+'), '').toUpperCase();
+    final uniquePart = const Uuid().v4().substring(0, 8).toUpperCase();
+    return 'GEN-$productPart-$sizePart-$uniquePart';
   }
 
   Future<Producto?> searchProductoByCodeOrName(String query) async {
@@ -696,6 +956,7 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
             id: detalle.id,
             movimientoId: movimientoId,
             productoId: detalle.productoId,
+            productoVarianteId: Value(detalle.productoVarianteId),
             cantidad: detalle.cantidad,
             costoProveedor: Value(detalle.costoProveedor),
             costoUnitarioFinal: Value(detalle.costoUnitarioFinal),
@@ -732,7 +993,9 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
                       talla: item.talla,
                       color: item.color,
                       cantidad: item.cantidad,
-                      precio: (item.precioVenta ?? 0) > 0 ? item.precioVenta! : item.costoUnitarioFinal,
+                      precio: (item.precioVenta ?? 0) > 0
+                          ? item.precioVenta!
+                          : item.costoUnitarioFinal,
                     ),
               ),
             )
@@ -950,10 +1213,11 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
     // Resolver el precio efectivo: el recibido, o el precioBase del producto como fallback
     double? effectivePrecio = precioVenta;
     if ((effectivePrecio == null || effectivePrecio <= 0)) {
-      final prod = await (select(productos)
-            ..where((tbl) => tbl.id.equals(productoId))
-            ..limit(1))
-          .getSingleOrNull();
+      final prod =
+          await (select(productos)
+                ..where((tbl) => tbl.id.equals(productoId))
+                ..limit(1))
+              .getSingleOrNull();
       final fallback = prod?.precioBase ?? prod?.ultimoPrecioVenta;
       if (fallback != null && fallback > 0) effectivePrecio = fallback;
     }
@@ -1004,9 +1268,9 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
       );
 
       if (effectivePrecio != null && effectivePrecio > 0) {
-        await (update(productoVariantes)
-              ..where((tbl) => tbl.id.equals(current.productoVarianteId)))
-            .write(
+        await (update(
+          productoVariantes,
+        )..where((tbl) => tbl.id.equals(current.productoVarianteId))).write(
           ProductoVariantesCompanion(
             precioEspecifico: Value(effectivePrecio),
             updatedAt: Value(now),
@@ -1018,7 +1282,9 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
 
     // Actualizar ultimoPrecioVenta en el producto si se recibió un precio válido
     if (effectivePrecio != null && effectivePrecio > 0) {
-      await (update(productos)..where((tbl) => tbl.id.equals(productoId))).write(
+      await (update(
+        productos,
+      )..where((tbl) => tbl.id.equals(productoId))).write(
         ProductosCompanion(
           ultimoPrecioVenta: Value(effectivePrecio),
           updatedAt: Value(now),
@@ -1336,11 +1602,14 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
   // Fallback para el asistente: primera bodega disponible cuando el usuario
   // no tiene bodegaDefaultId configurado en su perfil.
   Future<String?> getPrimeraBodegaId() async {
-    final row = await (select(bodegas)
-          ..where((b) => b.syncStatus.isNotIn(['deleted', 'pending_delete']))
-          ..orderBy([(b) => OrderingTerm.asc(b.nombre)])
-          ..limit(1))
-        .getSingleOrNull();
+    final row =
+        await (select(bodegas)
+              ..where(
+                (b) => b.syncStatus.isNotIn(['deleted', 'pending_delete']),
+              )
+              ..orderBy([(b) => OrderingTerm.asc(b.nombre)])
+              ..limit(1))
+            .getSingleOrNull();
     return row?.id;
   }
 }
@@ -1376,4 +1645,3 @@ class InventoryReportData {
     required this.lowStock,
   });
 }
-

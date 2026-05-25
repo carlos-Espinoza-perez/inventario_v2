@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
+import 'package:inventario_v2/features/inventory/data/repositories/inventario_repository.dart';
 import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
 import 'package:inventario_v2/features/inventory/presentation/widgets/categoria_filter_list.dart';
 import 'package:inventario_v2/features/inventory/presentation/providers/warehouse_inventory_provider.dart';
@@ -198,11 +199,16 @@ class _WarehouseInventoryScreenState
                 ),
               ),
               data: (products) {
+                final groupedProducts = _groupProducts(products);
+
                 // Filtrado local
-                final filteredProducts = products.where((p) {
+                final filteredProducts = groupedProducts.where((p) {
                   final matchesSearch =
                       p.nombre.toLowerCase().contains(_searchQuery) ||
-                      p.sku.toLowerCase().contains(_searchQuery);
+                      p.sku.toLowerCase().contains(_searchQuery) ||
+                      p.tallasDisponibles.any(
+                        (size) => size.toLowerCase().contains(_searchQuery),
+                      );
                   return matchesSearch && p.stock >= 1.0;
                 }).toList();
 
@@ -222,27 +228,18 @@ class _WarehouseInventoryScreenState
                   itemCount: filteredProducts.length,
                   itemBuilder: (context, index) {
                     final prod = filteredProducts[index];
-                    final tallas = products
-                        .where((p) =>
-                            p.productoId == prod.productoId &&
-                            p.talla != 'General' &&
-                            p.talla.trim().isNotEmpty)
-                        .map((p) => p.talla)
-                        .toSet()
-                        .toList();
-
                     return _ProductCard(
                       productId: prod.productoId, // Pasar ID
                       nombre: prod.nombre,
                       sku: prod.sku,
-                      stock: prod.stock.toInt(),
-                      precio: prod.precio,
+                      stock: prod.stock,
+                      precioLabel: prod.precioLabel,
                       costo: prod.costo,
                       categoria: prod.categoria,
                       imageUrl: prod.imagen,
                       warehouseId: widget.warehouseId,
                       tallaActual: prod.talla,
-                      tallasDisponibles: tallas,
+                      tallasDisponibles: prod.tallasDisponibles,
                     );
                   },
                 );
@@ -320,6 +317,106 @@ class _WarehouseInventoryScreenState
       ),
     );
   }
+
+  List<_GroupedInventoryProduct> _groupProducts(List<InventarioDTO> products) {
+    final grouped = <String, _GroupedInventoryProduct>{};
+
+    for (final product in products) {
+      grouped.update(
+        product.productoId,
+        (current) => current.add(product),
+        ifAbsent: () => _GroupedInventoryProduct.from(product),
+      );
+    }
+
+    return grouped.values.toList()
+      ..sort((a, b) => a.nombre.compareTo(b.nombre));
+  }
+}
+
+class _GroupedInventoryProduct {
+  final String productoId;
+  final String nombre;
+  final String sku;
+  final String talla;
+  final String categoria;
+  final double stock;
+  final double costo;
+  final String? imagen;
+  final List<String> tallasDisponibles;
+  final List<double> precios;
+
+  const _GroupedInventoryProduct({
+    required this.productoId,
+    required this.nombre,
+    required this.sku,
+    required this.talla,
+    required this.categoria,
+    required this.stock,
+    required this.costo,
+    required this.imagen,
+    required this.tallasDisponibles,
+    required this.precios,
+  });
+
+  factory _GroupedInventoryProduct.from(InventarioDTO product) {
+    final talla = product.talla.trim();
+    return _GroupedInventoryProduct(
+      productoId: product.productoId,
+      nombre: product.nombre,
+      sku: product.sku,
+      talla: _isRealSize(talla) ? talla : 'General',
+      categoria: product.categoria,
+      stock: product.stock,
+      costo: product.costo,
+      imagen: product.imagen,
+      tallasDisponibles: _isRealSize(talla) ? <String>[talla] : <String>[],
+      precios: product.precio > 0 ? <double>[product.precio] : <double>[],
+    );
+  }
+
+  _GroupedInventoryProduct add(InventarioDTO product) {
+    final talla = product.talla.trim();
+    final nextTallas = {...tallasDisponibles};
+    if (_isRealSize(talla)) {
+      nextTallas.add(talla);
+    }
+
+    final nextPrecios = [...precios];
+    if (product.precio > 0) {
+      nextPrecios.add(product.precio);
+    }
+
+    final nextSku = sku == product.sku ? sku : 'Varios codigos';
+    final sortedTallas = nextTallas.toList()..sort();
+
+    return _GroupedInventoryProduct(
+      productoId: productoId,
+      nombre: nombre,
+      sku: nextSku,
+      talla: sortedTallas.length == 1 ? sortedTallas.first : 'General',
+      categoria: categoria,
+      stock: stock + product.stock,
+      costo: costo,
+      imagen: imagen ?? product.imagen,
+      tallasDisponibles: sortedTallas,
+      precios: nextPrecios,
+    );
+  }
+
+  String get precioLabel {
+    if (precios.isEmpty) return 'Sin precio';
+
+    final sorted = [...precios]..sort();
+    final min = sorted.first;
+    final max = sorted.last;
+    if (min == max) return 'C\$ ${min.toStringAsFixed(2)}';
+    return 'C\$ ${min.toStringAsFixed(2)} - C\$ ${max.toStringAsFixed(2)}';
+  }
+
+  static bool _isRealSize(String value) {
+    return value.isNotEmpty && value.toLowerCase() != 'general';
+  }
 }
 
 // ------------------------------------------------------------------
@@ -330,8 +427,8 @@ class _ProductCard extends StatelessWidget {
   final String productId; // ID del producto
   final String nombre;
   final String sku;
-  final int stock;
-  final double precio;
+  final double stock;
+  final String precioLabel;
   final double costo;
   final String categoria;
   final String? imageUrl;
@@ -344,7 +441,7 @@ class _ProductCard extends StatelessWidget {
     required this.nombre,
     required this.sku,
     required this.stock,
-    required this.precio,
+    required this.precioLabel,
     required this.costo,
     required this.categoria,
     this.imageUrl,
@@ -364,6 +461,9 @@ class _ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isLowStock = stock <= 3;
+    final stockLabel = stock.truncateToDouble() == stock
+        ? stock.toStringAsFixed(0)
+        : stock.toStringAsFixed(1);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -485,7 +585,7 @@ class _ProductCard extends StatelessWidget {
                         textBaseline: TextBaseline.alphabetic,
                         children: [
                           Text(
-                            "C\$ ${precio.toStringAsFixed(2)}",
+                            precioLabel,
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
@@ -524,7 +624,7 @@ class _ProductCard extends StatelessWidget {
                       child: Column(
                         children: [
                           Text(
-                            "$stock",
+                            stockLabel,
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 18,

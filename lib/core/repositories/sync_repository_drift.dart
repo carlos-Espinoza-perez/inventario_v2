@@ -873,9 +873,11 @@ class SyncRepository {
       ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
       'movimiento_producto_id': r.movimientoId,
       'producto_id': r.productoId,
+      'producto_variante_id': r.productoVarianteId,
       'cantidad': r.cantidad,
       'costo_proveedor': r.costoProveedor,
       'costo_unitario_final': r.costoUnitarioFinal,
+      'variantes_json': r.variantesJson,
       'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
     };
     map.remove('fecha_registro');
@@ -1206,6 +1208,7 @@ class SyncRepository {
     id: _text(j['id']) ?? '',
     movimientoId: _text(j['movimiento_producto_id']) ?? '',
     productoId: _text(j['producto_id']) ?? '',
+    productoVarianteId: Value(_text(j['producto_variante_id'])),
     cantidad: _double(j['cantidad']),
     costoProveedor: Value(_double(j['costo_proveedor'])),
     cargosAdicionalesJson: Value(_json(j['cargos_adicionales_json'])),

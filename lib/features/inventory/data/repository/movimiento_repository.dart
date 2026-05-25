@@ -93,21 +93,28 @@ class MovimientoRepository {
     String productoId, {
     String? bodegaId,
   }) {
-    return _db.inventoryDao.getHistorialProducto(productoId, bodegaId: bodegaId);
+    return _db.inventoryDao.getHistorialProducto(
+      productoId,
+      bodegaId: bodegaId,
+    );
   }
 
-  Future<List<Map<String, dynamic>>> obtenerHistorialBodega(String bodegaId) async {
+  Future<List<Map<String, dynamic>>> obtenerHistorialBodega(
+    String bodegaId,
+  ) async {
     final rows =
         await (_db.select(_db.detalleMovimientos).join([
-              innerJoin(
-                _db.movimientos,
-                _db.movimientos.id.equalsExp(_db.detalleMovimientos.movimientoId),
-              ),
-              leftOuterJoin(
-                _db.usuarios,
-                _db.usuarios.id.equalsExp(_db.movimientos.usuarioRegistroId),
-              ),
-            ])
+                innerJoin(
+                  _db.movimientos,
+                  _db.movimientos.id.equalsExp(
+                    _db.detalleMovimientos.movimientoId,
+                  ),
+                ),
+                leftOuterJoin(
+                  _db.usuarios,
+                  _db.usuarios.id.equalsExp(_db.movimientos.usuarioRegistroId),
+                ),
+              ])
               ..where(
                 _db.movimientos.bodegaOrigenId.equals(bodegaId) |
                     _db.movimientos.bodegaDestinoId.equals(bodegaId),
@@ -125,9 +132,11 @@ class MovimientoRepository {
       final first = entry.value.first;
       final movimiento = first.readTable(_db.movimientos);
       final usuario = first.readTableOrNull(_db.usuarios);
-      final isEntrada = movimiento.bodegaDestinoId == bodegaId &&
+      final isEntrada =
+          movimiento.bodegaDestinoId == bodegaId &&
           movimiento.bodegaOrigenId != bodegaId;
-      final isSalida = movimiento.bodegaOrigenId == bodegaId &&
+      final isSalida =
+          movimiento.bodegaOrigenId == bodegaId &&
           movimiento.bodegaDestinoId != bodegaId;
       final direccion = isEntrada
           ? 'ENTRADA'
@@ -148,28 +157,38 @@ class MovimientoRepository {
     }).toList();
   }
 
-  Future<Map<String, dynamic>?> obtenerDetalleMovimiento(String movimientoId) async {
+  Future<Map<String, dynamic>?> obtenerDetalleMovimiento(
+    String movimientoId,
+  ) async {
     final destinoAlias = _db.bodegas.createAlias('bodega_destino');
     final rows =
         await (_db.select(_db.movimientos).join([
-              leftOuterJoin(
-                _db.detalleMovimientos,
-                _db.detalleMovimientos.movimientoId.equalsExp(_db.movimientos.id),
-              ),
-              leftOuterJoin(
-                _db.productos,
-                _db.productos.id.equalsExp(_db.detalleMovimientos.productoId),
-              ),
-              leftOuterJoin(
-                _db.bodegas,
-                _db.bodegas.id.equalsExp(_db.movimientos.bodegaOrigenId),
-                useColumns: true,
-              ),
-              leftOuterJoin(
-                destinoAlias,
-                destinoAlias.id.equalsExp(_db.movimientos.bodegaDestinoId),
-              ),
-            ])
+                leftOuterJoin(
+                  _db.detalleMovimientos,
+                  _db.detalleMovimientos.movimientoId.equalsExp(
+                    _db.movimientos.id,
+                  ),
+                ),
+                leftOuterJoin(
+                  _db.productos,
+                  _db.productos.id.equalsExp(_db.detalleMovimientos.productoId),
+                ),
+                leftOuterJoin(
+                  _db.productoVariantes,
+                  _db.productoVariantes.id.equalsExp(
+                    _db.detalleMovimientos.productoVarianteId,
+                  ),
+                ),
+                leftOuterJoin(
+                  _db.bodegas,
+                  _db.bodegas.id.equalsExp(_db.movimientos.bodegaOrigenId),
+                  useColumns: true,
+                ),
+                leftOuterJoin(
+                  destinoAlias,
+                  destinoAlias.id.equalsExp(_db.movimientos.bodegaDestinoId),
+                ),
+              ])
               ..where(_db.movimientos.id.equals(movimientoId))
               ..limit(100))
             .get();
@@ -187,17 +206,27 @@ class MovimientoRepository {
       final detalle = row.readTableOrNull(_db.detalleMovimientos);
       if (detalle == null) continue;
       final producto = row.readTableOrNull(_db.productos);
+      final variante = row.readTableOrNull(_db.productoVariantes);
       final precioUnitario = detalle.costoUnitarioFinal;
       final subtotal = precioUnitario * detalle.cantidad;
       costoProductos += subtotal;
+      final variantes = _enrichVariantes(
+        variantes: _decodeVariantes(detalle.variantesJson),
+        detalle: detalle,
+        variante: variante,
+      );
       items.add({
         'nombre': producto?.nombre ?? 'Producto',
-        'sku': producto?.codigoPersonalizado ?? producto?.id ?? detalle.productoId,
+        'sku':
+            variante?.sku ??
+            producto?.codigoPersonalizado ??
+            producto?.id ??
+            detalle.productoId,
         'cantidad': detalle.cantidad,
         'precio_unitario': precioUnitario,
         'precio_compra': precioUnitario,
         'subtotal': subtotal,
-        'variantes': _decodeVariantes(detalle.variantesJson),
+        'variantes': variantes,
       });
     }
 
@@ -233,5 +262,41 @@ class MovimientoRepository {
       debugPrint('_decodeVariantes: JSON inválido en variantesJson — $e\n$st');
       return const [];
     }
+  }
+
+  List<Map<String, dynamic>> _enrichVariantes({
+    required List<Map<String, dynamic>> variantes,
+    required DetalleMovimiento detalle,
+    required ProductoVariante? variante,
+  }) {
+    if (variante == null) return variantes;
+
+    if (variantes.isEmpty) {
+      return [
+        {
+          'sku': variante.sku,
+          'talla': variante.talla,
+          'color': variante.color,
+          'cantidad': detalle.cantidad,
+          'precio': detalle.costoUnitarioFinal,
+        },
+      ];
+    }
+
+    return variantes.map((item) {
+      final next = Map<String, dynamic>.from(item);
+      final sku =
+          next['sku']?.toString().trim() ?? next['qr']?.toString().trim();
+      final talla =
+          next['talla']?.toString().trim() ?? next['size']?.toString().trim();
+      final color = next['color']?.toString().trim();
+
+      if (sku == null || sku.isEmpty) next['sku'] = variante.sku;
+      if (talla == null || talla.isEmpty || talla.toLowerCase() == 'general') {
+        next['talla'] = variante.talla;
+      }
+      if (color == null || color.isEmpty) next['color'] = variante.color;
+      return next;
+    }).toList();
   }
 }
