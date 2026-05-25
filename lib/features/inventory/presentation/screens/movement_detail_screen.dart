@@ -515,6 +515,7 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
       itemBuilder: (context, index) {
         final item = items[index];
         final List variaciones = item['variantes'] ?? [];
+        final groupedVariations = _groupVariantRows(variaciones);
         final firstVariant = variaciones.isNotEmpty
             ? Map<String, dynamic>.from(variaciones.first as Map)
             : null;
@@ -591,15 +592,19 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                   ),
                 ],
               ),
-              if (variaciones.isNotEmpty) ...[
+              if (groupedVariations.isNotEmpty) ...[
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
                   child: Divider(height: 1),
                 ),
-                ...variaciones.map((v) {
-                  final variant = Map<String, dynamic>.from(v as Map);
+                ...groupedVariations.map((variant) {
                   final String tallaStr = _displaySize(
                     variant['talla'] ?? variant['size'],
+                  );
+                  final String colorStr =
+                      variant['color']?.toString().trim() ?? '';
+                  final String codeStr = _displayCode(
+                    variant['sku'] ?? variant['qr'],
                   );
                   final num qty = _readNum(variant['cantidad']) ?? 0;
                   final num? precioEsp = _readNum(
@@ -625,21 +630,46 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
                         ),
                         const SizedBox(width: 6),
                         Expanded(
-                          child: Text(
-                            "Talla: $tallaStr",
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[800],
-                              fontWeight: FontWeight.w500,
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                [
+                                  tallaStr,
+                                  if (colorStr.isNotEmpty) colorStr,
+                                ].join(' - '),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[800],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                codeStr,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[500],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        Text(
-                          "${qty}x",
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.bold,
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            "${_formatQuantity(qty)}x",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[700],
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -668,6 +698,12 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
     return text;
   }
 
+  String _formatQuantity(num value) {
+    return value.truncateToDouble() == value
+        ? value.toStringAsFixed(0)
+        : value.toStringAsFixed(1);
+  }
+
   String _displayCode(Object? value) {
     final text = value?.toString().trim();
     if (text == null || text.isEmpty) return 'Sin código';
@@ -679,6 +715,45 @@ class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
     if (value is num) return value;
     if (value is String) return num.tryParse(value);
     return null;
+  }
+
+  List<Map<String, dynamic>> _groupVariantRows(List rows) {
+    final grouped = <String, Map<String, dynamic>>{};
+
+    for (final raw in rows) {
+      if (raw is! Map) continue;
+
+      final row = Map<String, dynamic>.from(raw);
+      final talla = _displaySize(row['talla'] ?? row['size']);
+      final color = row['color']?.toString().trim() ?? '';
+      final price = _readNum(row['precio'] ?? row['price']);
+      final qty = _readNum(row['cantidad'] ?? row['quantity']) ?? 1;
+      final sku = (row['sku'] ?? row['qr'])?.toString().trim();
+      final key = '$talla|$color|${price ?? ''}';
+
+      final current = grouped.putIfAbsent(
+        key,
+        () => {
+          'talla': talla,
+          'color': color.isEmpty ? null : color,
+          'sku': sku,
+          'precio': price,
+          'cantidad': 0.0,
+          'skus': <String>{},
+        },
+      );
+
+      current['cantidad'] = (current['cantidad'] as double) + qty.toDouble();
+      if (sku != null && sku.isNotEmpty) {
+        (current['skus'] as Set<String>).add(sku);
+      }
+    }
+
+    return grouped.values.map((item) {
+      final skus = item['skus'] as Set<String>;
+      final singleSku = skus.isEmpty ? item['sku'] : skus.first;
+      return {...item, 'sku': skus.length <= 1 ? singleSku : 'Varios codigos'};
+    }).toList();
   }
 
   // Auxiliar de Colores

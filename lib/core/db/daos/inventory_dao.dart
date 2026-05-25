@@ -589,6 +589,11 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
               ..orderBy([OrderingTerm.desc(movimientos.createdAt)]))
             .get();
 
+    final variantesProducto = await getVariantesByProductoId(productoId);
+    final variantesPorSku = {
+      for (final variante in variantesProducto) variante.sku: variante,
+    };
+
     final history = <Map<String, dynamic>>[];
     for (final row in rows) {
       final movimiento = row.readTable(movimientos);
@@ -617,10 +622,15 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
         final sku = _cleanText(
           variante['sku']?.toString() ?? variante['qr']?.toString(),
         );
-        final talla = _cleanText(
-          variante['talla']?.toString() ?? variante['size']?.toString(),
-        );
-        final color = _cleanText(variante['color']?.toString());
+        final varianteReal = sku == null ? null : variantesPorSku[sku];
+        final talla =
+            _cleanVariantText(
+              variante['talla']?.toString() ?? variante['size']?.toString(),
+            ) ??
+            _cleanVariantText(varianteReal?.talla);
+        final color =
+            _cleanText(variante['color']?.toString()) ??
+            _cleanText(varianteReal?.color);
         final precio =
             _readDouble(variante['precio']) ??
             _readDouble(variante['price']) ??
@@ -684,6 +694,12 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
     final trimmed = value?.trim();
     if (trimmed == null || trimmed.isEmpty) return null;
     return trimmed;
+  }
+
+  static String? _cleanVariantText(String? value) {
+    final text = _cleanText(value);
+    if (text == null || text.toLowerCase() == 'general') return null;
+    return text;
   }
 
   static double? _readDouble(Object? value) {

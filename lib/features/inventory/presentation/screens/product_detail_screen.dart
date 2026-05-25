@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
@@ -231,32 +232,46 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
             final mov = history[index];
             final variants = (mov['variantes'] as List?) ?? const [];
             final groupedVariants = _groupMovementVariantRows(variants);
+            final movementId = mov['id']?.toString();
             return _SoftCard(
               margin: const EdgeInsets.only(bottom: 12),
               padding: EdgeInsets.zero,
-              child: ExpansionTile(
-                tilePadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 6,
-                ),
-                childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
-                title: Text(
-                  mov['tipo'].toString().toUpperCase(),
-                  style: const TextStyle(fontWeight: FontWeight.w800),
-                ),
-                subtitle: Text(
-                  DateFormat(
-                    'dd MMM yyyy, hh:mm a',
-                  ).format(mov['fecha'] as DateTime),
-                ),
-                trailing: Text(
-                  '${mov['cantidad']}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
+              child: Column(
                 children: [
+                  ListTile(
+                    onTap: movementId == null || movementId.isEmpty
+                        ? null
+                        : () => context.push('/movement-detail/$movementId'),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    title: Text(
+                      mov['tipo'].toString().toUpperCase(),
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    subtitle: Text(
+                      DateFormat(
+                        'dd MMM yyyy, hh:mm a',
+                      ).format(mov['fecha'] as DateTime),
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${mov['cantidad']}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        if (movementId != null && movementId.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          const Icon(Icons.open_in_new_rounded, size: 18),
+                        ],
+                      ],
+                    ),
+                  ),
                   if ((mov['descripcion']?.toString().trim() ?? '').isNotEmpty)
                     Padding(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                       child: Align(
                         alignment: Alignment.centerLeft,
                         child: Text(mov['descripcion'].toString()),
@@ -264,16 +279,32 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
                     ),
                   if (groupedVariants.isEmpty)
                     const Padding(
-                      padding: EdgeInsets.all(12),
+                      padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
                       child: Align(
                         alignment: Alignment.centerLeft,
                         child: Text('Sin detalle de variantes'),
                       ),
                     )
-                  else
-                    ...groupedVariants.map(
-                      (variant) => _KardexVariantTile(variant: variant),
-                    ),
+                  else ...[
+                    ...groupedVariants
+                        .take(2)
+                        .map((variant) => _KardexVariantTile(variant: variant)),
+                    if (movementId != null && movementId.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            'Toca el movimiento para ver el detalle completo',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.blue.shade700,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ],
               ),
             );
