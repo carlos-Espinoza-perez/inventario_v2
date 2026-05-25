@@ -223,6 +223,8 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
         .map((assignment) => assignment.bodegaId)
         .toSet();
 
+    final formKey = GlobalKey<FormState>();
+    String? emailErrorText;
     bool isSaving = false;
 
     await showDialog<void>(
@@ -233,77 +235,95 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
           title: Text(existing == null ? 'Nuevo personal' : 'Editar personal'),
           content: SizedBox(
             width: 460,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: nameCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Nombre completo',
-                    ),
-                    enabled: !isSaving,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: emailCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Correo de acceso',
-                      helperText: existing == null
-                          ? 'Se enviarÃ¡ una invitaciÃ³n a este correo.'
-                          : null,
-                    ),
-                    enabled: existing == null && !isSaving,
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedRoleId,
-                    decoration: const InputDecoration(labelText: 'Rol'),
-                    items: data.roles
-                        .map(
-                          (role) => DropdownMenuItem<String>(
-                            value: role.id,
-                            child: Text(role.nombre),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: isSaving
-                        ? null
-                        : (value) {
-                            setLocalState(() => selectedRoleId = value);
-                          },
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Bodegas asignadas',
-                    style: TextStyle(
-                      color: Colors.grey.shade700,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ...data.warehouses.map(
-                    (warehouse) => CheckboxListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      value: selectedWarehouses.contains(warehouse.id),
-                      title: Text(warehouse.nombre),
+            child: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextFormField(
+                      controller: nameCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Nombre completo',
+                      ),
                       enabled: !isSaving,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: emailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      autocorrect: false,
+                      textCapitalization: TextCapitalization.none,
+                      decoration: InputDecoration(
+                        labelText: 'Correo de acceso',
+                        helperText: existing == null
+                            ? 'Se enviarÃ¡ una invitaciÃ³n a este correo.'
+                            : null,
+                        errorText: emailErrorText,
+                      ),
+                      enabled: existing == null && !isSaving,
+                      validator: (value) {
+                        final normalizedEmail = (value ?? '').trim();
+                        if (existing == null && normalizedEmail.isEmpty) {
+                          return 'El correo es obligatorio.';
+                        }
+                        if (normalizedEmail.isNotEmpty &&
+                            !_isValidEmail(normalizedEmail)) {
+                          return 'Ingresa un correo válido.';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedRoleId,
+                      decoration: const InputDecoration(labelText: 'Rol'),
+                      items: data.roles
+                          .map(
+                            (role) => DropdownMenuItem<String>(
+                              value: role.id,
+                              child: Text(role.nombre),
+                            ),
+                          )
+                          .toList(),
                       onChanged: isSaving
                           ? null
-                          : (checked) {
-                              setLocalState(() {
-                                if (checked == true) {
-                                  selectedWarehouses.add(warehouse.id);
-                                } else {
-                                  selectedWarehouses.remove(warehouse.id);
-                                }
-                              });
+                          : (value) {
+                              setLocalState(() => selectedRoleId = value);
                             },
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    Text(
+                      'Bodegas asignadas',
+                      style: TextStyle(
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...data.warehouses.map(
+                      (warehouse) => CheckboxListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        value: selectedWarehouses.contains(warehouse.id),
+                        title: Text(warehouse.nombre),
+                        enabled: !isSaving,
+                        onChanged: isSaving
+                            ? null
+                            : (checked) {
+                                setLocalState(() {
+                                  if (checked == true) {
+                                    selectedWarehouses.add(warehouse.id);
+                                  } else {
+                                    selectedWarehouses.remove(warehouse.id);
+                                  }
+                                });
+                              },
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -317,14 +337,38 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
               onPressed: isSaving
                   ? null
                   : () async {
-                      setLocalState(() => isSaving = true);
-                      await _saveUser(
+                      final normalizedEmail = emailCtrl.text.trim();
+                      emailCtrl.value = emailCtrl.value.copyWith(
+                        text: normalizedEmail,
+                        selection: TextSelection.collapsed(
+                          offset: normalizedEmail.length,
+                        ),
+                      );
+                      final isValid = formKey.currentState?.validate() ?? false;
+                      if (!isValid) return;
+
+                      setLocalState(() {
+                        isSaving = true;
+                        emailErrorText = null;
+                      });
+
+                      final saveError = await _saveUser(
                         existing: existing,
                         name: nameCtrl.text.trim(),
-                        email: emailCtrl.text.trim(),
+                        email: normalizedEmail,
                         roleId: selectedRoleId,
                         warehouseIds: selectedWarehouses,
                       );
+
+                      if (saveError != null &&
+                          saveError.toLowerCase().contains('correo')) {
+                        setLocalState(() {
+                          emailErrorText = 'Ingresa un correo válido.';
+                          isSaving = false;
+                        });
+                        return;
+                      }
+
                       if (ctx.mounted) Navigator.pop(ctx);
                     },
               style: ElevatedButton.styleFrom(
@@ -348,7 +392,12 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
     );
   }
 
-  Future<void> _saveUser({
+  bool _isValidEmail(String value) {
+    final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+    return emailRegex.hasMatch(value);
+  }
+
+  Future<String?> _saveUser({
     required Usuario? existing,
     required String name,
     required String email,
@@ -359,19 +408,19 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Nombre y rol son obligatorios')),
       );
-      return;
+      return null;
     }
 
     if (existing == null && email.isEmpty) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('El correo es obligatorio')));
-      return;
+      return null;
     }
 
     final auth = ref.read(authControllerProvider.notifier);
     final currentUser = auth.usuarioActual ?? await auth.getUser();
-    if (currentUser == null) return;
+    if (currentUser == null) return null;
 
     final db = ref.read(driftDatabaseProvider);
     try {
@@ -404,7 +453,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
 
       ref.invalidate(staffAdminDataProvider);
       ref.invalidate(authorizationStateProvider);
-      if (!mounted) return;
+      if (!mounted) return null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -414,14 +463,16 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
           ),
         ),
       );
+      return null;
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted) return error.toString();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(error.toString()),
           backgroundColor: Colors.red.shade700,
         ),
       );
+      return error.toString();
     }
   }
 
@@ -580,6 +631,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
           ],
         ),
       );
+      return;
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -588,6 +640,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
           backgroundColor: Colors.red.shade700,
         ),
       );
+      return;
     }
   }
 
@@ -627,6 +680,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
           backgroundColor: Colors.green.shade600,
         ),
       );
+      return;
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -635,6 +689,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
           backgroundColor: Colors.red.shade700,
         ),
       );
+      return;
     }
   }
 
