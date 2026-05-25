@@ -516,11 +516,16 @@ class _TransferItemCardState extends State<_TransferItemCard> {
   late final TextEditingController _costCtrl;
   late final TextEditingController _priceCtrl;
 
-  String _formatNum(double val) {
-    if (val % 1 == 0) {
-      return val.toInt().toString();
+  String _formatMoneyInput(double value) {
+    if (value % 1 == 0) {
+      return value.toInt().toString();
     }
-    return val.toString();
+
+    return value.toStringAsFixed(2);
+  }
+
+  double? _parseDecimalInput(String value) {
+    return double.tryParse(value.trim().replaceAll(',', '.'));
   }
 
   @override
@@ -532,8 +537,8 @@ class _TransferItemCardState extends State<_TransferItemCard> {
     );
     final double cost = (widget.item['cost'] as num?)?.toDouble() ?? 0.0;
     final double price = (widget.item['price'] as num?)?.toDouble() ?? 0.0;
-    _costCtrl = TextEditingController(text: _formatNum(cost));
-    _priceCtrl = TextEditingController(text: _formatNum(price));
+    _costCtrl = TextEditingController(text: _formatMoneyInput(cost));
+    _priceCtrl = TextEditingController(text: _formatMoneyInput(price));
   }
 
   @override
@@ -578,9 +583,12 @@ class _TransferItemCardState extends State<_TransferItemCard> {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Text(
-                          'SKU: ${widget.item['qr'] ?? widget.item['productId']}',
-                          style: const TextStyle(fontSize: 12),
+                        Flexible(
+                          child: Text(
+                            'SKU: ${widget.item['qr'] ?? widget.item['productId']}',
+                            style: const TextStyle(fontSize: 12),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         if (widget.item['size'] != null &&
                             widget.item['size']
@@ -588,26 +596,34 @@ class _TransferItemCardState extends State<_TransferItemCard> {
                                 .trim()
                                 .isNotEmpty) ...[
                           const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 1.5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: widget.item['size'].toString() == 'General'
-                                  ? Colors.grey[100]
-                                  : Colors.blue[50],
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              widget.item['size'].toString(),
-                              style: TextStyle(
-                                fontSize: 10,
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 96),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 1.5,
+                              ),
+                              decoration: BoxDecoration(
                                 color:
                                     widget.item['size'].toString() == 'General'
-                                    ? Colors.grey[600]
-                                    : Colors.blue[700],
-                                fontWeight: FontWeight.bold,
+                                    ? Colors.grey[100]
+                                    : Colors.blue[50],
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                widget.item['size'].toString(),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color:
+                                      widget.item['size'].toString() ==
+                                          'General'
+                                      ? Colors.grey[600]
+                                      : Colors.blue[700],
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                softWrap: false,
                               ),
                             ),
                           ),
@@ -653,7 +669,10 @@ class _TransferItemCardState extends State<_TransferItemCard> {
                   label: 'Costo',
                   controller: _costCtrl,
                   onChanged: (value) {
-                    widget.item['cost'] = double.tryParse(value) ?? 0.0;
+                    final cost = _parseDecimalInput(value);
+                    if (cost != null) {
+                      widget.item['cost'] = cost;
+                    }
                     widget.onChanged();
                   },
                 ),
@@ -664,7 +683,10 @@ class _TransferItemCardState extends State<_TransferItemCard> {
                   label: 'Precio',
                   controller: _priceCtrl,
                   onChanged: (value) {
-                    widget.item['price'] = double.tryParse(value) ?? 0.0;
+                    final price = _parseDecimalInput(value);
+                    if (price != null) {
+                      widget.item['price'] = price;
+                    }
                     widget.onChanged();
                   },
                 ),
