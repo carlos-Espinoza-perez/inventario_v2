@@ -120,6 +120,13 @@ class UpdateDialog extends ConsumerWidget {
       );
     }
 
+    if (state.status == UpdateStatus.needsPermission) {
+      return const Text(
+        'Para instalar la actualización necesitas activar el permiso "Instalar apps desconocidas" para esta app.\n\nToca "Ir a Ajustes", activa el permiso y vuelve aquí para continuar.',
+        style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+      );
+    }
+
     if (state.status == UpdateStatus.error) {
       return Text(
         state.errorMessage ?? 'Ocurrió un error. Intenta de nuevo.',
@@ -157,9 +164,22 @@ class UpdateDialog extends ConsumerWidget {
     final isDownloading = state.status == UpdateStatus.downloading;
     final isReady = state.status == UpdateStatus.readyToInstall;
     final isError = state.status == UpdateStatus.error;
+    final needsPermission = state.status == UpdateStatus.needsPermission;
 
     if (isDownloading) {
       return const SizedBox.shrink();
+    }
+
+    if (needsPermission) {
+      return FilledButton.icon(
+        onPressed: () => notifier.openPermissionSettings(),
+        icon: const Icon(Icons.settings_rounded, size: 18),
+        label: const Text('Ir a Ajustes'),
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          minimumSize: const Size.fromHeight(44),
+        ),
+      );
     }
 
     if (isReady || isError) {

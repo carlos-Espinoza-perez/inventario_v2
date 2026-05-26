@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../services/app_update_service.dart';
 
@@ -11,6 +12,7 @@ enum UpdateStatus {
   updateAvailable,
   downloading,
   readyToInstall,
+  needsPermission,
   error,
 }
 
@@ -87,13 +89,23 @@ class AppUpdateNotifier extends StateNotifier<AppUpdateState> {
 
     await for (final progress in _service.downloadApk(
       info.apkUrl,
-      onComplete: (file) {
+      onComplete: (file) async {
         state = state.copyWith(
           status: UpdateStatus.readyToInstall,
           downloadProgress: 1.0,
           apkFile: file,
         );
-        _service.openInstaller(file);
+        final error = await _service.openInstaller(file);
+        if (error == 'NEEDS_PERMISSION') {
+          state = state.copyWith(
+            status: UpdateStatus.needsPermission,
+          );
+        } else if (error != null) {
+          state = state.copyWith(
+            status: UpdateStatus.error,
+            errorMessage: error,
+          );
+        }
       },
       onError: (error) {
         state = state.copyWith(
@@ -112,8 +124,17 @@ class AppUpdateNotifier extends StateNotifier<AppUpdateState> {
       await downloadAndInstall();
       return;
     }
-    state = state.copyWith(status: UpdateStatus.readyToInstall);
-    await _service.openInstaller(file);
+    state = state.copyWith(status: UpdateStatus.readyToInstall, errorMessage: null);
+    final error = await _service.openInstaller(file);
+    if (error == 'NEEDS_PERMISSION') {
+      state = state.copyWith(status: UpdateStatus.needsPermission);
+    } else if (error != null) {
+      state = state.copyWith(status: UpdateStatus.error, errorMessage: error);
+    }
+  }
+
+  Future<void> openPermissionSettings() async {
+    await openAppSettings();
   }
 
   void dismissOptional() {

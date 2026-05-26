@@ -94,16 +94,37 @@ jobs:
           PUBLISHED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
           python3 - <<PYEOF
-          import json
+          import json, os
 
           path = "app_update/version.json"
-          with open(path, encoding="utf-8") as f:
-              data = json.load(f)
 
-          data["versionName"] = "${VERSION_NAME}"
-          data["versionCode"] = int("${VERSION_CODE}")
-          data["apkUrl"] = "${APK_URL}"
-          data["publishedAt"] = "${PUBLISHED_AT}"
+          # Leer release notes del archivo temporal generado por el script
+          release_notes = ["Sin notas de versión"]
+          force_update = False
+          min_required = 1
+          try:
+              raw = open(path, "rb").read().decode("utf-8", errors="replace")
+              existing = json.loads(raw)
+              force_update = existing.get("forceUpdate", force_update)
+              min_required = existing.get("minRequiredVersionCode", min_required)
+          except Exception:
+              pass
+          try:
+              pending_raw = open("app_update/pending_release_notes.json", "rb").read().decode("utf-8", errors="replace")
+              pending = json.loads(pending_raw)
+              release_notes = pending.get("releaseNotes", release_notes)
+          except Exception:
+              pass
+
+          data = {
+              "versionName": "${VERSION_NAME}",
+              "versionCode": int("${VERSION_CODE}"),
+              "minRequiredVersionCode": min_required,
+              "apkUrl": "${APK_URL}",
+              "releaseNotes": release_notes,
+              "forceUpdate": force_update,
+              "publishedAt": "${PUBLISHED_AT}"
+          }
 
           with open(path, "w", encoding="utf-8", newline="\n") as f:
               json.dump(data, f, indent=2, ensure_ascii=False)
@@ -114,6 +135,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add app_update/version.json
+          git add app_update/version.json app_update/pending_release_notes.json
           git commit -m "chore: actualizar version.json para v${{ steps.version.outputs.version_name }} [skip ci]"
           git push origin HEAD:main

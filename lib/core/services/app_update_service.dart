@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:open_file/open_file.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../services/app_logger.dart';
 
@@ -135,11 +136,25 @@ class AppUpdateService {
     }
   }
 
-  Future<void> openInstaller(File apkFile) async {
-    final result = await OpenFile.open(apkFile.path, type: 'application/vnd.android.package-archive');
+  Future<String?> openInstaller(File apkFile) async {
+    // Android 8+ requiere permiso explícito para instalar APKs de fuentes externas
+    final status = await Permission.requestInstallPackages.status;
+    if (!status.isGranted) {
+      final requested = await Permission.requestInstallPackages.request();
+      if (!requested.isGranted) {
+        return 'NEEDS_PERMISSION';
+      }
+    }
+
+    final result = await OpenFile.open(
+      apkFile.path,
+      type: 'application/vnd.android.package-archive',
+    );
     if (result.type != ResultType.done) {
       AppLogger.warn('[AppUpdateService] openInstaller: ${result.message}');
+      return result.message;
     }
+    return null;
   }
 
   Future<void> cleanTempApk() async {
