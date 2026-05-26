@@ -44,11 +44,26 @@ class AuthRepository {
       final jsonUsuario = Map<String, dynamic>.from(data['usuario'] as Map);
       final jsonRol = Map<String, dynamic>.from(data['rol'] as Map);
 
+      final permissionsRaw = await _supabase
+          .from('acceso_rol')
+          .select()
+          .eq('rol_id', jsonUsuario['rol_id'])
+          .eq('estado', true);
+
+      final permisos = (permissionsRaw as List)
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .map(_accesoRolCompanionFromJson)
+          .toList();
+
       await _authDao.replaceSesionActiva(
         empresa: _empresaCompanionFromJson(jsonEmpresa),
         usuario: _usuarioCompanionFromJson(jsonUsuario),
         rol: _rolCompanionFromJson(jsonRol),
+        permisos: permisos,
       );
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('active_user_id', userId);
     } on PostgrestException catch (e) {
       throw Exception('Error de base de datos: ${e.message}');
     } catch (e) {

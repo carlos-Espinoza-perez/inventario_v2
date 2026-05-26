@@ -63,6 +63,14 @@ class AuthController extends _$AuthController {
           if (session != null &&
               (_sesionActiva == null ||
                   _sesionActiva!.usuario.id != session.user.id)) {
+            // Si estamos en el flujo de creación de empresa nueva (tenemos _draft),
+            // evitamos el sync automático porque public.usuario está vacío temporalmente
+            // hasta que se ejecute repo.createCompanyAndUser en la llamada de createUser.
+            if (_draft != null) {
+              debugPrint('[Auth] Detectada creación de empresa en curso, omitiendo sincronización automática en stream.');
+              return;
+            }
+
             state = const AsyncLoading();
             try {
               await _syncSessionFromSupabaseUser(session.user.id);
@@ -168,6 +176,8 @@ class AuthController extends _$AuthController {
       return;
     }
 
+    state = const AsyncLoading();
+
     try {
       final supabase = ref.read(supabaseClientProvider);
       final db = ref.read(driftDatabaseProvider);
@@ -200,6 +210,10 @@ class AuthController extends _$AuthController {
 
       _sesionActiva = await db.authDao.getSesionActiva();
       ref.read(autoSyncProvider.notifier).runFullSync();
+
+      // Limpiamos el borrador para que los eventos posteriores puedan sincronizar con normalidad
+      _draft = null;
+
       state = const AsyncValue.data(null);
     } catch (e, st) {
       debugPrint('[Auth] Error en createUser: $e');
