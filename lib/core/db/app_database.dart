@@ -12,6 +12,7 @@ import 'tables/inventory_tables.dart';
 import 'tables/sales_tables.dart';
 import 'tables/logistics_tables.dart';
 import 'tables/assistant_tables.dart';
+import 'tables/log_tables.dart';
 import 'daos/auth_dao.dart';
 import 'daos/inventory_dao.dart';
 import 'daos/sales_dao.dart';
@@ -42,6 +43,7 @@ part 'app_database.g.dart';
     DetalleMovimientos,
     AssistantEntrySessions,
     AssistantEntrySessionItems,
+    AppLogs,
   ],
   daos: [AuthDao, InventoryDao, SalesDao, LogisticsDao],
 )
@@ -49,7 +51,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration {
@@ -71,32 +73,9 @@ class AppDatabase extends _$AppDatabase {
           );
           await _backfillDetalleMovimientoVariantIds();
           await _createIndexes();
-        } else if (from != to) {
-          await transaction(() async {
-            await m.deleteTable('assistant_entry_session_items');
-            await m.deleteTable('assistant_entry_sessions');
-            await m.deleteTable('detalle_movimientos');
-            await m.deleteTable('movimientos');
-            await m.deleteTable('pagos_ventas');
-            await m.deleteTable('caja_movimientos_extras');
-            await m.deleteTable('detalle_ventas');
-            await m.deleteTable('ventas');
-            await m.deleteTable('clientes');
-            await m.deleteTable('inventarios');
-            await m.deleteTable('producto_variantes');
-            await m.deleteTable('productos');
-            await m.deleteTable('categorias');
-            await m.deleteTable('caja_sesiones');
-            await m.deleteTable('cajas');
-            await m.deleteTable('accesos_rol');
-            await m.deleteTable('roles');
-            await m.deleteTable('bodegas_usuarios');
-            await m.deleteTable('bodegas');
-            await m.deleteTable('usuarios');
-            await m.deleteTable('empresas');
-            await m.createAll();
-          });
-          await _createIndexes();
+        }
+        if (from < 7) {
+          await m.createTable(appLogs);
         }
       },
       beforeOpen: (details) async {

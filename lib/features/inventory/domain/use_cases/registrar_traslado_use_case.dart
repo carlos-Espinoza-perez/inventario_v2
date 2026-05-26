@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/db/models/inventory_requests.dart';
+import 'package:inventario_v2/core/services/remote_logger.dart';
 import 'package:inventario_v2/features/inventory/data/providers/inventario_provider.dart';
 import 'package:inventario_v2/features/inventory/presentation/providers/warehouse_inventory_provider.dart'
     hide inventarioRepositoryProvider;
@@ -36,7 +37,45 @@ class RegistrarTrasladoUseCase {
       items: transferItems.map(_mapItemToRequest).toList(),
     );
 
-    await repository.registrarTraslado(request);
+    RemoteLogger.info(
+      'Traslado iniciado',
+      module: 'inventario',
+      action: 'traslado_inicio',
+      metadata: {
+        'origen': originWarehouseId,
+        'destino': destinationWarehouseId,
+        'items': transferItems.length,
+      },
+    );
+
+    try {
+      await repository.registrarTraslado(request);
+    } catch (e, st) {
+      RemoteLogger.error(
+        'Error al registrar traslado',
+        module: 'inventario',
+        action: 'traslado_error',
+        exception: e,
+        stackTrace: st,
+        metadata: {
+          'origen': originWarehouseId,
+          'destino': destinationWarehouseId,
+          'items': transferItems.length,
+        },
+      );
+      rethrow;
+    }
+
+    RemoteLogger.info(
+      'Traslado registrado exitosamente',
+      module: 'inventario',
+      action: 'traslado_success',
+      metadata: {
+        'origen': originWarehouseId,
+        'destino': destinationWarehouseId,
+        'items': transferItems.length,
+      },
+    );
 
     _ref.invalidate(warehouseInventoryProvider(originWarehouseId));
     _ref.invalidate(warehouseInventoryProvider(destinationWarehouseId));

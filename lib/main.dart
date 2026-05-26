@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:inventario_v2/core/constants/app_constants.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/services/app_logger.dart';
@@ -21,6 +22,11 @@ void main() async {
     authOptions: const FlutterAuthClientOptions(
       authFlowType: AuthFlowType.implicit,
     ),
+  );
+
+  final packageInfo = await PackageInfo.fromPlatform();
+  AppLogger.info(
+    '=== App iniciada | v${packageInfo.version}+${packageInfo.buildNumber} ===',
   );
 
   runApp(const ProviderScope(child: MyApp()));

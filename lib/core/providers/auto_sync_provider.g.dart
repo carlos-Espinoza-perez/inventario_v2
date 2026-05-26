@@ -24,7 +24,7 @@ final syncRepositoryProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef SyncRepositoryRef = AutoDisposeFutureProviderRef<SyncRepository>;
-String _$autoSyncHash() => r'cff9cd3621d7afc5388769168c92f9934d93fa60';
+String _$autoSyncHash() => r'7a4a002e892b732b3f7a29cb56ddc22b01390531';
 
 /// See also [AutoSync].
 @ProviderFor(AutoSync)

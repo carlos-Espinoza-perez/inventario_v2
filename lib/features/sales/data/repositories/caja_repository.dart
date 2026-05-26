@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/db/models/cash_models.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
+import 'package:inventario_v2/core/services/remote_logger.dart';
 
 final cajaRepositoryProvider = Provider((ref) {
   final db = ref.watch(driftDatabaseProvider);
@@ -17,8 +18,26 @@ class CajaRepository {
     return _db.salesDao.getCajaSesionActivaActual();
   }
 
-  Future<CajaSesione> abrirCaja({double montoInicial = 0}) {
-    return _db.salesDao.abrirCajaActual(montoInicial: montoInicial);
+  Future<CajaSesione> abrirCaja({double montoInicial = 0}) async {
+    try {
+      final sesion = await _db.salesDao.abrirCajaActual(montoInicial: montoInicial);
+      RemoteLogger.info(
+        'Caja abierta',
+        module: 'caja',
+        action: 'abrir_caja',
+        metadata: {'cajaSesionId': sesion.id, 'montoInicial': montoInicial},
+      );
+      return sesion;
+    } catch (e, st) {
+      RemoteLogger.error(
+        'Error al abrir caja',
+        module: 'caja',
+        action: 'abrir_caja_error',
+        exception: e,
+        stackTrace: st,
+      );
+      rethrow;
+    }
   }
 
   Future<CajaMovimientosExtra> registrarGasto({
@@ -48,12 +67,39 @@ class CajaRepository {
     required String cajaSesionId,
     required String usuarioCierreId,
     double? efectivoContado,
-  }) {
-    return _db.salesDao.cerrarCaja(
-      cajaSesionId: cajaSesionId,
-      usuarioCierreId: usuarioCierreId,
-      efectivoContado: efectivoContado,
+  }) async {
+    RemoteLogger.info(
+      'Cierre de caja iniciado',
+      module: 'caja',
+      action: 'cerrar_caja_inicio',
+      metadata: {'cajaSesionId': cajaSesionId},
     );
+    try {
+      await _db.salesDao.cerrarCaja(
+        cajaSesionId: cajaSesionId,
+        usuarioCierreId: usuarioCierreId,
+        efectivoContado: efectivoContado,
+      );
+      RemoteLogger.info(
+        'Caja cerrada exitosamente',
+        module: 'caja',
+        action: 'cerrar_caja_success',
+        metadata: {
+          'cajaSesionId': cajaSesionId,
+          'efectivoContado': efectivoContado,
+        },
+      );
+    } catch (e, st) {
+      RemoteLogger.error(
+        'Error al cerrar caja',
+        module: 'caja',
+        action: 'cerrar_caja_error',
+        exception: e,
+        stackTrace: st,
+        metadata: {'cajaSesionId': cajaSesionId},
+      );
+      rethrow;
+    }
   }
 
   Future<double> obtenerVentasEfectivo(String cajaSesionId) {

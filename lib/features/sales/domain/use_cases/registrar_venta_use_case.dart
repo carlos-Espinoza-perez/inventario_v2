@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/db/exceptions/dao_exceptions.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
+import 'package:inventario_v2/core/services/remote_logger.dart';
 import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
 import 'package:inventario_v2/features/sales/data/repositories/sales_repository.dart';
@@ -93,14 +94,45 @@ class RegistrarVentaUseCase {
     }
 
     // 3. Ejecutar la acción en el repositorio
-    await salesRepository.registrarVentaDesdeCheckout(
-      cajaSesionId: effectiveCajaSesionId,
-      nombreCliente: nombreCliente,
-      saleType: normalizedSaleType,
-      total: total,
-      depositAmount: depositAmount,
-      bodegaId: effectiveBodegaId,
-      cartItems: cartItems,
+    try {
+      await salesRepository.registrarVentaDesdeCheckout(
+        cajaSesionId: effectiveCajaSesionId,
+        nombreCliente: nombreCliente,
+        saleType: normalizedSaleType,
+        total: total,
+        depositAmount: depositAmount,
+        bodegaId: effectiveBodegaId,
+        cartItems: cartItems,
+      );
+    } catch (e, st) {
+      RemoteLogger.error(
+        'Error al registrar venta',
+        module: 'ventas',
+        action: 'registrar_venta_error',
+        errorCode: e.runtimeType.toString(),
+        exception: e,
+        stackTrace: st,
+        metadata: {
+          'total': total,
+          'tipo': normalizedSaleType,
+          'items': cartItems.length,
+          'cajaSesionId': effectiveCajaSesionId,
+          'bodegaId': effectiveBodegaId,
+        },
+      );
+      rethrow;
+    }
+
+    RemoteLogger.info(
+      'Venta registrada',
+      module: 'ventas',
+      action: 'registrar_venta_success',
+      metadata: {
+        'total': total,
+        'tipo': normalizedSaleType,
+        'items': cartItems.length,
+        'bodegaId': effectiveBodegaId,
+      },
     );
 
     // 4. Invalidar estados para refrescar la UI

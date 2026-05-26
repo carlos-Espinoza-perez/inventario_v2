@@ -7,6 +7,7 @@ import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/core/providers/supabase_provider.dart';
 import 'package:inventario_v2/core/repositories/sync_repository.dart';
 import 'package:inventario_v2/core/services/app_logger.dart';
+import 'package:inventario_v2/core/services/remote_logger.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'auto_sync_provider.g.dart';
@@ -55,7 +56,10 @@ class AutoSync extends _$AutoSync {
   @override
   Future<SyncState> build() async {
     final db = ref.watch(driftDatabaseProvider);
+    final supabase = ref.watch(supabaseClientProvider);
     final repo = await ref.watch(syncRepositoryProvider.future);
+
+    await RemoteLogger.init(db, supabase);
 
     repo.subscribeToRealtimeChanges();
     _initConnectivity();
@@ -99,6 +103,15 @@ class AutoSync extends _$AutoSync {
     }
 
     AppLogger.info('[AutoSync] === INICIANDO SINCRONIZACIÓN COMPLETA ===');
+    final userId = sesion.usuario.id;
+    final empresaId = sesion.empresa.id;
+    RemoteLogger.info(
+      'Sincronización completa iniciada',
+      module: 'sync',
+      action: 'full_sync_start',
+      userId: userId,
+      empresaId: empresaId,
+    );
     try {
       state = AsyncData(
         (currentState ?? const SyncState()).copyWith(
@@ -114,6 +127,13 @@ class AutoSync extends _$AutoSync {
       await repo.pullRemoteChanges();
 
       AppLogger.info('[AutoSync] === SINCRONIZACIÓN COMPLETA FINALIZADA CON ÉXITO ===');
+      RemoteLogger.info(
+        'Sincronización completa finalizada con éxito',
+        module: 'sync',
+        action: 'full_sync_success',
+        userId: userId,
+        empresaId: empresaId,
+      );
       state = AsyncData(
         (currentState ?? const SyncState()).copyWith(
           isSyncing: false,
@@ -123,6 +143,15 @@ class AutoSync extends _$AutoSync {
       );
     } catch (e, st) {
       AppLogger.error('[AutoSync] Fallo en Full Sync', e, st);
+      RemoteLogger.error(
+        'Fallo en sincronización completa',
+        module: 'sync',
+        action: 'full_sync_error',
+        userId: userId,
+        empresaId: empresaId,
+        exception: e,
+        stackTrace: st,
+      );
       state = AsyncData(
         (currentState ?? const SyncState()).copyWith(
           isSyncing: false,
@@ -149,6 +178,7 @@ class AutoSync extends _$AutoSync {
 
     if (hasConnection && wasOffline) {
       runFullSync();
+      RemoteLogger.flushPending();
     }
   }
 
@@ -213,6 +243,13 @@ class AutoSync extends _$AutoSync {
       );
     } catch (e, st) {
       AppLogger.error('[AutoSync] Error en push automático', e, st);
+      RemoteLogger.error(
+        'Error en push automático de cambios locales',
+        module: 'sync',
+        action: 'push_error',
+        exception: e,
+        stackTrace: st,
+      );
       state = AsyncData(
         currentState.copyWith(isSyncing: false, lastError: e.toString()),
       );

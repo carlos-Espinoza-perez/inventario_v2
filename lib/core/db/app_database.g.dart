@@ -16285,6 +16285,1146 @@ class AssistantEntrySessionItemsCompanion
   }
 }
 
+class $AppLogsTable extends AppLogs with TableInfo<$AppLogsTable, AppLog> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AppLogsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _levelMeta = const VerificationMeta('level');
+  @override
+  late final GeneratedColumn<String> level = GeneratedColumn<String>(
+    'level',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _moduleMeta = const VerificationMeta('module');
+  @override
+  late final GeneratedColumn<String> module = GeneratedColumn<String>(
+    'module',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _screenMeta = const VerificationMeta('screen');
+  @override
+  late final GeneratedColumn<String> screen = GeneratedColumn<String>(
+    'screen',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _actionMeta = const VerificationMeta('action');
+  @override
+  late final GeneratedColumn<String> action = GeneratedColumn<String>(
+    'action',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _messageMeta = const VerificationMeta(
+    'message',
+  );
+  @override
+  late final GeneratedColumn<String> message = GeneratedColumn<String>(
+    'message',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _errorCodeMeta = const VerificationMeta(
+    'errorCode',
+  );
+  @override
+  late final GeneratedColumn<String> errorCode = GeneratedColumn<String>(
+    'error_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _empresaIdMeta = const VerificationMeta(
+    'empresaId',
+  );
+  @override
+  late final GeneratedColumn<String> empresaId = GeneratedColumn<String>(
+    'empresa_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _bodegaIdMeta = const VerificationMeta(
+    'bodegaId',
+  );
+  @override
+  late final GeneratedColumn<String> bodegaId = GeneratedColumn<String>(
+    'bodega_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _appVersionNameMeta = const VerificationMeta(
+    'appVersionName',
+  );
+  @override
+  late final GeneratedColumn<String> appVersionName = GeneratedColumn<String>(
+    'app_version_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _appVersionCodeMeta = const VerificationMeta(
+    'appVersionCode',
+  );
+  @override
+  late final GeneratedColumn<int> appVersionCode = GeneratedColumn<int>(
+    'app_version_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _buildNumberMeta = const VerificationMeta(
+    'buildNumber',
+  );
+  @override
+  late final GeneratedColumn<String> buildNumber = GeneratedColumn<String>(
+    'build_number',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _deviceModelMeta = const VerificationMeta(
+    'deviceModel',
+  );
+  @override
+  late final GeneratedColumn<String> deviceModel = GeneratedColumn<String>(
+    'device_model',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _androidVersionMeta = const VerificationMeta(
+    'androidVersion',
+  );
+  @override
+  late final GeneratedColumn<String> androidVersion = GeneratedColumn<String>(
+    'android_version',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isOnlineMeta = const VerificationMeta(
+    'isOnline',
+  );
+  @override
+  late final GeneratedColumn<bool> isOnline = GeneratedColumn<bool>(
+    'is_online',
+    aliasedName,
+    true,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_online" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _metadataJsonMeta = const VerificationMeta(
+    'metadataJson',
+  );
+  @override
+  late final GeneratedColumn<String> metadataJson = GeneratedColumn<String>(
+    'metadata_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sentToRemoteMeta = const VerificationMeta(
+    'sentToRemote',
+  );
+  @override
+  late final GeneratedColumn<bool> sentToRemote = GeneratedColumn<bool>(
+    'sent_to_remote',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("sent_to_remote" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _remoteSentAtMeta = const VerificationMeta(
+    'remoteSentAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> remoteSentAt = GeneratedColumn<DateTime>(
+    'remote_sent_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    createdAt,
+    level,
+    module,
+    screen,
+    action,
+    message,
+    errorCode,
+    userId,
+    empresaId,
+    bodegaId,
+    appVersionName,
+    appVersionCode,
+    buildNumber,
+    deviceModel,
+    androidVersion,
+    isOnline,
+    metadataJson,
+    sentToRemote,
+    remoteSentAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'app_logs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AppLog> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('level')) {
+      context.handle(
+        _levelMeta,
+        level.isAcceptableOrUnknown(data['level']!, _levelMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_levelMeta);
+    }
+    if (data.containsKey('module')) {
+      context.handle(
+        _moduleMeta,
+        module.isAcceptableOrUnknown(data['module']!, _moduleMeta),
+      );
+    }
+    if (data.containsKey('screen')) {
+      context.handle(
+        _screenMeta,
+        screen.isAcceptableOrUnknown(data['screen']!, _screenMeta),
+      );
+    }
+    if (data.containsKey('action')) {
+      context.handle(
+        _actionMeta,
+        action.isAcceptableOrUnknown(data['action']!, _actionMeta),
+      );
+    }
+    if (data.containsKey('message')) {
+      context.handle(
+        _messageMeta,
+        message.isAcceptableOrUnknown(data['message']!, _messageMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_messageMeta);
+    }
+    if (data.containsKey('error_code')) {
+      context.handle(
+        _errorCodeMeta,
+        errorCode.isAcceptableOrUnknown(data['error_code']!, _errorCodeMeta),
+      );
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    }
+    if (data.containsKey('empresa_id')) {
+      context.handle(
+        _empresaIdMeta,
+        empresaId.isAcceptableOrUnknown(data['empresa_id']!, _empresaIdMeta),
+      );
+    }
+    if (data.containsKey('bodega_id')) {
+      context.handle(
+        _bodegaIdMeta,
+        bodegaId.isAcceptableOrUnknown(data['bodega_id']!, _bodegaIdMeta),
+      );
+    }
+    if (data.containsKey('app_version_name')) {
+      context.handle(
+        _appVersionNameMeta,
+        appVersionName.isAcceptableOrUnknown(
+          data['app_version_name']!,
+          _appVersionNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('app_version_code')) {
+      context.handle(
+        _appVersionCodeMeta,
+        appVersionCode.isAcceptableOrUnknown(
+          data['app_version_code']!,
+          _appVersionCodeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('build_number')) {
+      context.handle(
+        _buildNumberMeta,
+        buildNumber.isAcceptableOrUnknown(
+          data['build_number']!,
+          _buildNumberMeta,
+        ),
+      );
+    }
+    if (data.containsKey('device_model')) {
+      context.handle(
+        _deviceModelMeta,
+        deviceModel.isAcceptableOrUnknown(
+          data['device_model']!,
+          _deviceModelMeta,
+        ),
+      );
+    }
+    if (data.containsKey('android_version')) {
+      context.handle(
+        _androidVersionMeta,
+        androidVersion.isAcceptableOrUnknown(
+          data['android_version']!,
+          _androidVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_online')) {
+      context.handle(
+        _isOnlineMeta,
+        isOnline.isAcceptableOrUnknown(data['is_online']!, _isOnlineMeta),
+      );
+    }
+    if (data.containsKey('metadata_json')) {
+      context.handle(
+        _metadataJsonMeta,
+        metadataJson.isAcceptableOrUnknown(
+          data['metadata_json']!,
+          _metadataJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('sent_to_remote')) {
+      context.handle(
+        _sentToRemoteMeta,
+        sentToRemote.isAcceptableOrUnknown(
+          data['sent_to_remote']!,
+          _sentToRemoteMeta,
+        ),
+      );
+    }
+    if (data.containsKey('remote_sent_at')) {
+      context.handle(
+        _remoteSentAtMeta,
+        remoteSentAt.isAcceptableOrUnknown(
+          data['remote_sent_at']!,
+          _remoteSentAtMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  AppLog map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AppLog(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      level: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}level'],
+      )!,
+      module: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}module'],
+      ),
+      screen: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}screen'],
+      ),
+      action: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}action'],
+      ),
+      message: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}message'],
+      )!,
+      errorCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}error_code'],
+      ),
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
+      ),
+      empresaId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}empresa_id'],
+      ),
+      bodegaId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}bodega_id'],
+      ),
+      appVersionName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}app_version_name'],
+      ),
+      appVersionCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}app_version_code'],
+      ),
+      buildNumber: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}build_number'],
+      ),
+      deviceModel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_model'],
+      ),
+      androidVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}android_version'],
+      ),
+      isOnline: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_online'],
+      ),
+      metadataJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}metadata_json'],
+      ),
+      sentToRemote: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}sent_to_remote'],
+      )!,
+      remoteSentAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}remote_sent_at'],
+      ),
+    );
+  }
+
+  @override
+  $AppLogsTable createAlias(String alias) {
+    return $AppLogsTable(attachedDatabase, alias);
+  }
+}
+
+class AppLog extends DataClass implements Insertable<AppLog> {
+  final String id;
+  final DateTime createdAt;
+  final String level;
+  final String? module;
+  final String? screen;
+  final String? action;
+  final String message;
+  final String? errorCode;
+  final String? userId;
+  final String? empresaId;
+  final String? bodegaId;
+  final String? appVersionName;
+  final int? appVersionCode;
+  final String? buildNumber;
+  final String? deviceModel;
+  final String? androidVersion;
+  final bool? isOnline;
+  final String? metadataJson;
+  final bool sentToRemote;
+  final DateTime? remoteSentAt;
+  const AppLog({
+    required this.id,
+    required this.createdAt,
+    required this.level,
+    this.module,
+    this.screen,
+    this.action,
+    required this.message,
+    this.errorCode,
+    this.userId,
+    this.empresaId,
+    this.bodegaId,
+    this.appVersionName,
+    this.appVersionCode,
+    this.buildNumber,
+    this.deviceModel,
+    this.androidVersion,
+    this.isOnline,
+    this.metadataJson,
+    required this.sentToRemote,
+    this.remoteSentAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['level'] = Variable<String>(level);
+    if (!nullToAbsent || module != null) {
+      map['module'] = Variable<String>(module);
+    }
+    if (!nullToAbsent || screen != null) {
+      map['screen'] = Variable<String>(screen);
+    }
+    if (!nullToAbsent || action != null) {
+      map['action'] = Variable<String>(action);
+    }
+    map['message'] = Variable<String>(message);
+    if (!nullToAbsent || errorCode != null) {
+      map['error_code'] = Variable<String>(errorCode);
+    }
+    if (!nullToAbsent || userId != null) {
+      map['user_id'] = Variable<String>(userId);
+    }
+    if (!nullToAbsent || empresaId != null) {
+      map['empresa_id'] = Variable<String>(empresaId);
+    }
+    if (!nullToAbsent || bodegaId != null) {
+      map['bodega_id'] = Variable<String>(bodegaId);
+    }
+    if (!nullToAbsent || appVersionName != null) {
+      map['app_version_name'] = Variable<String>(appVersionName);
+    }
+    if (!nullToAbsent || appVersionCode != null) {
+      map['app_version_code'] = Variable<int>(appVersionCode);
+    }
+    if (!nullToAbsent || buildNumber != null) {
+      map['build_number'] = Variable<String>(buildNumber);
+    }
+    if (!nullToAbsent || deviceModel != null) {
+      map['device_model'] = Variable<String>(deviceModel);
+    }
+    if (!nullToAbsent || androidVersion != null) {
+      map['android_version'] = Variable<String>(androidVersion);
+    }
+    if (!nullToAbsent || isOnline != null) {
+      map['is_online'] = Variable<bool>(isOnline);
+    }
+    if (!nullToAbsent || metadataJson != null) {
+      map['metadata_json'] = Variable<String>(metadataJson);
+    }
+    map['sent_to_remote'] = Variable<bool>(sentToRemote);
+    if (!nullToAbsent || remoteSentAt != null) {
+      map['remote_sent_at'] = Variable<DateTime>(remoteSentAt);
+    }
+    return map;
+  }
+
+  AppLogsCompanion toCompanion(bool nullToAbsent) {
+    return AppLogsCompanion(
+      id: Value(id),
+      createdAt: Value(createdAt),
+      level: Value(level),
+      module: module == null && nullToAbsent
+          ? const Value.absent()
+          : Value(module),
+      screen: screen == null && nullToAbsent
+          ? const Value.absent()
+          : Value(screen),
+      action: action == null && nullToAbsent
+          ? const Value.absent()
+          : Value(action),
+      message: Value(message),
+      errorCode: errorCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(errorCode),
+      userId: userId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(userId),
+      empresaId: empresaId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(empresaId),
+      bodegaId: bodegaId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(bodegaId),
+      appVersionName: appVersionName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(appVersionName),
+      appVersionCode: appVersionCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(appVersionCode),
+      buildNumber: buildNumber == null && nullToAbsent
+          ? const Value.absent()
+          : Value(buildNumber),
+      deviceModel: deviceModel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deviceModel),
+      androidVersion: androidVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(androidVersion),
+      isOnline: isOnline == null && nullToAbsent
+          ? const Value.absent()
+          : Value(isOnline),
+      metadataJson: metadataJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(metadataJson),
+      sentToRemote: Value(sentToRemote),
+      remoteSentAt: remoteSentAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remoteSentAt),
+    );
+  }
+
+  factory AppLog.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AppLog(
+      id: serializer.fromJson<String>(json['id']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      level: serializer.fromJson<String>(json['level']),
+      module: serializer.fromJson<String?>(json['module']),
+      screen: serializer.fromJson<String?>(json['screen']),
+      action: serializer.fromJson<String?>(json['action']),
+      message: serializer.fromJson<String>(json['message']),
+      errorCode: serializer.fromJson<String?>(json['errorCode']),
+      userId: serializer.fromJson<String?>(json['userId']),
+      empresaId: serializer.fromJson<String?>(json['empresaId']),
+      bodegaId: serializer.fromJson<String?>(json['bodegaId']),
+      appVersionName: serializer.fromJson<String?>(json['appVersionName']),
+      appVersionCode: serializer.fromJson<int?>(json['appVersionCode']),
+      buildNumber: serializer.fromJson<String?>(json['buildNumber']),
+      deviceModel: serializer.fromJson<String?>(json['deviceModel']),
+      androidVersion: serializer.fromJson<String?>(json['androidVersion']),
+      isOnline: serializer.fromJson<bool?>(json['isOnline']),
+      metadataJson: serializer.fromJson<String?>(json['metadataJson']),
+      sentToRemote: serializer.fromJson<bool>(json['sentToRemote']),
+      remoteSentAt: serializer.fromJson<DateTime?>(json['remoteSentAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'level': serializer.toJson<String>(level),
+      'module': serializer.toJson<String?>(module),
+      'screen': serializer.toJson<String?>(screen),
+      'action': serializer.toJson<String?>(action),
+      'message': serializer.toJson<String>(message),
+      'errorCode': serializer.toJson<String?>(errorCode),
+      'userId': serializer.toJson<String?>(userId),
+      'empresaId': serializer.toJson<String?>(empresaId),
+      'bodegaId': serializer.toJson<String?>(bodegaId),
+      'appVersionName': serializer.toJson<String?>(appVersionName),
+      'appVersionCode': serializer.toJson<int?>(appVersionCode),
+      'buildNumber': serializer.toJson<String?>(buildNumber),
+      'deviceModel': serializer.toJson<String?>(deviceModel),
+      'androidVersion': serializer.toJson<String?>(androidVersion),
+      'isOnline': serializer.toJson<bool?>(isOnline),
+      'metadataJson': serializer.toJson<String?>(metadataJson),
+      'sentToRemote': serializer.toJson<bool>(sentToRemote),
+      'remoteSentAt': serializer.toJson<DateTime?>(remoteSentAt),
+    };
+  }
+
+  AppLog copyWith({
+    String? id,
+    DateTime? createdAt,
+    String? level,
+    Value<String?> module = const Value.absent(),
+    Value<String?> screen = const Value.absent(),
+    Value<String?> action = const Value.absent(),
+    String? message,
+    Value<String?> errorCode = const Value.absent(),
+    Value<String?> userId = const Value.absent(),
+    Value<String?> empresaId = const Value.absent(),
+    Value<String?> bodegaId = const Value.absent(),
+    Value<String?> appVersionName = const Value.absent(),
+    Value<int?> appVersionCode = const Value.absent(),
+    Value<String?> buildNumber = const Value.absent(),
+    Value<String?> deviceModel = const Value.absent(),
+    Value<String?> androidVersion = const Value.absent(),
+    Value<bool?> isOnline = const Value.absent(),
+    Value<String?> metadataJson = const Value.absent(),
+    bool? sentToRemote,
+    Value<DateTime?> remoteSentAt = const Value.absent(),
+  }) => AppLog(
+    id: id ?? this.id,
+    createdAt: createdAt ?? this.createdAt,
+    level: level ?? this.level,
+    module: module.present ? module.value : this.module,
+    screen: screen.present ? screen.value : this.screen,
+    action: action.present ? action.value : this.action,
+    message: message ?? this.message,
+    errorCode: errorCode.present ? errorCode.value : this.errorCode,
+    userId: userId.present ? userId.value : this.userId,
+    empresaId: empresaId.present ? empresaId.value : this.empresaId,
+    bodegaId: bodegaId.present ? bodegaId.value : this.bodegaId,
+    appVersionName: appVersionName.present
+        ? appVersionName.value
+        : this.appVersionName,
+    appVersionCode: appVersionCode.present
+        ? appVersionCode.value
+        : this.appVersionCode,
+    buildNumber: buildNumber.present ? buildNumber.value : this.buildNumber,
+    deviceModel: deviceModel.present ? deviceModel.value : this.deviceModel,
+    androidVersion: androidVersion.present
+        ? androidVersion.value
+        : this.androidVersion,
+    isOnline: isOnline.present ? isOnline.value : this.isOnline,
+    metadataJson: metadataJson.present ? metadataJson.value : this.metadataJson,
+    sentToRemote: sentToRemote ?? this.sentToRemote,
+    remoteSentAt: remoteSentAt.present ? remoteSentAt.value : this.remoteSentAt,
+  );
+  AppLog copyWithCompanion(AppLogsCompanion data) {
+    return AppLog(
+      id: data.id.present ? data.id.value : this.id,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      level: data.level.present ? data.level.value : this.level,
+      module: data.module.present ? data.module.value : this.module,
+      screen: data.screen.present ? data.screen.value : this.screen,
+      action: data.action.present ? data.action.value : this.action,
+      message: data.message.present ? data.message.value : this.message,
+      errorCode: data.errorCode.present ? data.errorCode.value : this.errorCode,
+      userId: data.userId.present ? data.userId.value : this.userId,
+      empresaId: data.empresaId.present ? data.empresaId.value : this.empresaId,
+      bodegaId: data.bodegaId.present ? data.bodegaId.value : this.bodegaId,
+      appVersionName: data.appVersionName.present
+          ? data.appVersionName.value
+          : this.appVersionName,
+      appVersionCode: data.appVersionCode.present
+          ? data.appVersionCode.value
+          : this.appVersionCode,
+      buildNumber: data.buildNumber.present
+          ? data.buildNumber.value
+          : this.buildNumber,
+      deviceModel: data.deviceModel.present
+          ? data.deviceModel.value
+          : this.deviceModel,
+      androidVersion: data.androidVersion.present
+          ? data.androidVersion.value
+          : this.androidVersion,
+      isOnline: data.isOnline.present ? data.isOnline.value : this.isOnline,
+      metadataJson: data.metadataJson.present
+          ? data.metadataJson.value
+          : this.metadataJson,
+      sentToRemote: data.sentToRemote.present
+          ? data.sentToRemote.value
+          : this.sentToRemote,
+      remoteSentAt: data.remoteSentAt.present
+          ? data.remoteSentAt.value
+          : this.remoteSentAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AppLog(')
+          ..write('id: $id, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('level: $level, ')
+          ..write('module: $module, ')
+          ..write('screen: $screen, ')
+          ..write('action: $action, ')
+          ..write('message: $message, ')
+          ..write('errorCode: $errorCode, ')
+          ..write('userId: $userId, ')
+          ..write('empresaId: $empresaId, ')
+          ..write('bodegaId: $bodegaId, ')
+          ..write('appVersionName: $appVersionName, ')
+          ..write('appVersionCode: $appVersionCode, ')
+          ..write('buildNumber: $buildNumber, ')
+          ..write('deviceModel: $deviceModel, ')
+          ..write('androidVersion: $androidVersion, ')
+          ..write('isOnline: $isOnline, ')
+          ..write('metadataJson: $metadataJson, ')
+          ..write('sentToRemote: $sentToRemote, ')
+          ..write('remoteSentAt: $remoteSentAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    createdAt,
+    level,
+    module,
+    screen,
+    action,
+    message,
+    errorCode,
+    userId,
+    empresaId,
+    bodegaId,
+    appVersionName,
+    appVersionCode,
+    buildNumber,
+    deviceModel,
+    androidVersion,
+    isOnline,
+    metadataJson,
+    sentToRemote,
+    remoteSentAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AppLog &&
+          other.id == this.id &&
+          other.createdAt == this.createdAt &&
+          other.level == this.level &&
+          other.module == this.module &&
+          other.screen == this.screen &&
+          other.action == this.action &&
+          other.message == this.message &&
+          other.errorCode == this.errorCode &&
+          other.userId == this.userId &&
+          other.empresaId == this.empresaId &&
+          other.bodegaId == this.bodegaId &&
+          other.appVersionName == this.appVersionName &&
+          other.appVersionCode == this.appVersionCode &&
+          other.buildNumber == this.buildNumber &&
+          other.deviceModel == this.deviceModel &&
+          other.androidVersion == this.androidVersion &&
+          other.isOnline == this.isOnline &&
+          other.metadataJson == this.metadataJson &&
+          other.sentToRemote == this.sentToRemote &&
+          other.remoteSentAt == this.remoteSentAt);
+}
+
+class AppLogsCompanion extends UpdateCompanion<AppLog> {
+  final Value<String> id;
+  final Value<DateTime> createdAt;
+  final Value<String> level;
+  final Value<String?> module;
+  final Value<String?> screen;
+  final Value<String?> action;
+  final Value<String> message;
+  final Value<String?> errorCode;
+  final Value<String?> userId;
+  final Value<String?> empresaId;
+  final Value<String?> bodegaId;
+  final Value<String?> appVersionName;
+  final Value<int?> appVersionCode;
+  final Value<String?> buildNumber;
+  final Value<String?> deviceModel;
+  final Value<String?> androidVersion;
+  final Value<bool?> isOnline;
+  final Value<String?> metadataJson;
+  final Value<bool> sentToRemote;
+  final Value<DateTime?> remoteSentAt;
+  final Value<int> rowid;
+  const AppLogsCompanion({
+    this.id = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.level = const Value.absent(),
+    this.module = const Value.absent(),
+    this.screen = const Value.absent(),
+    this.action = const Value.absent(),
+    this.message = const Value.absent(),
+    this.errorCode = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.empresaId = const Value.absent(),
+    this.bodegaId = const Value.absent(),
+    this.appVersionName = const Value.absent(),
+    this.appVersionCode = const Value.absent(),
+    this.buildNumber = const Value.absent(),
+    this.deviceModel = const Value.absent(),
+    this.androidVersion = const Value.absent(),
+    this.isOnline = const Value.absent(),
+    this.metadataJson = const Value.absent(),
+    this.sentToRemote = const Value.absent(),
+    this.remoteSentAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AppLogsCompanion.insert({
+    required String id,
+    this.createdAt = const Value.absent(),
+    required String level,
+    this.module = const Value.absent(),
+    this.screen = const Value.absent(),
+    this.action = const Value.absent(),
+    required String message,
+    this.errorCode = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.empresaId = const Value.absent(),
+    this.bodegaId = const Value.absent(),
+    this.appVersionName = const Value.absent(),
+    this.appVersionCode = const Value.absent(),
+    this.buildNumber = const Value.absent(),
+    this.deviceModel = const Value.absent(),
+    this.androidVersion = const Value.absent(),
+    this.isOnline = const Value.absent(),
+    this.metadataJson = const Value.absent(),
+    this.sentToRemote = const Value.absent(),
+    this.remoteSentAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       level = Value(level),
+       message = Value(message);
+  static Insertable<AppLog> custom({
+    Expression<String>? id,
+    Expression<DateTime>? createdAt,
+    Expression<String>? level,
+    Expression<String>? module,
+    Expression<String>? screen,
+    Expression<String>? action,
+    Expression<String>? message,
+    Expression<String>? errorCode,
+    Expression<String>? userId,
+    Expression<String>? empresaId,
+    Expression<String>? bodegaId,
+    Expression<String>? appVersionName,
+    Expression<int>? appVersionCode,
+    Expression<String>? buildNumber,
+    Expression<String>? deviceModel,
+    Expression<String>? androidVersion,
+    Expression<bool>? isOnline,
+    Expression<String>? metadataJson,
+    Expression<bool>? sentToRemote,
+    Expression<DateTime>? remoteSentAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (createdAt != null) 'created_at': createdAt,
+      if (level != null) 'level': level,
+      if (module != null) 'module': module,
+      if (screen != null) 'screen': screen,
+      if (action != null) 'action': action,
+      if (message != null) 'message': message,
+      if (errorCode != null) 'error_code': errorCode,
+      if (userId != null) 'user_id': userId,
+      if (empresaId != null) 'empresa_id': empresaId,
+      if (bodegaId != null) 'bodega_id': bodegaId,
+      if (appVersionName != null) 'app_version_name': appVersionName,
+      if (appVersionCode != null) 'app_version_code': appVersionCode,
+      if (buildNumber != null) 'build_number': buildNumber,
+      if (deviceModel != null) 'device_model': deviceModel,
+      if (androidVersion != null) 'android_version': androidVersion,
+      if (isOnline != null) 'is_online': isOnline,
+      if (metadataJson != null) 'metadata_json': metadataJson,
+      if (sentToRemote != null) 'sent_to_remote': sentToRemote,
+      if (remoteSentAt != null) 'remote_sent_at': remoteSentAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AppLogsCompanion copyWith({
+    Value<String>? id,
+    Value<DateTime>? createdAt,
+    Value<String>? level,
+    Value<String?>? module,
+    Value<String?>? screen,
+    Value<String?>? action,
+    Value<String>? message,
+    Value<String?>? errorCode,
+    Value<String?>? userId,
+    Value<String?>? empresaId,
+    Value<String?>? bodegaId,
+    Value<String?>? appVersionName,
+    Value<int?>? appVersionCode,
+    Value<String?>? buildNumber,
+    Value<String?>? deviceModel,
+    Value<String?>? androidVersion,
+    Value<bool?>? isOnline,
+    Value<String?>? metadataJson,
+    Value<bool>? sentToRemote,
+    Value<DateTime?>? remoteSentAt,
+    Value<int>? rowid,
+  }) {
+    return AppLogsCompanion(
+      id: id ?? this.id,
+      createdAt: createdAt ?? this.createdAt,
+      level: level ?? this.level,
+      module: module ?? this.module,
+      screen: screen ?? this.screen,
+      action: action ?? this.action,
+      message: message ?? this.message,
+      errorCode: errorCode ?? this.errorCode,
+      userId: userId ?? this.userId,
+      empresaId: empresaId ?? this.empresaId,
+      bodegaId: bodegaId ?? this.bodegaId,
+      appVersionName: appVersionName ?? this.appVersionName,
+      appVersionCode: appVersionCode ?? this.appVersionCode,
+      buildNumber: buildNumber ?? this.buildNumber,
+      deviceModel: deviceModel ?? this.deviceModel,
+      androidVersion: androidVersion ?? this.androidVersion,
+      isOnline: isOnline ?? this.isOnline,
+      metadataJson: metadataJson ?? this.metadataJson,
+      sentToRemote: sentToRemote ?? this.sentToRemote,
+      remoteSentAt: remoteSentAt ?? this.remoteSentAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (level.present) {
+      map['level'] = Variable<String>(level.value);
+    }
+    if (module.present) {
+      map['module'] = Variable<String>(module.value);
+    }
+    if (screen.present) {
+      map['screen'] = Variable<String>(screen.value);
+    }
+    if (action.present) {
+      map['action'] = Variable<String>(action.value);
+    }
+    if (message.present) {
+      map['message'] = Variable<String>(message.value);
+    }
+    if (errorCode.present) {
+      map['error_code'] = Variable<String>(errorCode.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (empresaId.present) {
+      map['empresa_id'] = Variable<String>(empresaId.value);
+    }
+    if (bodegaId.present) {
+      map['bodega_id'] = Variable<String>(bodegaId.value);
+    }
+    if (appVersionName.present) {
+      map['app_version_name'] = Variable<String>(appVersionName.value);
+    }
+    if (appVersionCode.present) {
+      map['app_version_code'] = Variable<int>(appVersionCode.value);
+    }
+    if (buildNumber.present) {
+      map['build_number'] = Variable<String>(buildNumber.value);
+    }
+    if (deviceModel.present) {
+      map['device_model'] = Variable<String>(deviceModel.value);
+    }
+    if (androidVersion.present) {
+      map['android_version'] = Variable<String>(androidVersion.value);
+    }
+    if (isOnline.present) {
+      map['is_online'] = Variable<bool>(isOnline.value);
+    }
+    if (metadataJson.present) {
+      map['metadata_json'] = Variable<String>(metadataJson.value);
+    }
+    if (sentToRemote.present) {
+      map['sent_to_remote'] = Variable<bool>(sentToRemote.value);
+    }
+    if (remoteSentAt.present) {
+      map['remote_sent_at'] = Variable<DateTime>(remoteSentAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AppLogsCompanion(')
+          ..write('id: $id, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('level: $level, ')
+          ..write('module: $module, ')
+          ..write('screen: $screen, ')
+          ..write('action: $action, ')
+          ..write('message: $message, ')
+          ..write('errorCode: $errorCode, ')
+          ..write('userId: $userId, ')
+          ..write('empresaId: $empresaId, ')
+          ..write('bodegaId: $bodegaId, ')
+          ..write('appVersionName: $appVersionName, ')
+          ..write('appVersionCode: $appVersionCode, ')
+          ..write('buildNumber: $buildNumber, ')
+          ..write('deviceModel: $deviceModel, ')
+          ..write('androidVersion: $androidVersion, ')
+          ..write('isOnline: $isOnline, ')
+          ..write('metadataJson: $metadataJson, ')
+          ..write('sentToRemote: $sentToRemote, ')
+          ..write('remoteSentAt: $remoteSentAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -16316,6 +17456,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $AssistantEntrySessionsTable(this);
   late final $AssistantEntrySessionItemsTable assistantEntrySessionItems =
       $AssistantEntrySessionItemsTable(this);
+  late final $AppLogsTable appLogs = $AppLogsTable(this);
   late final AuthDao authDao = AuthDao(this as AppDatabase);
   late final InventoryDao inventoryDao = InventoryDao(this as AppDatabase);
   late final SalesDao salesDao = SalesDao(this as AppDatabase);
@@ -16346,6 +17487,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     detalleMovimientos,
     assistantEntrySessions,
     assistantEntrySessionItems,
+    appLogs,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -35259,6 +36401,501 @@ typedef $$AssistantEntrySessionItemsTableProcessedTableManager =
       AssistantEntrySessionItem,
       PrefetchHooks Function({bool sessionId, bool productId, bool categoryId})
     >;
+typedef $$AppLogsTableCreateCompanionBuilder =
+    AppLogsCompanion Function({
+      required String id,
+      Value<DateTime> createdAt,
+      required String level,
+      Value<String?> module,
+      Value<String?> screen,
+      Value<String?> action,
+      required String message,
+      Value<String?> errorCode,
+      Value<String?> userId,
+      Value<String?> empresaId,
+      Value<String?> bodegaId,
+      Value<String?> appVersionName,
+      Value<int?> appVersionCode,
+      Value<String?> buildNumber,
+      Value<String?> deviceModel,
+      Value<String?> androidVersion,
+      Value<bool?> isOnline,
+      Value<String?> metadataJson,
+      Value<bool> sentToRemote,
+      Value<DateTime?> remoteSentAt,
+      Value<int> rowid,
+    });
+typedef $$AppLogsTableUpdateCompanionBuilder =
+    AppLogsCompanion Function({
+      Value<String> id,
+      Value<DateTime> createdAt,
+      Value<String> level,
+      Value<String?> module,
+      Value<String?> screen,
+      Value<String?> action,
+      Value<String> message,
+      Value<String?> errorCode,
+      Value<String?> userId,
+      Value<String?> empresaId,
+      Value<String?> bodegaId,
+      Value<String?> appVersionName,
+      Value<int?> appVersionCode,
+      Value<String?> buildNumber,
+      Value<String?> deviceModel,
+      Value<String?> androidVersion,
+      Value<bool?> isOnline,
+      Value<String?> metadataJson,
+      Value<bool> sentToRemote,
+      Value<DateTime?> remoteSentAt,
+      Value<int> rowid,
+    });
+
+class $$AppLogsTableFilterComposer
+    extends Composer<_$AppDatabase, $AppLogsTable> {
+  $$AppLogsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get level => $composableBuilder(
+    column: $table.level,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get module => $composableBuilder(
+    column: $table.module,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get screen => $composableBuilder(
+    column: $table.screen,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get action => $composableBuilder(
+    column: $table.action,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get message => $composableBuilder(
+    column: $table.message,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get errorCode => $composableBuilder(
+    column: $table.errorCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get empresaId => $composableBuilder(
+    column: $table.empresaId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bodegaId => $composableBuilder(
+    column: $table.bodegaId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get appVersionName => $composableBuilder(
+    column: $table.appVersionName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get appVersionCode => $composableBuilder(
+    column: $table.appVersionCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get buildNumber => $composableBuilder(
+    column: $table.buildNumber,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deviceModel => $composableBuilder(
+    column: $table.deviceModel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get androidVersion => $composableBuilder(
+    column: $table.androidVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isOnline => $composableBuilder(
+    column: $table.isOnline,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get metadataJson => $composableBuilder(
+    column: $table.metadataJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get sentToRemote => $composableBuilder(
+    column: $table.sentToRemote,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get remoteSentAt => $composableBuilder(
+    column: $table.remoteSentAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$AppLogsTableOrderingComposer
+    extends Composer<_$AppDatabase, $AppLogsTable> {
+  $$AppLogsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get level => $composableBuilder(
+    column: $table.level,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get module => $composableBuilder(
+    column: $table.module,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get screen => $composableBuilder(
+    column: $table.screen,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get action => $composableBuilder(
+    column: $table.action,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get message => $composableBuilder(
+    column: $table.message,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get errorCode => $composableBuilder(
+    column: $table.errorCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get empresaId => $composableBuilder(
+    column: $table.empresaId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bodegaId => $composableBuilder(
+    column: $table.bodegaId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get appVersionName => $composableBuilder(
+    column: $table.appVersionName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get appVersionCode => $composableBuilder(
+    column: $table.appVersionCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get buildNumber => $composableBuilder(
+    column: $table.buildNumber,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deviceModel => $composableBuilder(
+    column: $table.deviceModel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get androidVersion => $composableBuilder(
+    column: $table.androidVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isOnline => $composableBuilder(
+    column: $table.isOnline,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get metadataJson => $composableBuilder(
+    column: $table.metadataJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get sentToRemote => $composableBuilder(
+    column: $table.sentToRemote,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get remoteSentAt => $composableBuilder(
+    column: $table.remoteSentAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$AppLogsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AppLogsTable> {
+  $$AppLogsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get level =>
+      $composableBuilder(column: $table.level, builder: (column) => column);
+
+  GeneratedColumn<String> get module =>
+      $composableBuilder(column: $table.module, builder: (column) => column);
+
+  GeneratedColumn<String> get screen =>
+      $composableBuilder(column: $table.screen, builder: (column) => column);
+
+  GeneratedColumn<String> get action =>
+      $composableBuilder(column: $table.action, builder: (column) => column);
+
+  GeneratedColumn<String> get message =>
+      $composableBuilder(column: $table.message, builder: (column) => column);
+
+  GeneratedColumn<String> get errorCode =>
+      $composableBuilder(column: $table.errorCode, builder: (column) => column);
+
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
+
+  GeneratedColumn<String> get empresaId =>
+      $composableBuilder(column: $table.empresaId, builder: (column) => column);
+
+  GeneratedColumn<String> get bodegaId =>
+      $composableBuilder(column: $table.bodegaId, builder: (column) => column);
+
+  GeneratedColumn<String> get appVersionName => $composableBuilder(
+    column: $table.appVersionName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get appVersionCode => $composableBuilder(
+    column: $table.appVersionCode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get buildNumber => $composableBuilder(
+    column: $table.buildNumber,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get deviceModel => $composableBuilder(
+    column: $table.deviceModel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get androidVersion => $composableBuilder(
+    column: $table.androidVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isOnline =>
+      $composableBuilder(column: $table.isOnline, builder: (column) => column);
+
+  GeneratedColumn<String> get metadataJson => $composableBuilder(
+    column: $table.metadataJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get sentToRemote => $composableBuilder(
+    column: $table.sentToRemote,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get remoteSentAt => $composableBuilder(
+    column: $table.remoteSentAt,
+    builder: (column) => column,
+  );
+}
+
+class $$AppLogsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $AppLogsTable,
+          AppLog,
+          $$AppLogsTableFilterComposer,
+          $$AppLogsTableOrderingComposer,
+          $$AppLogsTableAnnotationComposer,
+          $$AppLogsTableCreateCompanionBuilder,
+          $$AppLogsTableUpdateCompanionBuilder,
+          (AppLog, BaseReferences<_$AppDatabase, $AppLogsTable, AppLog>),
+          AppLog,
+          PrefetchHooks Function()
+        > {
+  $$AppLogsTableTableManager(_$AppDatabase db, $AppLogsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AppLogsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AppLogsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AppLogsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<String> level = const Value.absent(),
+                Value<String?> module = const Value.absent(),
+                Value<String?> screen = const Value.absent(),
+                Value<String?> action = const Value.absent(),
+                Value<String> message = const Value.absent(),
+                Value<String?> errorCode = const Value.absent(),
+                Value<String?> userId = const Value.absent(),
+                Value<String?> empresaId = const Value.absent(),
+                Value<String?> bodegaId = const Value.absent(),
+                Value<String?> appVersionName = const Value.absent(),
+                Value<int?> appVersionCode = const Value.absent(),
+                Value<String?> buildNumber = const Value.absent(),
+                Value<String?> deviceModel = const Value.absent(),
+                Value<String?> androidVersion = const Value.absent(),
+                Value<bool?> isOnline = const Value.absent(),
+                Value<String?> metadataJson = const Value.absent(),
+                Value<bool> sentToRemote = const Value.absent(),
+                Value<DateTime?> remoteSentAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AppLogsCompanion(
+                id: id,
+                createdAt: createdAt,
+                level: level,
+                module: module,
+                screen: screen,
+                action: action,
+                message: message,
+                errorCode: errorCode,
+                userId: userId,
+                empresaId: empresaId,
+                bodegaId: bodegaId,
+                appVersionName: appVersionName,
+                appVersionCode: appVersionCode,
+                buildNumber: buildNumber,
+                deviceModel: deviceModel,
+                androidVersion: androidVersion,
+                isOnline: isOnline,
+                metadataJson: metadataJson,
+                sentToRemote: sentToRemote,
+                remoteSentAt: remoteSentAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<DateTime> createdAt = const Value.absent(),
+                required String level,
+                Value<String?> module = const Value.absent(),
+                Value<String?> screen = const Value.absent(),
+                Value<String?> action = const Value.absent(),
+                required String message,
+                Value<String?> errorCode = const Value.absent(),
+                Value<String?> userId = const Value.absent(),
+                Value<String?> empresaId = const Value.absent(),
+                Value<String?> bodegaId = const Value.absent(),
+                Value<String?> appVersionName = const Value.absent(),
+                Value<int?> appVersionCode = const Value.absent(),
+                Value<String?> buildNumber = const Value.absent(),
+                Value<String?> deviceModel = const Value.absent(),
+                Value<String?> androidVersion = const Value.absent(),
+                Value<bool?> isOnline = const Value.absent(),
+                Value<String?> metadataJson = const Value.absent(),
+                Value<bool> sentToRemote = const Value.absent(),
+                Value<DateTime?> remoteSentAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AppLogsCompanion.insert(
+                id: id,
+                createdAt: createdAt,
+                level: level,
+                module: module,
+                screen: screen,
+                action: action,
+                message: message,
+                errorCode: errorCode,
+                userId: userId,
+                empresaId: empresaId,
+                bodegaId: bodegaId,
+                appVersionName: appVersionName,
+                appVersionCode: appVersionCode,
+                buildNumber: buildNumber,
+                deviceModel: deviceModel,
+                androidVersion: androidVersion,
+                isOnline: isOnline,
+                metadataJson: metadataJson,
+                sentToRemote: sentToRemote,
+                remoteSentAt: remoteSentAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$AppLogsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $AppLogsTable,
+      AppLog,
+      $$AppLogsTableFilterComposer,
+      $$AppLogsTableOrderingComposer,
+      $$AppLogsTableAnnotationComposer,
+      $$AppLogsTableCreateCompanionBuilder,
+      $$AppLogsTableUpdateCompanionBuilder,
+      (AppLog, BaseReferences<_$AppDatabase, $AppLogsTable, AppLog>),
+      AppLog,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -35312,4 +36949,6 @@ class $AppDatabaseManager {
         _db,
         _db.assistantEntrySessionItems,
       );
+  $$AppLogsTableTableManager get appLogs =>
+      $$AppLogsTableTableManager(_db, _db.appLogs);
 }
