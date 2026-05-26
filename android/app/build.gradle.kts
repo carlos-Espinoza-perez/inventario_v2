@@ -7,12 +7,31 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// Lee key.properties si existe (local o generado por CI)
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
+
+// Resuelve credenciales: key.properties tiene prioridad, luego variables de entorno
+val releaseKeyAlias: String? =
+    (keystoreProperties["keyAlias"] as? String)?.takeIf { it.isNotBlank() }
+    ?: System.getenv("KEY_ALIAS")
+
+val releaseKeyPassword: String? =
+    (keystoreProperties["keyPassword"] as? String)?.takeIf { it.isNotBlank() }
+    ?: System.getenv("KEY_PASSWORD")
+
+val releaseStorePassword: String? =
+    (keystoreProperties["storePassword"] as? String)?.takeIf { it.isNotBlank() }
+    ?: System.getenv("KEY_STORE_PASSWORD")
+
+val releaseStoreFilePath: String? =
+    (keystoreProperties["storeFile"] as? String)?.takeIf { it.isNotBlank() }
+    ?: System.getenv("KEYSTORE_PATH")
+
+val hasReleaseKeys = listOf(releaseKeyAlias, releaseKeyPassword, releaseStorePassword, releaseStoreFilePath)
+    .all { !it.isNullOrBlank() }
 
 android {
     namespace = "com.example.inventario_v2"
@@ -36,13 +55,13 @@ android {
         versionName = flutter.versionName
     }
 
-    signingConfigs {
-        create("release") {
-            if (keystorePropertiesFile.exists()) {
-                keyAlias = keystoreProperties["keyAlias"] as String
-                keyPassword = keystoreProperties["keyPassword"] as String
-                storeFile = file(keystoreProperties["storeFile"] as String)
-                storePassword = keystoreProperties["storePassword"] as String
+    if (hasReleaseKeys) {
+        signingConfigs {
+            create("release") {
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+                storeFile = file(releaseStoreFilePath!!)
+                storePassword = releaseStorePassword
             }
         }
     }
@@ -54,8 +73,7 @@ android {
         }
 
         release {
-            // Usa keystore release si key.properties existe, si no cae a debug (solo local)
-            signingConfig = if (keystorePropertiesFile.exists()) {
+            signingConfig = if (hasReleaseKeys) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")

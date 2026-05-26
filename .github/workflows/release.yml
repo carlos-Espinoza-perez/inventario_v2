@@ -58,6 +58,11 @@ jobs:
           echo "apk_name=inventario-v${VERSION_NAME}.apk" >> $GITHUB_OUTPUT
 
       - name: Build APK release
+        env:
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEYSTORE_PATH: ${{ github.workspace }}/android/app/keystore.jks
         run: flutter build apk --release
 
       - name: Renombrar APK
