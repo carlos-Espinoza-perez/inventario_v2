@@ -95,6 +95,7 @@ class SyncRepository {
       'inventarios',
       await _db.inventoryDao.getPendingInventarios(),
       _inventarioToJson,
+      onConflict: 'id',
     );
     await _push(
       'cliente',
@@ -509,7 +510,7 @@ class SyncRepository {
           await _markSynced(localTable, [id]);
         } catch (itemError) {
           AppLogger.error(
-            '[Sync][Push] Error en registro individual $id en $remoteTable',
+            '[Sync][Push] Error en registro individual $id en $remoteTable | payload: $payload',
             itemError,
           );
           await _markSyncError(localTable, [id], itemError.toString());
@@ -805,6 +806,7 @@ class SyncRepository {
     final map = {
       ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
       'producto_id': variante.productoId,
+      'producto_variante_id': r.productoVarianteId,
       'bodega_id': r.bodegaId,
       'cantidad_actual': r.cantidadActual,
       'cantidad_reservada': r.cantidadReservada,
@@ -812,9 +814,9 @@ class SyncRepository {
       'precio_venta': r.precioVenta,
       'costo_promedio': r.costoPromedio,
       'actualizado_por': r.actualizadoPor,
+      'estado': r.estado,
       'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
     };
-    map.remove('fecha_registro');
     return map;
   }
 
@@ -869,7 +871,16 @@ class SyncRepository {
   }
 
   Map<String, dynamic> _detalleMovimientoToJson(DetalleMovimiento r) {
-    final map = {
+    // cargos_adicionales en Supabase es JSONB, debemos enviar objeto parseado
+    dynamic cargosValue;
+    if (r.cargosAdicionalesJson != null) {
+      try {
+        cargosValue = jsonDecode(r.cargosAdicionalesJson!);
+      } catch (_) {
+        cargosValue = null;
+      }
+    }
+    return {
       ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
       'movimiento_producto_id': r.movimientoId,
       'producto_id': r.productoId,
@@ -877,11 +888,10 @@ class SyncRepository {
       'cantidad': r.cantidad,
       'costo_proveedor': r.costoProveedor,
       'costo_unitario_final': r.costoUnitarioFinal,
+      'cargos_adicionales': cargosValue,
       'variantes_json': r.variantesJson,
       'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
     };
-    map.remove('fecha_registro');
-    return map;
   }
 
   Map<String, dynamic> _ventaToJson(Venta r) {
@@ -906,10 +916,11 @@ class SyncRepository {
   }
 
   Map<String, dynamic> _detalleVentaToJson(DetalleVenta r) {
-    final map = {
+    return {
       ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
       'venta_id': r.ventaId,
       'producto_id': r.productoId,
+      'producto_variante_id': r.productoVarianteId,
       'cantidad': r.cantidad,
       'precio_unitario': r.precioUnitario,
       'descuento': r.descuento,
@@ -917,8 +928,6 @@ class SyncRepository {
       'costo_historico_compra': r.costoHistoricoCompra,
       'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
     };
-    map.remove('fecha_registro');
-    return map;
   }
 
   Map<String, dynamic> _pagoVentaToJson(PagosVenta r) => {
@@ -1211,7 +1220,7 @@ class SyncRepository {
     productoVarianteId: Value(_text(j['producto_variante_id'])),
     cantidad: _double(j['cantidad']),
     costoProveedor: Value(_double(j['costo_proveedor'])),
-    cargosAdicionalesJson: Value(_json(j['cargos_adicionales_json'])),
+    cargosAdicionalesJson: Value(_json(j['cargos_adicionales'] ?? j['cargos_adicionales_json'])),
     costoUnitarioFinal: Value(_double(j['costo_unitario_final'])),
     variantesJson: Value(_json(j['variantes_json'])),
     createdAt: Value(_date(j['fecha_registro'])),

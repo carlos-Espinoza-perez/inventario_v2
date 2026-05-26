@@ -57,7 +57,7 @@ class SalesRepository {
       final producto = await _db.inventoryDao.getProductoById(productoId);
       detalles.add(
         VentaDetalleInput(
-          id: '${ventaId}_${productoId}_${DateTime.now().microsecondsSinceEpoch}',
+          id: const Uuid().v4(),
           productoId: productoId,
           productoVarianteId: item['variantId'] as String?,
           cantidad: cantidad,
