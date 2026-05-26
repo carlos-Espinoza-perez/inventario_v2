@@ -149,6 +149,20 @@ class InventarioRepository {
     );
   }
 
+  Future<void> actualizarCostoVariante({
+    required String productId,
+    required String productVariantId,
+    required String? bodegaId,
+    required double costo,
+  }) {
+    return _db.inventoryDao.actualizarCostoVariante(
+      productoId: productId,
+      productoVarianteId: productVariantId,
+      bodegaId: bodegaId,
+      costo: costo,
+    );
+  }
+
   Future<TransferItemDraft?> crearBorradorTrasladoDesdeCodigo({
     required String query,
     required String bodegaOrigenId,

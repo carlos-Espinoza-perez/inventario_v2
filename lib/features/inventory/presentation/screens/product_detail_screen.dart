@@ -69,6 +69,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   final Map<String, double> _editedPrices = {};
+  final Map<String, double> _editedCosts = {};
 
   @override
   void initState() {
@@ -149,7 +150,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
             error: (_, _) => const SizedBox.shrink(),
             data: (variants) => _ProductSummaryCard(
               product: product,
-              variants: _groupVariantRows(_applyEditedPrices(variants)),
+              variants: _groupVariantRows(_applyEditedValues(variants)),
             ),
           ),
           const SizedBox(height: 16),
@@ -163,7 +164,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
             error: (e, _) => Text('Error al cargar variantes: $e'),
             data: (variants) {
               final groupedVariants = _groupVariantRows(
-                _applyEditedPrices(variants),
+                _applyEditedValues(variants),
               );
               if (groupedVariants.isEmpty) {
                 return _SoftCard(
@@ -343,8 +344,15 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
     }
 
     final currentPrice = _asDouble(variant['precio']) ?? 0;
+    final currentCost = _asDouble(variant['costo']) ?? 0;
 
-    final savedPrice = await showModalBottomSheet<double>(
+    final authorizationAsync = ref.read(authorizationStateProvider);
+    final canEditCost = authorizationAsync.maybeWhen(
+      data: (authorization) => authorization.isAdmin,
+      orElse: () => false,
+    );
+
+    final result = await showModalBottomSheet<Map<String, double>>(
       context: context,
       isScrollControlled: true,
       builder: (sheetContext) {
@@ -353,30 +361,51 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
           variant: variant,
           bodegaId: widget.bodegaId,
           currentPrice: currentPrice,
+          currentCost: currentCost,
+          canEditCost: canEditCost,
         );
       },
     );
 
-    if (savedPrice != null) {
+    if (result != null) {
+      final savedPrice = result['precio'];
+      final savedCost = result['costo'];
       setState(() {
-        _editedPrices[variantId] = savedPrice;
+        if (savedPrice != null) {
+          _editedPrices[variantId] = savedPrice;
+        }
+        if (savedCost != null) {
+          _editedCosts[variantId] = savedCost;
+        }
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Precio actualizado correctamente')),
+        const SnackBar(content: Text('Valores actualizados correctamente')),
       );
     }
   }
 
-  List<Map<String, dynamic>> _applyEditedPrices(
+  List<Map<String, dynamic>> _applyEditedValues(
     List<Map<String, dynamic>> variants,
   ) {
-    if (_editedPrices.isEmpty) return variants;
+    if (_editedPrices.isEmpty && _editedCosts.isEmpty) return variants;
     return variants.map((variant) {
       final variantId = variant['varianteId']?.toString();
-      final editedPrice = variantId == null ? null : _editedPrices[variantId];
-      if (editedPrice == null) return variant;
-      return {...variant, 'precio': editedPrice};
+      if (variantId == null) return variant;
+
+      var updatedVariant = {...variant};
+
+      final editedPrice = _editedPrices[variantId];
+      if (editedPrice != null) {
+        updatedVariant['precio'] = editedPrice;
+      }
+
+      final editedCost = _editedCosts[variantId];
+      if (editedCost != null) {
+        updatedVariant['costo'] = editedCost;
+      }
+
+      return updatedVariant;
     }).toList();
   }
 }
@@ -386,12 +415,16 @@ class _EditPriceSheet extends ConsumerStatefulWidget {
   final Map<String, dynamic> variant;
   final String? bodegaId;
   final double currentPrice;
+  final double currentCost;
+  final bool canEditCost;
 
   const _EditPriceSheet({
     required this.productId,
     required this.variant,
     required this.bodegaId,
     required this.currentPrice,
+    required this.currentCost,
+    required this.canEditCost,
   });
 
   @override
@@ -399,31 +432,48 @@ class _EditPriceSheet extends ConsumerStatefulWidget {
 }
 
 class _EditPriceSheetState extends ConsumerState<_EditPriceSheet> {
-  late final TextEditingController _controller;
-  String? _errorText;
+  late final TextEditingController _priceController;
+  late final TextEditingController _costController;
+  String? _priceErrorText;
+  String? _costErrorText;
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(
+    _priceController = TextEditingController(
       text: _formatPriceInput(widget.currentPrice),
+    );
+    _costController = TextEditingController(
+      text: _formatPriceInput(widget.currentCost),
     );
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _priceController.dispose();
+    _costController.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
-    final parsed = _parseMoneyInput(_controller.text);
-    if (parsed == null || parsed < 0) {
+    final parsedPrice = _parseMoneyInput(_priceController.text);
+    if (parsedPrice == null || parsedPrice < 0) {
       setState(() {
-        _errorText = 'Ingresa un precio valido mayor o igual a 0';
+        _priceErrorText = 'Ingresa un precio válido mayor o igual a 0';
       });
       return;
+    }
+
+    double? parsedCost;
+    if (widget.canEditCost) {
+      parsedCost = _parseMoneyInput(_costController.text);
+      if (parsedCost == null || parsedCost < 0) {
+        setState(() {
+          _costErrorText = 'Ingresa un costo válido mayor o igual a 0';
+        });
+        return;
+      }
     }
 
     setState(() {
@@ -432,15 +482,46 @@ class _EditPriceSheetState extends ConsumerState<_EditPriceSheet> {
 
     try {
       final variantId = widget.variant['varianteId']?.toString();
+      
+      // 1. Guardar precio de venta
       await ref
           .read(inventarioRepositoryProvider)
           .actualizarPrecioVentaVariante(
             productId: widget.productId,
             productVariantId: variantId!,
             bodegaId: widget.bodegaId,
-            precioVenta: parsed,
+            precioVenta: parsedPrice,
           );
-      if (mounted) Navigator.pop(context, parsed);
+
+      // 2. Guardar costo si tiene permiso
+      if (widget.canEditCost && parsedCost != null) {
+        await ref
+            .read(inventarioRepositoryProvider)
+            .actualizarCostoVariante(
+              productId: widget.productId,
+              productVariantId: variantId,
+              bodegaId: widget.bodegaId,
+              costo: parsedCost,
+            );
+      }
+
+      // Invalida los providers correspondientes para refrescar reactivamente
+      ref.invalidate(productVariantsProvider((
+        id: widget.productId,
+        bodegaId: widget.bodegaId,
+      )));
+      ref.invalidate(productDetailProvider(widget.productId));
+      ref.invalidate(productPriceHistoryProvider((
+        id: widget.productId,
+        bodegaId: widget.bodegaId,
+      )));
+
+      if (mounted) {
+        Navigator.pop(context, {
+          'precio': parsedPrice,
+          if (parsedCost != null) 'costo': parsedCost,
+        });
+      }
     } catch (_) {
       setState(() {
         _isSaving = false;
@@ -449,7 +530,7 @@ class _EditPriceSheetState extends ConsumerState<_EditPriceSheet> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'No se pudo actualizar el precio. Intenta nuevamente.',
+            'No se pudo actualizar los valores. Intenta nuevamente.',
           ),
         ),
       );
@@ -470,7 +551,7 @@ class _EditPriceSheetState extends ConsumerState<_EditPriceSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Editar precio de venta',
+            widget.canEditCost ? 'Editar precio y costo' : 'Editar precio de venta',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w800,
             ),
@@ -485,24 +566,45 @@ class _EditPriceSheetState extends ConsumerState<_EditPriceSheet> {
           ),
           const SizedBox(height: 16),
           TextField(
-            controller: _controller,
-            autofocus: true,
+            controller: _priceController,
+            autofocus: !widget.canEditCost,
             keyboardType: const TextInputType.numberWithOptions(
               decimal: true,
             ),
             decoration: InputDecoration(
-              labelText: 'Nuevo precio',
+              labelText: 'Nuevo precio de venta',
               prefixText: 'C\$ ',
-              errorText: _errorText,
+              errorText: _priceErrorText,
               border: const OutlineInputBorder(),
             ),
             onChanged: (_) {
-              if (_errorText != null) {
-                setState(() => _errorText = null);
+              if (_priceErrorText != null) {
+                setState(() => _priceErrorText = null);
               }
             },
-            onSubmitted: _isSaving ? null : (_) => _save(),
           ),
+          if (widget.canEditCost) ...[
+            const SizedBox(height: 16),
+            TextField(
+              controller: _costController,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: InputDecoration(
+                labelText: 'Nuevo costo',
+                prefixText: 'C\$ ',
+                errorText: _costErrorText,
+                border: const OutlineInputBorder(),
+              ),
+              onChanged: (_) {
+                if (_costErrorText != null) {
+                  setState(() => _costErrorText = null);
+                }
+              },
+              onSubmitted: _isSaving ? null : (_) => _save(),
+            ),
+          ],
           const SizedBox(height: 18),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
