@@ -1445,6 +1445,19 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
         ),
       );
     }
+
+    // Actualizar ultimoCosto en el producto para que las ventas capturen el costo correcto
+    if (costoPromedio > 0) {
+      await (update(
+        productos,
+      )..where((tbl) => tbl.id.equals(productoId))).write(
+        ProductosCompanion(
+          ultimoCosto: Value(costoPromedio),
+          updatedAt: Value(now),
+          syncStatus: const Value('pending_update'),
+        ),
+      );
+    }
   }
 
   Future<String> _ensureDefaultVariantForProducto({
