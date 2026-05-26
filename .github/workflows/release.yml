@@ -33,7 +33,10 @@ jobs:
       - name: Restaurar keystore
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/keystore.jks
-          printf "storePassword=${{ secrets.KEY_STORE_PASSWORD }}\nkeyPassword=${{ secrets.KEY_PASSWORD }}\nkeyAlias=${{ secrets.KEY_ALIAS }}\nstoreFile=keystore.jks\n" > android/key.properties
+          printf "storePassword=${{ secrets.KEY_STORE_PASSWORD }}\nkeyPassword=${{ secrets.KEY_PASSWORD }}\nkeyAlias=${{ secrets.KEY_ALIAS }}\nstoreFile=app/keystore.jks\n" > android/key.properties
+          echo "--- Verificando keystore ---"
+          ls -lh android/app/keystore.jks
+          cat android/key.properties
 
       - name: Crear .env
         run: |
