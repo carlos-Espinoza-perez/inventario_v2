@@ -1,6 +1,5 @@
 name: Release APK
 
-# Solo se dispara cuando se hace push de un tag con formato vX.Y.Z
 on:
   push:
     tags:
@@ -10,48 +9,39 @@ jobs:
   build-and-release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # necesario para crear GitHub Releases y hacer commit
+      contents: write
 
     steps:
-      # ── 1. Checkout ────────────────────────────────────────────────────────
       - name: Checkout código
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # ── 2. Java 17 ─────────────────────────────────────────────────────────
       - name: Configurar Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      # ── 3. Flutter ─────────────────────────────────────────────────────────
       - name: Configurar Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      # ── 4. Keystore ────────────────────────────────────────────────────────
-      # El keystore se guarda en Base64 como secret KEYSTORE_BASE64.
-      # key.properties se genera aquí para que build.gradle.kts lo lea.
       - name: Restaurar keystore
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/keystore.jks
-          cat > android/key.properties <<EOF
-          storePassword=${{ secrets.KEY_STORE_PASSWORD }}
-          keyPassword=${{ secrets.KEY_PASSWORD }}
-          keyAlias=${{ secrets.KEY_ALIAS }}
-          storeFile=keystore.jks
-          EOF
+          printf "storePassword=${{ secrets.KEY_STORE_PASSWORD }}\nkeyPassword=${{ secrets.KEY_PASSWORD }}\nkeyAlias=${{ secrets.KEY_ALIAS }}\nstoreFile=keystore.jks\n" > android/key.properties
 
-      # ── 5. Dependencias ────────────────────────────────────────────────────
+      - name: Crear .env
+        run: |
+          printf "SUPABASE_URL=${{ secrets.SUPABASE_URL }}\nSUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}\nSUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}\nOPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}\nOPENAI_MODEL=${{ secrets.OPENAI_MODEL }}\nOPENAI_TEMPERATURE=${{ secrets.OPENAI_TEMPERATURE }}\nOPENAI_MAX_TOKENS=${{ secrets.OPENAI_MAX_TOKENS }}\nASSISTANT_MAX_REACT_ITERATIONS=${{ secrets.ASSISTANT_MAX_REACT_ITERATIONS }}\nASSISTANT_HISTORY_TURNS=${{ secrets.ASSISTANT_HISTORY_TURNS }}\n" > .env
+
       - name: Instalar dependencias Flutter
         run: flutter pub get
 
-      # ── 6. Leer versión desde pubspec.yaml ─────────────────────────────────
       - name: Extraer versionName y versionCode
         id: version
         run: |
@@ -61,19 +51,15 @@ jobs:
           echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
           echo "apk_name=inventario-v${VERSION_NAME}.apk" >> $GITHUB_OUTPUT
 
-      # ── 7. Compilar APK release ────────────────────────────────────────────
       - name: Build APK release
         run: flutter build apk --release
 
-      # ── 8. Renombrar APK ───────────────────────────────────────────────────
       - name: Renombrar APK
         run: |
           mv build/app/outputs/flutter-apk/app-release.apk \
              build/app/outputs/flutter-apk/${{ steps.version.outputs.apk_name }}
 
-      # ── 9. Crear GitHub Release y subir APK ───────────────────────────────
       - name: Crear GitHub Release
-        id: create_release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -86,7 +72,6 @@ jobs:
           draft: false
           prerelease: false
 
-      # ── 10. Actualizar version.json ────────────────────────────────────────
       - name: Actualizar app_update/version.json
         run: |
           TAG=${{ github.ref_name }}
@@ -97,10 +82,8 @@ jobs:
           APK_URL="https://github.com/${REPO}/releases/download/${TAG}/${APK_NAME}"
           PUBLISHED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-          # Preserva releaseNotes y otros campos editables del archivo actual
-          # Solo actualiza los campos que dependen de la compilación
           python3 - <<PYEOF
-          import json, os
+          import json
 
           path = "app_update/version.json"
           with open(path) as f:
@@ -116,7 +99,6 @@ jobs:
               f.write("\n")
           PYEOF
 
-      # ── 11. Commit version.json actualizado a main ─────────────────────────
       - name: Commit version.json
         run: |
           git config user.name "github-actions[bot]"
