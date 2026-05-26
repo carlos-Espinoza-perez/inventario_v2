@@ -1,11 +1,11 @@
 {
-  "versionName": "1.0.2",
-  "versionCode": 3,
+  "versionName": "1.0.3",
+  "versionCode": 4,
   "minRequiredVersionCode": 1,
-  "apkUrl": "https://github.com/carlos-Espinoza-perez/inventario_v2/releases/download/v1.0.2/inventario-v1.0.2.apk",
+  "apkUrl": "https://github.com/carlos-Espinoza-perez/inventario_v2/releases/download/v1.0.3/inventario-v1.0.3.apk",
   "releaseNotes": [
-    "Corrección de permiso para instalar APK en Android 8+"
+    "Permiso de instalacion con mensaje explicativo antes de abrir Ajustes"
   ],
   "forceUpdate": false,
-  "publishedAt": "2026-05-26T02:21:34Z"
+  "publishedAt": "2026-05-26T02:34:58Z"
 }
