@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:inventario_v2/core/constants/permission_codes.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
+import 'package:inventario_v2/features/auth/presentation/providers/authorization_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/inventario_provider.dart';
 
 final productDetailProvider = FutureProvider.autoDispose
@@ -66,6 +68,7 @@ class ProductDetailScreen extends ConsumerStatefulWidget {
 class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  final Map<String, double> _editedPrices = {};
 
   @override
   void initState() {
@@ -130,6 +133,11 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
         bodegaId: widget.bodegaId,
       )),
     );
+    final authorizationAsync = ref.watch(authorizationStateProvider);
+    final canEditPrice = authorizationAsync.maybeWhen(
+      data: (authorization) => authorization.can(PermissionCode.productUpdate),
+      orElse: () => false,
+    );
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -141,7 +149,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
             error: (_, _) => const SizedBox.shrink(),
             data: (variants) => _ProductSummaryCard(
               product: product,
-              variants: _groupVariantRows(variants),
+              variants: _groupVariantRows(_applyEditedPrices(variants)),
             ),
           ),
           const SizedBox(height: 16),
@@ -154,7 +162,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
             loading: () => const LinearProgressIndicator(),
             error: (e, _) => Text('Error al cargar variantes: $e'),
             data: (variants) {
-              final groupedVariants = _groupVariantRows(variants);
+              final groupedVariants = _groupVariantRows(
+                _applyEditedPrices(variants),
+              );
               if (groupedVariants.isEmpty) {
                 return _SoftCard(
                   child: const Text('No hay variantes registradas en Drift'),
@@ -163,7 +173,12 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
 
               return Column(
                 children: groupedVariants
-                    .map((variant) => _VariantStockCard(variant: variant))
+                    .map(
+                      (variant) => _VariantStockCard(
+                        variant: variant,
+                        onEditPrice: canEditPrice ? _showEditPriceSheet : null,
+                      ),
+                    )
                     .toList(),
               );
             },
@@ -313,6 +328,209 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
       },
     );
   }
+
+  Future<void> _showEditPriceSheet(Map<String, dynamic> variant) async {
+    final variantId = variant['varianteId']?.toString();
+    if (variantId == null || variantId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Esta fila agrupa varias variantes. Edita una variante individual.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final currentPrice = _asDouble(variant['precio']) ?? 0;
+
+    final savedPrice = await showModalBottomSheet<double>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return _EditPriceSheet(
+          productId: widget.productId,
+          variant: variant,
+          bodegaId: widget.bodegaId,
+          currentPrice: currentPrice,
+        );
+      },
+    );
+
+    if (savedPrice != null) {
+      setState(() {
+        _editedPrices[variantId] = savedPrice;
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Precio actualizado correctamente')),
+      );
+    }
+  }
+
+  List<Map<String, dynamic>> _applyEditedPrices(
+    List<Map<String, dynamic>> variants,
+  ) {
+    if (_editedPrices.isEmpty) return variants;
+    return variants.map((variant) {
+      final variantId = variant['varianteId']?.toString();
+      final editedPrice = variantId == null ? null : _editedPrices[variantId];
+      if (editedPrice == null) return variant;
+      return {...variant, 'precio': editedPrice};
+    }).toList();
+  }
+}
+
+class _EditPriceSheet extends ConsumerStatefulWidget {
+  final String productId;
+  final Map<String, dynamic> variant;
+  final String? bodegaId;
+  final double currentPrice;
+
+  const _EditPriceSheet({
+    required this.productId,
+    required this.variant,
+    required this.bodegaId,
+    required this.currentPrice,
+  });
+
+  @override
+  ConsumerState<_EditPriceSheet> createState() => _EditPriceSheetState();
+}
+
+class _EditPriceSheetState extends ConsumerState<_EditPriceSheet> {
+  late final TextEditingController _controller;
+  String? _errorText;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(
+      text: _formatPriceInput(widget.currentPrice),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final parsed = _parseMoneyInput(_controller.text);
+    if (parsed == null || parsed < 0) {
+      setState(() {
+        _errorText = 'Ingresa un precio valido mayor o igual a 0';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      final variantId = widget.variant['varianteId']?.toString();
+      await ref
+          .read(inventarioRepositoryProvider)
+          .actualizarPrecioVentaVariante(
+            productId: widget.productId,
+            productVariantId: variantId!,
+            bodegaId: widget.bodegaId,
+            precioVenta: parsed,
+          );
+      if (mounted) Navigator.pop(context, parsed);
+    } catch (_) {
+      setState(() {
+        _isSaving = false;
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No se pudo actualizar el precio. Intenta nuevamente.',
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Editar precio de venta',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            [
+              _displaySize(widget.variant['talla']),
+              _displayCode(widget.variant['sku']),
+            ].join(' - '),
+            style: TextStyle(color: Colors.grey[700]),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(
+              decimal: true,
+            ),
+            decoration: InputDecoration(
+              labelText: 'Nuevo precio',
+              prefixText: 'C\$ ',
+              errorText: _errorText,
+              border: const OutlineInputBorder(),
+            ),
+            onChanged: (_) {
+              if (_errorText != null) {
+                setState(() => _errorText = null);
+              }
+            },
+            onSubmitted: _isSaving ? null : (_) => _save(),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: _isSaving ? null : () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: _isSaving ? null : _save,
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text('Guardar'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ProductSummaryCard extends StatelessWidget {
@@ -324,9 +542,12 @@ class _ProductSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final firstVariant = variants.isNotEmpty ? variants.first : null;
-    final priceLabel = (product.precioBase ?? 0) > 0
+    final variantPriceLabel = _priceLabel(variants);
+    final priceLabel = variants.isNotEmpty && variantPriceLabel != 'C\$ 0.00'
+        ? variantPriceLabel
+        : (product.precioBase ?? 0) > 0
         ? _money(product.precioBase!)
-        : _priceLabel(variants);
+        : _money(product.ultimoPrecioVenta);
     final cost = product.ultimoCosto > 0
         ? product.ultimoCosto
         : (_asDouble(firstVariant?['costo']) ?? 0);
@@ -447,8 +668,9 @@ class _ProductSummaryCard extends StatelessWidget {
 
 class _VariantStockCard extends StatelessWidget {
   final Map<String, dynamic> variant;
+  final ValueChanged<Map<String, dynamic>>? onEditPrice;
 
-  const _VariantStockCard({required this.variant});
+  const _VariantStockCard({required this.variant, this.onEditPrice});
 
   @override
   Widget build(BuildContext context) {
@@ -489,14 +711,30 @@ class _VariantStockCard extends StatelessWidget {
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                '${_formatQuantity(stock)} unds',
-                style: const TextStyle(fontWeight: FontWeight.w800),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${_formatQuantity(stock)} unds',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  Text(
+                    priceLabel,
+                    style: TextStyle(color: Colors.blue.shade700),
+                  ),
+                ],
               ),
-              Text(priceLabel, style: TextStyle(color: Colors.blue.shade700)),
+              if (onEditPrice != null) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: 'Editar precio',
+                  icon: const Icon(Icons.edit_outlined, size: 20),
+                  onPressed: () => onEditPrice!(variant),
+                ),
+              ],
             ],
           ),
         ],
@@ -752,6 +990,17 @@ class _SizeChip extends StatelessWidget {
 
 String _money(double value) => 'C\$ ${value.toStringAsFixed(2)}';
 
+String _formatPriceInput(double value) {
+  if (value.truncateToDouble() == value) return value.toStringAsFixed(0);
+  return value.toStringAsFixed(2);
+}
+
+double? _parseMoneyInput(String value) {
+  final normalized = value.trim().replaceAll(',', '.');
+  if (normalized.isEmpty) return null;
+  return double.tryParse(normalized);
+}
+
 double? _asDouble(Object? value) {
   if (value is num) return value.toDouble();
   if (value is String) return double.tryParse(value);
@@ -799,6 +1048,7 @@ List<Map<String, dynamic>> _groupVariantRows(List<Map<String, dynamic>> rows) {
     final price = _asDouble(row['precio']) ?? 0;
     final cost = _asDouble(row['costo']) ?? 0;
     final sku = row['sku']?.toString().trim();
+    final variantId = row['varianteId']?.toString().trim();
 
     final current = grouped.putIfAbsent(
       key,
@@ -811,6 +1061,7 @@ List<Map<String, dynamic>> _groupVariantRows(List<Map<String, dynamic>> rows) {
         'costo': cost,
         'precios': <double>[],
         'skus': <String>{},
+        'varianteIds': <String>{},
       },
     );
 
@@ -819,16 +1070,21 @@ List<Map<String, dynamic>> _groupVariantRows(List<Map<String, dynamic>> rows) {
     if (sku != null && sku.isNotEmpty) {
       (current['skus'] as Set<String>).add(sku);
     }
+    if (variantId != null && variantId.isNotEmpty) {
+      (current['varianteIds'] as Set<String>).add(variantId);
+    }
   }
 
   final result =
       grouped.values.map((item) {
         final skus = item['skus'] as Set<String>;
+        final variantIds = item['varianteIds'] as Set<String>;
         final prices = item['precios'] as List<double>;
         final singleSku = skus.isEmpty ? item['sku'] : skus.first;
         return {
           ...item,
           'sku': skus.length <= 1 ? singleSku : 'Varios códigos',
+          'varianteId': variantIds.length == 1 ? variantIds.first : null,
           'precioLabel': _priceLabelFromPrices(prices),
         };
       }).toList()..sort(

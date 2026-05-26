@@ -206,6 +206,87 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
     return into(inventarios).insertOnConflictUpdate(inventario);
   }
 
+  Future<void> actualizarPrecioVentaVariante({
+    required String productoId,
+    required String productoVarianteId,
+    required String? bodegaId,
+    required double precioVenta,
+  }) async {
+    if (precioVenta < 0) {
+      throw const ContextoInvalidoException(
+        'El precio de venta debe ser mayor o igual a cero.',
+      );
+    }
+
+    final now = DateTime.now();
+    final context = await getRequiredContext();
+    final variante =
+        await (select(productoVariantes)
+              ..where((tbl) => tbl.id.equals(productoVarianteId))
+              ..where((tbl) => tbl.productoId.equals(productoId))
+              ..where((tbl) => tbl.estado.equals(true))
+              ..limit(1))
+            .getSingleOrNull();
+
+    if (variante == null) {
+      throw const ContextoInvalidoException(
+        'No se encontro la variante seleccionada.',
+      );
+    }
+
+    if (bodegaId != null && bodegaId.isNotEmpty) {
+      final updated =
+          await (update(inventarios)..where(
+                (tbl) =>
+                    tbl.productoVarianteId.equals(productoVarianteId) &
+                    tbl.bodegaId.equals(bodegaId),
+              ))
+              .write(
+                InventariosCompanion(
+                  precioVenta: Value(precioVenta),
+                  actualizadoPor: Value(context.usuarioId),
+                  updatedAt: Value(now),
+                  syncStatus: const Value('pending_update'),
+                ),
+              );
+      if (updated == 0) {
+        throw const ContextoInvalidoException(
+          'No se encontro inventario para esta variante en la bodega.',
+        );
+      }
+      return;
+    }
+
+    await (update(
+      productoVariantes,
+    )..where((tbl) => tbl.id.equals(productoVarianteId))).write(
+      ProductoVariantesCompanion(
+        precioEspecifico: Value(precioVenta),
+        updatedAt: Value(now),
+        syncStatus: const Value('pending_update'),
+      ),
+    );
+
+    final productHasBasePrice =
+        (await (select(productos)
+                  ..where((tbl) => tbl.id.equals(productoId))
+                  ..limit(1))
+                .getSingleOrNull())
+            ?.precioBase !=
+        null;
+    if (!productHasBasePrice) {
+      await (update(
+        productos,
+      )..where((tbl) => tbl.id.equals(productoId))).write(
+        ProductosCompanion(
+          ultimoPrecioVenta: Value(precioVenta),
+          updatedAt: Value(now),
+          syncStatus: const Value('pending_update'),
+        ),
+      );
+    }
+  }
+
   Future<List<ProductCatalogItemDrift>> getCatalogItems({
     String? empresaId,
     String? bodegaId,
