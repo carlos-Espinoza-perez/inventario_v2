@@ -287,6 +287,78 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
     }
   }
 
+  Future<void> actualizarCostoVariante({
+    required String productoId,
+    required String productoVarianteId,
+    required String? bodegaId,
+    required double costo,
+  }) async {
+    if (costo < 0) {
+      throw const ContextoInvalidoException(
+        'El costo debe ser mayor o igual a cero.',
+      );
+    }
+
+    final now = DateTime.now();
+    final context = await getRequiredContext();
+    final variante =
+        await (select(productoVariantes)
+              ..where((tbl) => tbl.id.equals(productoVarianteId))
+              ..where((tbl) => tbl.productoId.equals(productoId))
+              ..where((tbl) => tbl.estado.equals(true))
+              ..limit(1))
+            .getSingleOrNull();
+
+    if (variante == null) {
+      throw const ContextoInvalidoException(
+        'No se encontro la variante seleccionada.',
+      );
+    }
+
+    if (bodegaId != null && bodegaId.isNotEmpty) {
+      final updated =
+          await (update(inventarios)..where(
+                (tbl) =>
+                    tbl.productoVarianteId.equals(productoVarianteId) &
+                    tbl.bodegaId.equals(bodegaId),
+              ))
+              .write(
+                InventariosCompanion(
+                  costoPromedio: Value(costo),
+                  actualizadoPor: Value(context.usuarioId),
+                  updatedAt: Value(now),
+                  syncStatus: const Value('pending_update'),
+                ),
+              );
+      if (updated == 0) {
+        throw const ContextoInvalidoException(
+          'No se encontro inventario para esta variante en la bodega.',
+        );
+      }
+      return;
+    }
+
+    await (update(
+      productoVariantes,
+    )..where((tbl) => tbl.id.equals(productoVarianteId))).write(
+      ProductoVariantesCompanion(
+        costoEspecifico: Value(costo),
+        updatedAt: Value(now),
+        syncStatus: const Value('pending_update'),
+      ),
+    );
+
+    await (update(
+      productos,
+    )..where((tbl) => tbl.id.equals(productoId))).write(
+      ProductosCompanion(
+        ultimoCosto: Value(costo),
+        updatedAt: Value(now),
+        syncStatus: const Value('pending_update'),
+      ),
+    );
+  }
+
   Future<List<ProductCatalogItemDrift>> getCatalogItems({
     String? empresaId,
     String? bodegaId,
