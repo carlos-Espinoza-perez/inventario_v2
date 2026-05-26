@@ -97,7 +97,7 @@ jobs:
           import json
 
           path = "app_update/version.json"
-          with open(path) as f:
+          with open(path, encoding="utf-8") as f:
               data = json.load(f)
 
           data["versionName"] = "${VERSION_NAME}"
@@ -105,7 +105,7 @@ jobs:
           data["apkUrl"] = "${APK_URL}"
           data["publishedAt"] = "${PUBLISHED_AT}"
 
-          with open(path, "w") as f:
+          with open(path, "w", encoding="utf-8", newline="\n") as f:
               json.dump(data, f, indent=2, ensure_ascii=False)
               f.write("\n")
           PYEOF
