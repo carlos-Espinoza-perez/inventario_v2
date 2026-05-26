@@ -77,8 +77,10 @@ class InventarioRepository {
   }
 
   static double _resolvePrecio(ProductoStockDrift item) {
-    if ((item.variante.precioEspecifico ?? 0) > 0) return item.variante.precioEspecifico!;
     if (item.inventario.precioVenta > 0) return item.inventario.precioVenta;
+    if ((item.variante.precioEspecifico ?? 0) > 0) {
+      return item.variante.precioEspecifico!;
+    }
     if ((item.producto.precioBase ?? 0) > 0) return item.producto.precioBase!;
     return item.producto.ultimoPrecioVenta;
   }
@@ -97,8 +99,8 @@ class InventarioRepository {
       costo: (item.variante.costoEspecifico ?? 0) > 0
           ? item.variante.costoEspecifico!
           : item.inventario.costoPromedio > 0
-              ? item.inventario.costoPromedio
-              : item.producto.ultimoCosto,
+          ? item.inventario.costoPromedio
+          : item.producto.ultimoCosto,
       imagen: item.producto.imagenUrl,
     );
   }

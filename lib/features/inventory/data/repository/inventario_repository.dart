@@ -135,6 +135,20 @@ class InventarioRepository {
     );
   }
 
+  Future<void> actualizarPrecioVentaVariante({
+    required String productId,
+    required String productVariantId,
+    required String? bodegaId,
+    required double precioVenta,
+  }) {
+    return _db.inventoryDao.actualizarPrecioVentaVariante(
+      productoId: productId,
+      productoVarianteId: productVariantId,
+      bodegaId: bodegaId,
+      precioVenta: precioVenta,
+    );
+  }
+
   Future<TransferItemDraft?> crearBorradorTrasladoDesdeCodigo({
     required String query,
     required String bodegaOrigenId,
@@ -182,8 +196,8 @@ class InventarioRepository {
               'cantidad': 0.0,
               'stock': 0.0,
               'precio': _resolvePrice(
-                item.precioEspecifico,
                 null,
+                item.precioEspecifico,
                 producto?.precioBase,
                 producto?.ultimoPrecioVenta,
               ),
@@ -207,8 +221,8 @@ class InventarioRepository {
             'cantidad': item.inventario.cantidadActual,
             'stock': item.inventario.cantidadActual,
             'precio': _resolvePrice(
-              item.variante.precioEspecifico,
               item.inventario.precioVenta,
+              item.variante.precioEspecifico,
               item.producto.precioBase,
               item.producto.ultimoPrecioVenta,
             ),
@@ -225,13 +239,13 @@ class InventarioRepository {
   }
 
   double _resolvePrice(
-    double? precioEspecifico,
     double? precioVenta,
+    double? precioEspecifico,
     double? precioBase,
     double? ultimoPrecioVenta,
   ) {
-    if ((precioEspecifico ?? 0) > 0) return precioEspecifico!;
     if ((precioVenta ?? 0) > 0) return precioVenta!;
+    if ((precioEspecifico ?? 0) > 0) return precioEspecifico!;
     if ((precioBase ?? 0) > 0) return precioBase!;
     return ultimoPrecioVenta ?? 0.0;
   }
