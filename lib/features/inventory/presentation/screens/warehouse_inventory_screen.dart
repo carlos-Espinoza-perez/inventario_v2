@@ -7,6 +7,8 @@ import 'package:inventario_v2/features/inventory/data/repositories/inventario_re
 import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
 import 'package:inventario_v2/features/inventory/presentation/widgets/categoria_filter_list.dart';
 import 'package:inventario_v2/features/inventory/presentation/providers/warehouse_inventory_provider.dart';
+import 'package:inventario_v2/core/global_provider.dart';
+import 'package:inventario_v2/features/inventory/data/providers/categoria_provider.dart';
 
 class WarehouseInventoryScreen extends ConsumerStatefulWidget {
   final String warehouseId;
@@ -126,6 +128,10 @@ class _WarehouseInventoryScreenState
       warehouseInventoryProvider(widget.warehouseId),
     );
 
+    final selectedFilter = ref.watch(filtroCategoriaSeleccionadoProvider);
+    final categoriesAsync = ref.watch(listCategoriasAllProvider);
+    final categories = categoriesAsync.value ?? const [];
+
     return Scaffold(
       body: Column(
         children: [
@@ -210,22 +216,49 @@ class _WarehouseInventoryScreenState
               data: (products) {
                 final groupedProducts = _groupProducts(products);
 
+                // Determinar categorías dependientes (subcategorías) si hay filtro activo
+                final Set<String> targetCategoryIds = {};
+                if (selectedFilter != null && selectedFilter != kFiltroBajoStock) {
+                  targetCategoryIds.add(selectedFilter);
+                  for (final cat in categories) {
+                    if (cat.categoriaPadreId == selectedFilter) {
+                      targetCategoryIds.add(cat.id);
+                    }
+                  }
+                }
+
                 // Filtrado local
                 final filteredProducts = groupedProducts.where((p) {
+                  // A. Filtro por término de búsqueda
                   final matchesSearch =
                       p.nombre.toLowerCase().contains(_searchQuery) ||
                       p.sku.toLowerCase().contains(_searchQuery) ||
                       p.tallasDisponibles.any(
                         (size) => size.toLowerCase().contains(_searchQuery),
                       );
-                  return matchesSearch && p.stock >= 1.0;
+
+                  if (!matchesSearch) return false;
+
+                  // B. Filtro de Categoría / Bajo Stock
+                  if (selectedFilter == kFiltroBajoStock) {
+                    return p.stock <= 3.0 && p.stock >= 1.0;
+                  } else if (selectedFilter != null) {
+                    return targetCategoryIds.contains(p.categoria) && p.stock >= 1.0;
+                  }
+
+                  // Default (Todos)
+                  return p.stock >= 1.0;
                 }).toList();
 
                 if (filteredProducts.isEmpty) {
                   return Center(
                     child: Text(
                       _searchQuery.isEmpty
-                          ? "No hay productos en esta bodega"
+                          ? (selectedFilter == kFiltroBajoStock
+                              ? "No hay productos con bajo stock en esta bodega"
+                              : selectedFilter != null
+                                  ? "No hay productos en esta categoría"
+                                  : "No hay productos en esta bodega")
                           : "No se encontraron coincidencias",
                       style: TextStyle(color: Colors.grey[500]),
                     ),
