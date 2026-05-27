@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/features/inventory/data/repositories/inventario_repository.dart';
 import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
@@ -17,7 +18,7 @@ class WarehouseInventoryScreen extends ConsumerStatefulWidget {
 }
 
 class _WarehouseInventoryScreenState
-    extends ConsumerState<WarehouseInventoryScreen> {
+    extends ConsumerState<WarehouseInventoryScreen> with AppBarConfigMixin {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
 
@@ -39,6 +40,11 @@ class _WarehouseInventoryScreenState
     super.dispose();
   }
 
+  @override
+  void configureAppBar() {
+    _updateAppBarTitle();
+  }
+
   // Método para actualizar el título del AppBar reactivamente
   void _updateAppBarTitle() {
     final bodegaAsync = ref.watch(bodegaByIdProvider(widget.warehouseId));
@@ -46,6 +52,7 @@ class _WarehouseInventoryScreenState
     bodegaAsync.when(
       data: (bodega) {
         Future.microtask(() {
+          if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
           ref
               .read(appBarProvider.notifier)
               .setOptions(
@@ -66,6 +73,7 @@ class _WarehouseInventoryScreenState
       },
       loading: () {
         Future.microtask(() {
+          if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
           ref
               .read(appBarProvider.notifier)
               .setOptions(
@@ -86,6 +94,7 @@ class _WarehouseInventoryScreenState
       },
       error: (error, stack) {
         Future.microtask(() {
+          if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
           ref
               .read(appBarProvider.notifier)
               .setOptions(

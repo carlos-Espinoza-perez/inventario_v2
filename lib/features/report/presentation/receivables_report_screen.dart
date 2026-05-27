@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:inventario_v2/core/db/models/report_models.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
@@ -23,23 +24,26 @@ class ReceivablesReportScreen extends ConsumerStatefulWidget {
 }
 
 class _ReceivablesReportScreenState
-    extends ConsumerState<ReceivablesReportScreen> {
+    extends ConsumerState<ReceivablesReportScreen> with AppBarConfigMixin {
+  @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Cuentas por Cobrar',
+      subtitle: 'Analisis de fiados',
+      showBackButton: true,
+      actions: [
+        IconButton(
+          onPressed: () => ref.invalidate(receivablesProvider),
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
+    );
+  }
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(appBarProvider.notifier).setOptions(
-        title: 'Cuentas por Cobrar',
-        subtitle: 'Analisis de fiados',
-        showBackButton: true,
-        actions: [
-          IconButton(
-            onPressed: () => ref.invalidate(receivablesProvider),
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      );
-    });
+    Future.microtask(configureAppBar);
   }
 
   @override

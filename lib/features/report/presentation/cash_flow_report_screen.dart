@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:inventario_v2/core/db/models/report_models.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 
@@ -22,23 +23,27 @@ class CashFlowReportScreen extends ConsumerStatefulWidget {
       _CashFlowReportScreenState();
 }
 
-class _CashFlowReportScreenState extends ConsumerState<CashFlowReportScreen> {
+class _CashFlowReportScreenState extends ConsumerState<CashFlowReportScreen>
+    with AppBarConfigMixin {
+  @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Auditoria de Cajas',
+      subtitle: 'Historial de faltantes',
+      showBackButton: true,
+      actions: [
+        IconButton(
+          onPressed: () => ref.invalidate(cashAuditProvider),
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
+    );
+  }
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(appBarProvider.notifier).setOptions(
-        title: 'Auditoria de Cajas',
-        subtitle: 'Historial de faltantes',
-        showBackButton: true,
-        actions: [
-          IconButton(
-            onPressed: () => ref.invalidate(cashAuditProvider),
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      );
-    });
+    Future.microtask(configureAppBar);
   }
 
   @override

@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 
@@ -39,25 +40,27 @@ class SalesReportScreen extends ConsumerStatefulWidget {
   ConsumerState<SalesReportScreen> createState() => _SalesReportScreenState();
 }
 
-class _SalesReportScreenState extends ConsumerState<SalesReportScreen> {
+class _SalesReportScreenState extends ConsumerState<SalesReportScreen>
+    with AppBarConfigMixin {
+  @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Reporte de Ventas',
+      subtitle: 'Analisis Semanal',
+      showBackButton: true,
+      actions: [
+        IconButton(
+          onPressed: () => ref.invalidate(salesReportProvider),
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
+    );
+  }
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref
-          .read(appBarProvider.notifier)
-          .setOptions(
-            title: 'Reporte de Ventas',
-            subtitle: 'Analisis Semanal',
-            showBackButton: true,
-            actions: [
-              IconButton(
-                onPressed: () => ref.invalidate(salesReportProvider),
-                icon: const Icon(Icons.refresh),
-              ),
-            ],
-          );
-    });
+    Future.microtask(configureAppBar);
   }
 
   int _touchedIndex = -1;

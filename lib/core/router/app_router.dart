@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:inventario_v2/core/router/route_observer.dart';
 import 'package:inventario_v2/core/presentation/widgets/main_layout.dart';
 import 'package:inventario_v2/features/inventory/presentation/screens/barcode_scanner_screen.dart';
 import 'package:inventario_v2/features/inventory/presentation/screens/magic_camera_screen.dart';
@@ -55,6 +56,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/splash',
+    observers: const [],
     refreshListenable: AuthNotifierListenable(ref),
     redirect: (context, state) {
       final authState = ref.read(authControllerProvider);
@@ -174,6 +176,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
 
       ShellRoute(
+        observers: [appRouteObserver],
         builder: (context, state, child) {
           final String location = state.uri.toString();
           return MainLayout(

@@ -1,6 +1,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
@@ -72,25 +73,27 @@ class InventoryReportScreen extends ConsumerStatefulWidget {
       _InventoryReportScreenState();
 }
 
-class _InventoryReportScreenState extends ConsumerState<InventoryReportScreen> {
+class _InventoryReportScreenState extends ConsumerState<InventoryReportScreen>
+    with AppBarConfigMixin {
+  @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Estado de Inventario',
+      subtitle: 'Distribucion y valorizacion',
+      showBackButton: true,
+      actions: [
+        IconButton(
+          onPressed: () => ref.invalidate(inventoryReportProvider),
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
+    );
+  }
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref
-          .read(appBarProvider.notifier)
-          .setOptions(
-            title: 'Estado de Inventario',
-            subtitle: 'Distribucion y valorizacion',
-            showBackButton: true,
-            actions: [
-              IconButton(
-                onPressed: () => ref.invalidate(inventoryReportProvider),
-                icon: const Icon(Icons.refresh),
-              ),
-            ],
-          );
-    });
+    Future.microtask(configureAppBar);
   }
 
   @override

@@ -78,7 +78,7 @@ class BottomAppBarDashboard extends ConsumerWidget {
                 text: 'Inventario',
                 onTap: () {
                   debugPrint("Inventario");
-                  context.push('/warehouse');
+                  context.go('/warehouse');
                 },
               ),
               const Spacer(),
@@ -88,7 +88,7 @@ class BottomAppBarDashboard extends ConsumerWidget {
                 icon: Icons.point_of_sale_outlined,
                 text: 'Ventas',
                 onTap: () {
-                  context.push('/sales');
+                  context.go('/sales');
                 },
               ),
               const Spacer(),
@@ -99,7 +99,7 @@ class BottomAppBarDashboard extends ConsumerWidget {
                 icon: Icons.bar_chart_rounded,
                 text: 'Reportes',
                 onTap: () {
-                  context.push('/reports');
+                  context.go('/reports');
                 },
               ),
               const Spacer(),
@@ -107,7 +107,7 @@ class BottomAppBarDashboard extends ConsumerWidget {
             _MenuButton(
               icon: Icons.auto_awesome_rounded,
               text: 'IA',
-              onTap: () => context.push('/assistant'),
+              onTap: () => context.go('/assistant'),
             ),
             const Spacer(),
           ],

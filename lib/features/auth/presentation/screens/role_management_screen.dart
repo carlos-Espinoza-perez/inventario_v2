@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/constants/permission_codes.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/db/models/auth_admin_models.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/features/auth/data/repositories/role_access_repository.dart';
@@ -30,17 +31,21 @@ class RoleManagementScreen extends ConsumerStatefulWidget {
       _RoleManagementScreenState();
 }
 
-class _RoleManagementScreenState extends ConsumerState<RoleManagementScreen> {
+class _RoleManagementScreenState extends ConsumerState<RoleManagementScreen>
+    with AppBarConfigMixin {
+  @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Roles y permisos',
+      subtitle: 'Controla el acceso por pantalla y accion',
+      showBackButton: true,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(appBarProvider.notifier).setOptions(
-        title: 'Roles y permisos',
-        subtitle: 'Controla el acceso por pantalla y accion',
-        showBackButton: true,
-      );
-    });
+    Future.microtask(configureAppBar);
   }
 
   @override

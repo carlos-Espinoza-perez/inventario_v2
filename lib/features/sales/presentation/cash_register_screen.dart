@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/features/auth/presentation/providers/auth_provider.dart';
 import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
@@ -34,10 +35,47 @@ class CashRegisterScreen extends ConsumerStatefulWidget {
   ConsumerState<CashRegisterScreen> createState() => _CashRegisterScreenState();
 }
 
-class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
+class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen>
+    with AppBarConfigMixin {
   final TextEditingController _expenseAmountCtrl = TextEditingController();
   final TextEditingController _expenseReasonCtrl = TextEditingController();
   bool _isSubmitting = false;
+  bool _isRegisterOpen = false;
+
+  @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: _isRegisterOpen ? 'Monitor de Caja' : 'Caja Cerrada',
+      showBackButton: true,
+      actions: [
+        if (_isRegisterOpen)
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.green),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.fiber_manual_record, size: 10, color: Colors.green),
+                SizedBox(width: 4),
+                Text(
+                  'EN CURSO',
+                  style: TextStyle(
+                    color: Colors.green,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
 
   @override
   void dispose() {
@@ -61,49 +99,8 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen> {
         final initialCash = dashboardState.cajaAbierta?.montoInicial ?? 0.0;
 
         Future.microtask(() {
-          ref
-              .read(appBarProvider.notifier)
-              .setOptions(
-                title: isRegisterOpen ? 'Monitor de Caja' : 'Caja Cerrada',
-                showBackButton: true,
-                actions: [
-                  if (isRegisterOpen)
-                    Container(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.green),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.fiber_manual_record,
-                            size: 10,
-                            color: Colors.green,
-                          ),
-                          SizedBox(width: 4),
-                          Text(
-                            'EN CURSO',
-                            style: TextStyle(
-                              color: Colors.green,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              );
+          _isRegisterOpen = isRegisterOpen;
+          configureAppBar();
         });
 
         return Scaffold(

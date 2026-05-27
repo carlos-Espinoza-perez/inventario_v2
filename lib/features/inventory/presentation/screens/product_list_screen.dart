@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/db/models/product_catalog_models.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/categoria_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/producto_provider.dart';
@@ -17,22 +18,24 @@ class ProductListScreen extends ConsumerStatefulWidget {
   ConsumerState<ProductListScreen> createState() => _ProductListScreenState();
 }
 
-class _ProductListScreenState extends ConsumerState<ProductListScreen> {
+class _ProductListScreenState extends ConsumerState<ProductListScreen>
+    with AppBarConfigMixin {
   String _searchQuery = '';
   String _selectedCategoryId = 'Todos';
 
   @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Catalogo de Productos',
+      showBackButton: true,
+      actions: [],
+    );
+  }
+
+  @override
   void initState() {
     super.initState();
-    Future.microtask(() {
-      ref
-          .read(appBarProvider.notifier)
-          .setOptions(
-            title: 'Catalogo de Productos',
-            showBackButton: true,
-            actions: [],
-          );
-    });
+    Future.microtask(configureAppBar);
   }
 
   @override

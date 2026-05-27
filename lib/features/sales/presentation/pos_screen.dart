@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
@@ -19,10 +20,24 @@ class PosScreen extends ConsumerStatefulWidget {
   ConsumerState<PosScreen> createState() => _PosScreenState();
 }
 
-class _PosScreenState extends ConsumerState<PosScreen> {
+class _PosScreenState extends ConsumerState<PosScreen> with AppBarConfigMixin {
   final List<Map<String, dynamic>> _cart = [];
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+
+  @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Punto de Venta',
+      showBackButton: true,
+      actions: [
+        IconButton(
+          onPressed: _clearCart,
+          icon: const Icon(Icons.delete_sweep, color: Colors.red),
+        ),
+      ],
+    );
+  }
 
   @override
   void initState() {
@@ -32,20 +47,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         () => _searchQuery = _searchController.text.trim().toLowerCase(),
       );
     });
-    Future.microtask(() {
-      ref
-          .read(appBarProvider.notifier)
-          .setOptions(
-            title: 'Punto de Venta',
-            showBackButton: true,
-            actions: [
-              IconButton(
-                onPressed: _clearCart,
-                icon: const Icon(Icons.delete_sweep, color: Colors.red),
-              ),
-            ],
-          );
-    });
+    Future.microtask(configureAppBar);
   }
 
   @override

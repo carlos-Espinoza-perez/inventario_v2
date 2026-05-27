@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import '../providers/warehouse_history_provider.dart';
 
@@ -15,33 +16,28 @@ class WarehouseHistoryScreen extends ConsumerStatefulWidget {
 }
 
 class _WarehouseHistoryScreenState
-    extends ConsumerState<WarehouseHistoryScreen> {
-  String _selectedFilter = 'Todos'; // Filtro actual
+    extends ConsumerState<WarehouseHistoryScreen> with AppBarConfigMixin {
+  String _selectedFilter = 'Todos';
+
+  @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Historial de Movimientos',
+      subtitle: 'Últimos 30 días',
+      showBackButton: true,
+      actions: [
+        IconButton(
+          onPressed: () {},
+          icon: const Icon(Icons.calendar_today_rounded, color: Colors.black87),
+        ),
+      ],
+    );
+  }
 
   @override
   void initState() {
     super.initState();
-    // Configurar AppBar Dinámico
-    Future.microtask(() {
-      ref
-          .read(appBarProvider.notifier)
-          .setOptions(
-            title: "Historial de Movimientos",
-            subtitle: "Últimos 30 días",
-            showBackButton: true,
-            actions: [
-              IconButton(
-                onPressed: () {
-                  // Filtro por fecha avanzado
-                },
-                icon: const Icon(
-                  Icons.calendar_today_rounded,
-                  color: Colors.black87,
-                ),
-              ),
-            ],
-          );
-    });
+    Future.microtask(configureAppBar);
   }
 
   // Lógica de filtrado en resultados de base de datos

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/features/inventory/presentation/providers/movement_detail_provider.dart';
 import '../../utils/pdf_generator.dart';
@@ -22,16 +23,20 @@ class MovementDetailScreen extends ConsumerStatefulWidget {
       _MovementDetailScreenState();
 }
 
-class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen> {
-  Map<String, dynamic>? _currentData; // Para el appbar actions
+class _MovementDetailScreenState extends ConsumerState<MovementDetailScreen>
+    with AppBarConfigMixin {
+  Map<String, dynamic>? _currentData;
 
   @override
-  void initState() {
-    super.initState();
+  void configureAppBar() {
+    if (_currentData != null) {
+      _setupHeader(_currentData!);
+    }
   }
 
   void _setupHeader(Map<String, dynamic> data) {
     Future.microtask(() {
+      if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
       String title = "Detalle de Movimiento";
       if (data['tipo'] == 'COMPRA') title = "Entrada de Mercadería";
       if (data['tipo'] == 'VENTA') title = "Detalle de Venta";

@@ -55,8 +55,6 @@ class TopAppBarDashboard extends ConsumerWidget implements PreferredSizeWidget {
                 } else {
                   context.go('/dashboard');
                 }
-                // Reseteamos el título al volver
-                ref.read(appBarProvider.notifier).reset();
               },
             )
           : null, // Si es null y leadingWidth es 0, no ocupa espacio

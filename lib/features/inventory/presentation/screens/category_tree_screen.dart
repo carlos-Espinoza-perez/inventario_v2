@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/db/models/product_catalog_models.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/categoria_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/producto_provider.dart';
@@ -15,17 +16,21 @@ class CategoryTreeScreen extends ConsumerStatefulWidget {
   ConsumerState<CategoryTreeScreen> createState() => _CategoryTreeScreenState();
 }
 
-class _CategoryTreeScreenState extends ConsumerState<CategoryTreeScreen> {
+class _CategoryTreeScreenState extends ConsumerState<CategoryTreeScreen>
+    with AppBarConfigMixin {
+  @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Arbol del catalogo',
+      subtitle: 'Categorias, marcas y productos',
+      showBackButton: true,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(appBarProvider.notifier).setOptions(
-        title: 'Arbol del catalogo',
-        subtitle: 'Categorias, marcas y productos',
-        showBackButton: true,
-      );
-    });
+    Future.microtask(configureAppBar);
   }
 
   @override

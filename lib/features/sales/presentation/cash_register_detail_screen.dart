@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:inventario_v2/core/db/models/cash_models.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/features/sales/data/repositories/caja_repository.dart';
 
@@ -23,15 +24,19 @@ class CashRegisterDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _CashRegisterDetailScreenState
-    extends ConsumerState<CashRegisterDetailScreen> {
+    extends ConsumerState<CashRegisterDetailScreen> with AppBarConfigMixin {
+  @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Reporte de Cerrado',
+      showBackButton: true,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
-    Future.microtask(() {
-      ref
-          .read(appBarProvider.notifier)
-          .setOptions(title: 'Reporte de Cerrado', showBackButton: true);
-    });
+    Future.microtask(configureAppBar);
   }
 
   @override

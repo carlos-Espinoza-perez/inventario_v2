@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inventario_v2/core/presentation/widgets/custom_card.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/constants/permission_codes.dart';
 import 'package:inventario_v2/core/providers/supabase_provider.dart';
@@ -17,17 +18,23 @@ class UserProfileScreen extends ConsumerStatefulWidget {
   ConsumerState<UserProfileScreen> createState() => _UserProfileScreenState();
 }
 
-class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
+class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
+    with AppBarConfigMixin {
   bool _isLoggingOut = false;
+
+  @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Mi Perfil',
+      showBackButton: true,
+      actions: [],
+    );
+  }
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref
-          .read(appBarProvider.notifier)
-          .setOptions(title: "Mi Perfil", showBackButton: true, actions: []);
-    });
+    Future.microtask(configureAppBar);
   }
 
   @override

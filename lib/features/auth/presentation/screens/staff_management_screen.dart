@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:inventario_v2/core/constants/permission_codes.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/db/models/auth_admin_models.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/core/providers/supabase_provider.dart';
@@ -40,19 +41,21 @@ class StaffManagementScreen extends ConsumerStatefulWidget {
       _StaffManagementScreenState();
 }
 
-class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
+class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen>
+    with AppBarConfigMixin {
+  @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Personal y accesos',
+      subtitle: 'Usuarios, roles y bodegas asignadas',
+      showBackButton: true,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref
-          .read(appBarProvider.notifier)
-          .setOptions(
-            title: 'Personal y accesos',
-            subtitle: 'Usuarios, roles y bodegas asignadas',
-            showBackButton: true,
-          );
-    });
+    Future.microtask(configureAppBar);
   }
 
   @override

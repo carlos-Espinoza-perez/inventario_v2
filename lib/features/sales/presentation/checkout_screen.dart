@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:inventario_v2/core/db/exceptions/dao_exceptions.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/features/sales/domain/use_cases/registrar_venta_use_case.dart';
 
@@ -24,19 +25,24 @@ class CheckoutScreen extends ConsumerStatefulWidget {
   ConsumerState<CheckoutScreen> createState() => _CheckoutScreenState();
 }
 
-class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
+class _CheckoutScreenState extends ConsumerState<CheckoutScreen>
+    with AppBarConfigMixin {
   String _saleType = "Contado";
   final TextEditingController _clientCtrl = TextEditingController();
   final TextEditingController _depositCtrl = TextEditingController();
 
   @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Confirmar Venta',
+      showBackButton: true,
+    );
+  }
+
+  @override
   void initState() {
     super.initState();
-    Future.microtask(() {
-      ref
-          .read(appBarProvider.notifier)
-          .setOptions(title: "Confirmar Venta", showBackButton: true);
-    });
+    Future.microtask(configureAppBar);
   }
 
   double get _depositAmount => double.tryParse(_depositCtrl.text) ?? 0.0;
