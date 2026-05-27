@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inventario_v2/core/constants/permission_codes.dart';
 import 'package:inventario_v2/core/db/models/auth_admin_models.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/features/auth/data/repositories/role_access_repository.dart';
@@ -36,17 +37,21 @@ class AdminHubScreen extends ConsumerStatefulWidget {
   ConsumerState<AdminHubScreen> createState() => _AdminHubScreenState();
 }
 
-class _AdminHubScreenState extends ConsumerState<AdminHubScreen> {
+class _AdminHubScreenState extends ConsumerState<AdminHubScreen>
+    with AppBarConfigMixin {
+  @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Administración',
+      subtitle: 'Panel de control del sistema',
+      showBackButton: true,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(appBarProvider.notifier).setOptions(
-        title: 'Administración',
-        subtitle: 'Panel de control del sistema',
-        showBackButton: true,
-      );
-    });
+    Future.microtask(configureAppBar);
   }
 
   @override

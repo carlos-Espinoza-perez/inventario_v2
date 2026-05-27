@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/services/app_logger.dart';
 
@@ -11,37 +12,41 @@ class LogViewerScreen extends ConsumerStatefulWidget {
   ConsumerState<LogViewerScreen> createState() => _LogViewerScreenState();
 }
 
-class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
+class _LogViewerScreenState extends ConsumerState<LogViewerScreen>
+    with AppBarConfigMixin {
   String _logContent = "Cargando logs...";
   String _filterKeyword = "";
   bool _onlyErrors = false;
 
   @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Logs del Sistema',
+      showBackButton: true,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.refresh),
+          onPressed: _loadLogs,
+          tooltip: 'Recargar',
+        ),
+        IconButton(
+          icon: const Icon(Icons.copy),
+          onPressed: _copyToClipboard,
+          tooltip: 'Copiar Logs',
+        ),
+        IconButton(
+          icon: const Icon(Icons.delete_outline),
+          onPressed: _clearLogs,
+          tooltip: 'Limpiar Logs',
+        ),
+      ],
+    );
+  }
+
+  @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(appBarProvider.notifier).setOptions(
-        title: "Logs del Sistema",
-        showBackButton: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadLogs,
-            tooltip: "Recargar",
-          ),
-          IconButton(
-            icon: const Icon(Icons.copy),
-            onPressed: _copyToClipboard,
-            tooltip: "Copiar Logs",
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: _clearLogs,
-            tooltip: "Limpiar Logs",
-          ),
-        ],
-      );
-    });
+    Future.microtask(configureAppBar);
     _loadLogs();
   }
 

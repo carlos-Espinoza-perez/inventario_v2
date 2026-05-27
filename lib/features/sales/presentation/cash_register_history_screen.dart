@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/features/sales/data/repositories/caja_repository.dart';
 import 'package:inventario_v2/features/sales/presentation/cash_register_detail_screen.dart';
@@ -22,15 +23,19 @@ class CashRegisterHistoryScreen extends ConsumerStatefulWidget {
 }
 
 class _CashRegisterHistoryScreenState
-    extends ConsumerState<CashRegisterHistoryScreen> {
+    extends ConsumerState<CashRegisterHistoryScreen> with AppBarConfigMixin {
+  @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Historial de Cajas',
+      showBackButton: true,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
-    Future.microtask(() {
-      ref
-          .read(appBarProvider.notifier)
-          .setOptions(title: 'Historial de Cajas', showBackButton: true);
-    });
+    Future.microtask(configureAppBar);
   }
 
   @override

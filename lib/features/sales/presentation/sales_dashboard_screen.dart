@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:inventario_v2/core/db/models/report_models.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/providers/auto_sync_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
@@ -24,9 +25,30 @@ class SalesDashboardScreen extends ConsumerStatefulWidget {
       _SalesDashboardScreenState();
 }
 
-class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
+class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen>
+    with AppBarConfigMixin {
   String _searchQuery = '';
   String _selectedStatus = 'Todos';
+
+  @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Gestion de Ventas',
+      showBackButton: true,
+      actions: [
+        IconButton(
+          onPressed: () => context.push('/cash-register-history'),
+          icon: const Icon(Icons.point_of_sale_sharp, color: Colors.blueGrey),
+          tooltip: 'Corte de Caja / Arqueo',
+        ),
+        IconButton(
+          onPressed: () => context.push('/reports'),
+          icon: const Icon(Icons.bar_chart, color: Colors.black87),
+          tooltip: 'Estadisticas',
+        ),
+      ],
+    );
+  }
 
   List<SalesListItemDrift> _filterSales(List<SalesListItemDrift> allSales) {
     return allSales.where((sale) {
@@ -44,22 +66,7 @@ class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
     super.initState();
     Future.microtask(() {
       ref.invalidate(salesListProvider);
-      ref.read(appBarProvider.notifier).setOptions(
-        title: 'Gestion de Ventas',
-        showBackButton: true,
-        actions: [
-          IconButton(
-            onPressed: () => context.push('/cash-register-history'),
-            icon: const Icon(Icons.point_of_sale_sharp, color: Colors.blueGrey),
-            tooltip: 'Corte de Caja / Arqueo',
-          ),
-          IconButton(
-            onPressed: () => context.push('/reports'),
-            icon: const Icon(Icons.bar_chart, color: Colors.black87),
-            tooltip: 'Estadisticas',
-          ),
-        ],
-      );
+      configureAppBar();
     });
   }
 

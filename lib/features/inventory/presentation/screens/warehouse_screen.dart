@@ -6,6 +6,7 @@ import 'package:inventario_v2/core/constants/permission_codes.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/features/auth/presentation/providers/auth_provider.dart';
 import 'package:inventario_v2/features/auth/presentation/providers/authorization_provider.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
@@ -18,20 +19,26 @@ class WarehouseScreen extends ConsumerStatefulWidget {
   ConsumerState<WarehouseScreen> createState() => _WarehouseScreenState();
 }
 
-class _WarehouseScreenState extends ConsumerState<WarehouseScreen> {
+class _WarehouseScreenState extends ConsumerState<WarehouseScreen>
+    with AppBarConfigMixin {
+  @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Bodegas',
+      subtitle: 'Gestión de Almacenes',
+      showBackButton: true,
+      actions: [],
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(configureAppBar);
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Configurar el título del AppBar cada vez que se renderiza
-    Future.microtask(() {
-      ref
-          .read(appBarProvider.notifier)
-          .setOptions(
-            title: "Bodegas",
-            subtitle: "Gestión de Almacenes",
-            showBackButton: true,
-            actions: [],
-          );
-    });
 
     // 1. Escuchamos la lista de bodegas
     final bodegasAsync = ref.watch(bodegaListProvider);
@@ -180,7 +187,7 @@ class _WarehouseScreenState extends ConsumerState<WarehouseScreen> {
           .get();
       final activeUserIds = assignments.map((a) => a.usuarioId).toSet();
 
-      if (!mounted) return;
+      if (!context.mounted) return;
 
       final selectedUserIds = Set<String>.from(activeUserIds);
 
@@ -264,7 +271,7 @@ class _WarehouseScreenState extends ConsumerState<WarehouseScreen> {
         ),
       );
     } catch (e) {
-      if (mounted) {
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al cargar datos: $e'),

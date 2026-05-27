@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:inventario_v2/core/db/models/report_models.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
@@ -24,7 +25,7 @@ class ReportsDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _ReportsDashboardScreenState
-    extends ConsumerState<ReportsDashboardScreen> {
+    extends ConsumerState<ReportsDashboardScreen> with AppBarConfigMixin {
   final List<Map<String, dynamic>> _reportMenu = const [
     {
       'title': 'Ventas',
@@ -64,16 +65,19 @@ class _ReportsDashboardScreenState
   ];
 
   @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Centro de Reportes',
+      subtitle: 'Estadisticas y Analisis',
+      showBackButton: false,
+      actions: [],
+    );
+  }
+
+  @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(appBarProvider.notifier).setOptions(
-        title: 'Centro de Reportes',
-        subtitle: 'Estadisticas y Analisis',
-        showBackButton: false,
-        actions: [],
-      );
-    });
+    Future.microtask(configureAppBar);
   }
 
   @override

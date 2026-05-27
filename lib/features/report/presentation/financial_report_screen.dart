@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:inventario_v2/core/db/models/report_models.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
@@ -30,23 +31,27 @@ class FinancialReportScreen extends ConsumerStatefulWidget {
       _FinancialReportScreenState();
 }
 
-class _FinancialReportScreenState extends ConsumerState<FinancialReportScreen> {
+class _FinancialReportScreenState extends ConsumerState<FinancialReportScreen>
+    with AppBarConfigMixin {
+  @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Reporte Financiero',
+      subtitle: 'Ingresos y Egresos',
+      showBackButton: true,
+      actions: [
+        IconButton(
+          onPressed: () => ref.invalidate(financialReportProvider),
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
+    );
+  }
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(appBarProvider.notifier).setOptions(
-        title: 'Reporte Financiero',
-        subtitle: 'Ingresos y Egresos',
-        showBackButton: true,
-        actions: [
-          IconButton(
-            onPressed: () => ref.invalidate(financialReportProvider),
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      );
-    });
+    Future.microtask(configureAppBar);
   }
 
   @override

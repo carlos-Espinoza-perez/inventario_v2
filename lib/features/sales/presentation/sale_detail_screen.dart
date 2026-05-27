@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:inventario_v2/core/db/models/report_models.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
@@ -25,28 +26,32 @@ class SaleDetailScreen extends ConsumerStatefulWidget {
   ConsumerState<SaleDetailScreen> createState() => _SaleDetailScreenState();
 }
 
-class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
+class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen>
+    with AppBarConfigMixin {
+  @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Detalle de Venta',
+      showBackButton: true,
+      actions: [
+        IconButton(
+          onPressed: () {},
+          icon: const Icon(Icons.share_outlined),
+          tooltip: 'Compartir Ticket',
+        ),
+        IconButton(
+          onPressed: () {},
+          icon: const Icon(Icons.print_outlined),
+          tooltip: 'Imprimir',
+        ),
+      ],
+    );
+  }
+
   @override
   void initState() {
     super.initState();
-    Future.microtask(() {
-      ref.read(appBarProvider.notifier).setOptions(
-        title: 'Detalle de Venta',
-        showBackButton: true,
-        actions: [
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.share_outlined),
-            tooltip: 'Compartir Ticket',
-          ),
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.print_outlined),
-            tooltip: 'Imprimir',
-          ),
-        ],
-      );
-    });
+    Future.microtask(configureAppBar);
   }
 
   @override

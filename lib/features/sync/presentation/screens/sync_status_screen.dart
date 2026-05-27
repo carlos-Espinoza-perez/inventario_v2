@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inventario_v2/core/presentation/widgets/custom_card.dart';
 import 'package:inventario_v2/core/presentation/widgets/custom_status_badge.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/providers/auto_sync_provider.dart';
 import 'package:inventario_v2/features/sync/presentation/providers/sync_status_provider.dart';
@@ -14,28 +15,33 @@ class SyncStatusScreen extends ConsumerStatefulWidget {
   ConsumerState<SyncStatusScreen> createState() => _SyncStatusScreenState();
 }
 
-class _SyncStatusScreenState extends ConsumerState<SyncStatusScreen> {
+class _SyncStatusScreenState extends ConsumerState<SyncStatusScreen>
+    with AppBarConfigMixin {
+  @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: 'Estado de Sincronización',
+      showBackButton: true,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.receipt_long, color: Colors.black87),
+          onPressed: () => context.push('/log-viewer'),
+          tooltip: 'Ver Logs del Sistema',
+        ),
+        IconButton(
+          icon: const Icon(Icons.refresh, color: Colors.black87),
+          onPressed: () =>
+              ref.read(syncStatusReportProvider.notifier).refreshStats(),
+          tooltip: 'Recargar Contadores',
+        ),
+      ],
+    );
+  }
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(appBarProvider.notifier).setOptions(
-        title: "Estado de Sincronización",
-        showBackButton: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.receipt_long, color: Colors.black87),
-            onPressed: () => context.push('/log-viewer'),
-            tooltip: "Ver Logs del Sistema",
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.black87),
-            onPressed: () => ref.read(syncStatusReportProvider.notifier).refreshStats(),
-            tooltip: "Recargar Contadores",
-          ),
-        ],
-      );
-    });
+    Future.microtask(configureAppBar);
   }
 
   @override

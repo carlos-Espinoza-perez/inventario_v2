@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'package:inventario_v2/core/db/app_database.dart';
+import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/core/providers/supabase_provider.dart';
@@ -31,7 +32,8 @@ class ProductCreateScreen extends ConsumerStatefulWidget {
       _ProductCreateScreenState();
 }
 
-class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen> {
+class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
+    with AppBarConfigMixin {
   final Color _primaryColor = Colors.cyan.shade800;
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _categoryCtrl = TextEditingController();
@@ -72,18 +74,19 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen> {
   ];
 
   @override
+  void configureAppBar() {
+    ref.read(appBarProvider.notifier).setOptions(
+      title: widget.productToEdit != null ? 'Editar Producto' : 'Nuevo Producto',
+      showBackButton: true,
+      actions: [],
+    );
+  }
+
+  @override
   void initState() {
     super.initState();
     Future.microtask(() {
-      ref
-          .read(appBarProvider.notifier)
-          .setOptions(
-            title: widget.productToEdit != null
-                ? 'Editar Producto'
-                : 'Nuevo Producto',
-            showBackButton: true,
-            actions: [],
-          );
+      configureAppBar();
       _populateFieldsForEdit();
     });
     _categoryCtrl.addListener(_updateSmartName);
