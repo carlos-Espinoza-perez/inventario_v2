@@ -122,33 +122,30 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
     final normalizedTalla = _cleanText(talla) ?? 'General';
     final normalizedColor = _cleanText(color);
 
-    ProductoVariante? existing;
+    ProductoVariante? existing = await (select(productoVariantes)
+          ..where((tbl) => tbl.productoId.equals(productoId))
+          ..where((tbl) => tbl.talla.equals(normalizedTalla))
+          ..where((tbl) => tbl.estado.equals(true))
+          ..limit(1))
+        .getSingleOrNull();
+
     if (normalizedSku != null) {
-      existing =
-          await (select(productoVariantes)
-                ..where((tbl) => tbl.sku.equals(normalizedSku))
-                ..where((tbl) => tbl.estado.equals(true))
-                ..limit(1))
-              .getSingleOrNull();
-      if (existing != null && existing.productoId != productoId) {
+      final existingBySku = await (select(productoVariantes)
+            ..where((tbl) => tbl.sku.equals(normalizedSku))
+            ..where((tbl) => tbl.estado.equals(true))
+            ..limit(1))
+          .getSingleOrNull();
+      if (existingBySku != null && existingBySku.productoId != productoId) {
         throw ContextoInvalidoException(
           'El codigo $normalizedSku ya esta asignado a otro producto.',
         );
       }
     }
 
-    existing ??=
-        await (select(productoVariantes)
-              ..where((tbl) => tbl.productoId.equals(productoId))
-              ..where((tbl) => tbl.talla.equals(normalizedTalla))
-              ..where((tbl) => tbl.estado.equals(true))
-              ..limit(1))
-            .getSingleOrNull();
-
     if (existing != null) {
       await (update(
         productoVariantes,
-      )..where((tbl) => tbl.id.equals(existing!.id))).write(
+      )..where((tbl) => tbl.id.equals(existing.id))).write(
         ProductoVariantesCompanion(
           sku: normalizedSku != null
               ? Value(normalizedSku)
@@ -170,7 +167,7 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
 
       return (select(
         productoVariantes,
-      )..where((tbl) => tbl.id.equals(existing!.id))).getSingle();
+      )..where((tbl) => tbl.id.equals(existing.id))).getSingle();
     }
 
     final newId = const Uuid().v4();

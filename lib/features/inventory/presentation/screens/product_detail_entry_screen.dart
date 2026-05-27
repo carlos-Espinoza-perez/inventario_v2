@@ -228,18 +228,20 @@ class _ProductDetailEntryScreenState
 
     for (var item in _generatedItems) {
       final String sku = item['qr'];
+      final String size = item['size'];
+      final String key = '${sku}_$size';
 
-      if (!grouped.containsKey(sku)) {
-        grouped[sku] = {
+      if (!grouped.containsKey(key)) {
+        grouped[key] = {
           'qr': sku,
-          'size': item['size'],
+          'size': size,
           'printed': item['printed'],
           'price': item['price'],
           'count': 0,
         };
       }
 
-      grouped[sku]!['count'] = (grouped[sku]!['count'] as int) + 1;
+      grouped[key]!['count'] = (grouped[key]!['count'] as int) + 1;
     }
 
     return grouped.values.toList().reversed.toList();
@@ -694,7 +696,8 @@ class _ProductDetailEntryScreenState
           icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
           onPressed: () {
             setState(() {
-              _generatedItems.removeWhere((item) => item['qr'] == sku);
+              _generatedItems.removeWhere((item) =>
+                  item['qr'] == sku && item['size'] == group['size']);
             });
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
