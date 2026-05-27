@@ -1564,6 +1564,8 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
     int threshold = 5,
     int limit = 10,
   }) async {
+    final resolvedEmpresaId = await getRequiredEmpresaId();
+
     final rows =
         await (select(inventarios).join([
                 innerJoin(
@@ -1578,6 +1580,10 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
                 ),
               ])
               ..where(inventarios.estado.equals(true))
+              ..where(productos.estado.equals(true))
+              ..where(productoVariantes.estado.equals(true))
+              ..where(productos.empresaId.equals(resolvedEmpresaId))
+              ..where(inventarios.cantidadActual.isBiggerThanValue(0.0))
               ..where(
                 inventarios.cantidadActual.isSmallerOrEqualValue(
                   threshold.toDouble(),
