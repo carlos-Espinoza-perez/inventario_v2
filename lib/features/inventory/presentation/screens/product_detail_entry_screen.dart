@@ -13,15 +13,24 @@ import 'package:inventario_v2/features/inventory/presentation/widgets/product_la
 class ProductEntryArgs {
   final String productId;
   final String categoriaId;
-  ProductEntryArgs({required this.productId, required this.categoriaId});
+  final String? preferredBarcode;
+  
+  ProductEntryArgs({
+    required this.productId, 
+    required this.categoriaId,
+    this.preferredBarcode,
+  });
+  
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is ProductEntryArgs &&
           productId == other.productId &&
-          categoriaId == other.categoriaId;
+          categoriaId == other.categoriaId &&
+          preferredBarcode == other.preferredBarcode;
+          
   @override
-  int get hashCode => productId.hashCode ^ categoriaId.hashCode;
+  int get hashCode => productId.hashCode ^ categoriaId.hashCode ^ preferredBarcode.hashCode;
 }
 
 class ProductEntryData {
@@ -31,6 +40,8 @@ class ProductEntryData {
   final double ultimoCosto;
   final double ultimoPrecioVenta;
   final int stockActual;
+  final bool hasRealBarcode;
+  
   ProductEntryData({
     required this.producto,
     required this.tallasDisponibles,
@@ -38,6 +49,7 @@ class ProductEntryData {
     required this.ultimoCosto,
     required this.ultimoPrecioVenta,
     required this.stockActual,
+    required this.hasRealBarcode,
   });
 }
 
@@ -70,6 +82,8 @@ final productEntryDataProvider =
           final specs = jsonDecode(categoria.especificacionJson!);
           if (specs['tallas'] != null) {
             tallas = List<String>.from(specs['tallas']);
+          } else if (specs['tallas_permitidas'] != null) {
+            tallas = List<String>.from(specs['tallas_permitidas']);
           }
           if (specs['porcentaje_ganancia'] != null) {
             double val = (specs['porcentaje_ganancia'] is int)
@@ -80,6 +94,19 @@ final productEntryDataProvider =
           }
         } catch (e) {
           debugPrint("Error specs: $e");
+        }
+      }
+
+      bool hasRealBarcode = args.preferredBarcode != null && args.preferredBarcode!.isNotEmpty;
+
+      final variantes = await db.inventoryDao.getVariantesByProductoId(args.productId);
+      if (variantes.isNotEmpty) {
+        if (variantes.any((v) => !v.sku.toUpperCase().startsWith('GEN-'))) {
+          hasRealBarcode = true;
+        }
+        final dbTallas = variantes.map((v) => v.talla).whereType<String>().toSet().toList();
+        if (dbTallas.isNotEmpty && !(dbTallas.length == 1 && dbTallas.first == 'General')) {
+          tallas = {...tallas, ...dbTallas}.toList();
         }
       }
 
@@ -98,6 +125,7 @@ final productEntryDataProvider =
         ultimoCosto: lastCost,
         ultimoPrecioVenta: lastPrice,
         stockActual: stockTotal,
+        hasRealBarcode: hasRealBarcode,
       );
     });
 
@@ -138,6 +166,7 @@ class _ProductDetailEntryScreenState
   bool _defaultPrint = true;
   bool _defaultShowPrice = true;
   bool _defaultOnePerLot = false;
+  bool _isFirstTimeModal = true;
 
   @override
   void initState() {
@@ -256,6 +285,7 @@ class _ProductDetailEntryScreenState
     final args = ProductEntryArgs(
       productId: widget.productId,
       categoriaId: widget.categoriaId,
+      preferredBarcode: widget.preferredBarcode,
     );
     final asyncData = ref.watch(productEntryDataProvider(args));
 
@@ -467,6 +497,11 @@ class _ProductDetailEntryScreenState
     if (_costCtrl.text.isEmpty || _priceCtrl.text.isEmpty) {
       _showErrorSnack("⚠️ Define costos primero");
       return;
+    }
+
+    if (_isFirstTimeModal) {
+      _defaultPrint = !data.hasRealBarcode;
+      _isFirstTimeModal = false;
     }
 
     final double basePrice = double.tryParse(_priceCtrl.text) ?? 0.0;
@@ -893,7 +928,10 @@ class _SizeSelectorModalState extends State<_SizeSelectorModal> {
       MaterialPageRoute(builder: (_) => const _BarcodeScannerPage()),
     );
     if (result != null && result.isNotEmpty) {
-      setState(() => _scannedCode = result);
+      setState(() {
+        _scannedCode = result;
+        _shouldPrint = false;
+      });
     }
   }
 

@@ -5,6 +5,7 @@ class OpenAutocompleteField extends StatefulWidget {
   final String label;
   final List<String> options;
   final IconData icon;
+  final VoidCallback? onSelectedAction;
 
   const OpenAutocompleteField({
     super.key,
@@ -12,6 +13,7 @@ class OpenAutocompleteField extends StatefulWidget {
     required this.label,
     required this.options,
     required this.icon,
+    this.onSelectedAction,
   });
 
   @override
@@ -46,6 +48,8 @@ class _OpenAutocompleteFieldState extends State<OpenAutocompleteField> {
             return TextField(
               controller: controller,
               focusNode: focusNode,
+              textInputAction: TextInputAction.next,
+              onSubmitted: (_) => onFieldSubmitted(),
               decoration: InputDecoration(
                 labelText: widget.label,
                 filled: true,
@@ -91,7 +95,14 @@ class _OpenAutocompleteFieldState extends State<OpenAutocompleteField> {
                     itemBuilder: (context, index) {
                       final option = options.elementAt(index);
                       return InkWell(
-                        onTap: () => onSelected(option),
+                        onTap: () {
+                          onSelected(option);
+                          if (widget.onSelectedAction != null) {
+                            widget.onSelectedAction!();
+                          } else {
+                            FocusScope.of(context).nextFocus();
+                          }
+                        },
                         child: Padding(
                           padding: const EdgeInsets.all(16.0),
                           child: Text(option),

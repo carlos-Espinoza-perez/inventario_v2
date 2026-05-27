@@ -174,9 +174,10 @@ class FormLoginState extends ConsumerState<FormLogin> {
 
     return Form(
       key: _formKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
+      child: AutofillGroup(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
           Text(
             "Nombre de usuario",
             style: TextStyle(
@@ -190,6 +191,7 @@ class FormLoginState extends ConsumerState<FormLogin> {
 
           TextFormField(
             controller: _emailCtrl,
+            autofillHints: const [AutofillHints.email],
             decoration: InputDecoration(
               border: const OutlineInputBorder(
                 borderRadius: BorderRadius.all(Radius.circular(8)),
@@ -221,6 +223,7 @@ class FormLoginState extends ConsumerState<FormLogin> {
           TextFormField(
             obscureText: obscureText,
             controller: _passwordCtrl,
+            autofillHints: const [AutofillHints.password],
             decoration: InputDecoration(
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.all(Radius.circular(8)),
@@ -298,6 +301,7 @@ class FormLoginState extends ConsumerState<FormLogin> {
             ),
           ),
         ],
+      ),
       ),
     );
   }
