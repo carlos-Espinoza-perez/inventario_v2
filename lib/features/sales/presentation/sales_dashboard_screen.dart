@@ -4,10 +4,14 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:inventario_v2/core/db/models/report_models.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
+import 'package:inventario_v2/core/providers/auto_sync_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
 
-final salesListProvider = FutureProvider<List<SalesListItemDrift>>((ref) async {
+final salesListProvider = FutureProvider.autoDispose<List<SalesListItemDrift>>((ref) async {
+  // Se re-ejecuta cuando termina una sincronización exitosa con el servidor
+  ref.watch(autoSyncProvider.select((s) => s.value?.lastSync));
+
   final db = ref.watch(driftDatabaseProvider);
   return db.salesDao.getSalesList();
 });
@@ -39,6 +43,7 @@ class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
   void initState() {
     super.initState();
     Future.microtask(() {
+      ref.invalidate(salesListProvider);
       ref.read(appBarProvider.notifier).setOptions(
         title: 'Gestion de Ventas',
         showBackButton: true,

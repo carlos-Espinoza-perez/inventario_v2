@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
+import 'package:inventario_v2/core/providers/auto_sync_provider.dart';
 import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
 import 'package:inventario_v2/features/dashboard/presentation/widgets/content_view_dashboard.dart';
 
@@ -24,9 +25,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final asyncData = ref.watch(dashboardProvider);
+    final syncErrorCount = ref.watch(syncErrorCountProvider).valueOrNull ?? 0;
+    final isSyncing = ref.watch(autoSyncProvider.select((s) => s.value?.isSyncing ?? false));
 
     return Column(
       children: [
+        if (syncErrorCount > 0)
+          _SyncErrorBanner(
+            errorCount: syncErrorCount,
+            isSyncing: isSyncing,
+            onRetry: () => ref.read(autoSyncProvider.notifier).runFullSync(),
+          ),
         Expanded(
           child: SingleChildScrollView(
             child: asyncData.when(
@@ -38,6 +47,65 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SyncErrorBanner extends StatelessWidget {
+  final int errorCount;
+  final bool isSyncing;
+  final VoidCallback onRetry;
+
+  const _SyncErrorBanner({
+    required this.errorCount,
+    required this.isSyncing,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.orange.shade700,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            const Icon(Icons.sync_problem, color: Colors.white, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '$errorCount registro${errorCount == 1 ? '' : 's'} pendiente${errorCount == 1 ? '' : 's'} de sincronizar',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            isSyncing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : TextButton(
+                    onPressed: onRetry,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text(
+                      'Reintentar',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ),
+          ],
+        ),
+      ),
     );
   }
 }

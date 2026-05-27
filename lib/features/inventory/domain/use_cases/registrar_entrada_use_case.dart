@@ -1,7 +1,10 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/db/models/inventory_requests.dart';
+import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/inventario_provider.dart';
+import 'package:inventario_v2/features/inventory/presentation/providers/warehouse_inventory_provider.dart'
+    hide inventarioRepositoryProvider;
 
 final registrarEntradaUseCaseProvider = Provider((ref) {
   return RegistrarEntradaUseCase(ref);
@@ -43,6 +46,9 @@ class RegistrarEntradaUseCase {
         st,
       );
     }
+
+    _ref.invalidate(warehouseInventoryProvider(bodegaId));
+    _ref.invalidate(dashboardProvider);
   }
 
   Future<List<InventoryEntryItem>> _mapOrderLinesToRequestItems(

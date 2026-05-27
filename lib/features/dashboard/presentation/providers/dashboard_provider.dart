@@ -1,8 +1,28 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/db/models/dashboard_models.dart';
+import 'package:inventario_v2/core/providers/auto_sync_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
+
+final syncErrorCountProvider = FutureProvider.autoDispose<int>((ref) async {
+  ref.watch(autoSyncProvider.select((s) => s.value?.lastSync));
+  final db = ref.watch(driftDatabaseProvider);
+  const tables = [
+    'empresas', 'roles', 'accesos_rol', 'usuarios', 'bodegas', 'bodegas_usuarios',
+    'cajas', 'caja_sesiones', 'caja_movimientos_extras', 'categorias', 'productos',
+    'producto_variantes', 'inventarios', 'clientes', 'movimientos',
+    'detalle_movimientos', 'ventas', 'detalle_ventas', 'pagos_ventas',
+  ];
+  var total = 0;
+  for (final table in tables) {
+    final row = await db
+        .customSelect("SELECT COUNT(*) AS cnt FROM $table WHERE sync_status = 'sync_error'")
+        .getSingleOrNull();
+    total += row?.read<int>('cnt') ?? 0;
+  }
+  return total;
+});
 
 extension CajaSesionDashboardCompat on CajaSesione {
   String get serverId => id;
@@ -49,6 +69,9 @@ class DashboardState {
 }
 
 final dashboardProvider = FutureProvider<DashboardState>((ref) async {
+  // Se re-ejecuta cuando termina una sincronización exitosa con el servidor
+  ref.watch(autoSyncProvider.select((s) => s.value?.lastSync));
+
   final db = ref.watch(driftDatabaseProvider);
   final validBodegaIds = await ref.watch(validBodegasIdsProvider.future);
 

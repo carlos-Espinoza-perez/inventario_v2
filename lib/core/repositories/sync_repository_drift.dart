@@ -84,12 +84,16 @@ class SyncRepository {
     if (pendingProductos.isNotEmpty) {
       await ImageSyncService().preCacheImages(pendingProductos);
     }
+    final pendingVariantes = await _db.inventoryDao.getPendingProductoVariantes();
+    await _reconcileProductoVarianteUUIDs(pendingVariantes);
     await _push(
       'codigo_producto',
       'producto_variantes',
       await _db.inventoryDao.getPendingProductoVariantes(),
       _productoVarianteToJson,
     );
+    final pendingInventarios = await _db.inventoryDao.getPendingInventarios();
+    await _reconcileInventarioUUIDs(pendingInventarios);
     await _push(
       'inventario_producto',
       'inventarios',
@@ -444,6 +448,131 @@ class SyncRepository {
     return true;
   }
 
+  /// Antes de enviar variantes pendientes, detecta SKUs que ya existen en
+  /// Supabase con distinto UUID. Cuando ocurre, redirige todas las FKs locales
+  /// al UUID remoto y marca la variante local duplicada como 'synced' para
+  /// que no vuelva a intentarse (evita error 23505 y los 23503 en cascada).
+  Future<void> _reconcileProductoVarianteUUIDs(
+    List<ProductoVariante> pendingVariantes,
+  ) async {
+    if (pendingVariantes.isEmpty) return;
+
+    final skus = pendingVariantes.map((v) => v.sku).where((s) => s.isNotEmpty).toList();
+    if (skus.isEmpty) return;
+
+    List<dynamic> remoteRows;
+    try {
+      remoteRows = await _supabase
+          .from('codigo_producto')
+          .select('id, codigo_sku')
+          .inFilter('codigo_sku', skus);
+    } catch (e) {
+      AppLogger.warn('[Sync][Reconcile] No se pudo consultar codigo_producto remoto: $e');
+      return;
+    }
+
+    // Mapa SKU → UUID remoto
+    final remoteSkuToId = <String, String>{};
+    for (final row in remoteRows) {
+      final sku = row['codigo_sku']?.toString() ?? '';
+      final remoteId = row['id']?.toString() ?? '';
+      if (sku.isNotEmpty && remoteId.isNotEmpty) {
+        remoteSkuToId[sku] = remoteId;
+      }
+    }
+
+    for (final variante in pendingVariantes) {
+      final remoteId = remoteSkuToId[variante.sku];
+      if (remoteId == null || remoteId == variante.id) continue;
+
+      // Este SKU existe remotamente con un UUID distinto → necesita reconciliación
+      final localId = variante.id;
+      AppLogger.info(
+        '[Sync][Reconcile] SKU ${variante.sku}: redirigiendo $localId → $remoteId',
+      );
+
+      // 1. Redirigir FK en inventarios
+      await _db.customStatement(
+        "UPDATE inventarios SET producto_variante_id = '$remoteId', sync_status = 'pending_update' WHERE producto_variante_id = '$localId'",
+      );
+      // 2. Redirigir FK en detalle_movimientos
+      await _db.customStatement(
+        "UPDATE detalle_movimientos SET producto_variante_id = '$remoteId', sync_status = 'pending_update' WHERE producto_variante_id = '$localId'",
+      );
+      // 3. Redirigir FK en detalle_ventas
+      await _db.customStatement(
+        "UPDATE detalle_ventas SET producto_variante_id = '$remoteId', sync_status = 'pending_update' WHERE producto_variante_id = '$localId'",
+      );
+      // 4. Insertar/actualizar la variante remota localmente con el UUID correcto
+      try {
+        final remoteVariante = await _supabase
+            .from('codigo_producto')
+            .select()
+            .eq('id', remoteId)
+            .single();
+        await _db
+            .into(_db.productoVariantes)
+            .insertOnConflictUpdate(_productoVarianteFromJson(Map<String, dynamic>.from(remoteVariante)));
+      } catch (e) {
+        AppLogger.warn('[Sync][Reconcile] No se pudo bajar variante remota $remoteId: $e');
+      }
+      // 5. Marcar la variante local duplicada como synced (apunta al remoto)
+      await _db.customStatement(
+        "UPDATE producto_variantes SET sync_status = 'synced' WHERE id = '$localId'",
+      );
+    }
+  }
+
+  /// Antes de enviar inventarios pendientes, detecta filas que ya existen en
+  /// Supabase con la misma combinación (producto_variante_id, bodega_id) pero
+  /// con distinto UUID. En ese caso redirige el UUID local al remoto y marca
+  /// el duplicado como 'synced' para evitar el error 23505 "unique_inventario".
+  Future<void> _reconcileInventarioUUIDs(List<Inventario> pendingInventarios) async {
+    if (pendingInventarios.isEmpty) return;
+
+    for (final inv in pendingInventarios) {
+      List<dynamic> remoteRows;
+      try {
+        remoteRows = await _supabase
+            .from('inventario_producto')
+            .select('id')
+            .eq('producto_variante_id', inv.productoVarianteId)
+            .eq('bodega_id', inv.bodegaId)
+            .neq('id', inv.id);
+      } catch (e) {
+        AppLogger.warn('[Sync][Reconcile] No se pudo consultar inventario_producto remoto: $e');
+        continue;
+      }
+
+      if (remoteRows.isEmpty) continue;
+
+      final remoteId = remoteRows.first['id']?.toString() ?? '';
+      if (remoteId.isEmpty) continue;
+
+      final localId = inv.id;
+      AppLogger.info(
+        '[Sync][Reconcile] inventario (variante=${inv.productoVarianteId}, bodega=${inv.bodegaId}): redirigiendo $localId → $remoteId',
+      );
+
+      // Si el UUID remoto ya existe localmente (bajado en un pull previo),
+      // solo marcamos el duplicado como synced para que no se intente subir.
+      // Si no existe aún, renombramos para enviarlo con el UUID correcto.
+      final alreadyLocal = await _db
+          .customSelect("SELECT 1 FROM inventarios WHERE id = '$remoteId' LIMIT 1")
+          .getSingleOrNull();
+
+      if (alreadyLocal != null) {
+        await _db.customStatement(
+          "UPDATE inventarios SET sync_status = 'synced' WHERE id = '$localId'",
+        );
+      } else {
+        await _db.customStatement(
+          "UPDATE inventarios SET id = '$remoteId', sync_status = 'pending_update' WHERE id = '$localId'",
+        );
+      }
+    }
+  }
+
   Future<void> _push<T>(
     String remoteTable,
     String localTable,
@@ -742,17 +871,21 @@ class SyncRepository {
     return map;
   }
 
-  Map<String, dynamic> _cajaMovimientoExtraToJson(CajaMovimientosExtra r) => {
-    ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
-    'caja_sesion_id': r.cajaSesionId,
-    'referencia_venta_id': r.referenciaVentaId,
-    'tipo': r.tipo,
-    'motivo': r.motivo,
-    'monto': r.monto,
-    'usuario_registro_id': r.usuarioRegistroId,
-    'estado': r.estado,
-    'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
-  };
+  Map<String, dynamic> _cajaMovimientoExtraToJson(CajaMovimientosExtra r) {
+    final map = {
+      ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
+      'caja_sesion_id': r.cajaSesionId,
+      'referencia_venta_id': r.referenciaVentaId,
+      'tipo': r.tipo,
+      'motivo': r.motivo,
+      'monto': r.monto,
+      'usuario_registro_id': r.usuarioRegistroId,
+      'estado': r.estado,
+      'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
+    };
+    map.remove('fecha_registro');
+    return map;
+  }
   Map<String, dynamic> _categoriaToJson(Categoria r) => {
     ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
     'empresa_id': r.empresaId,

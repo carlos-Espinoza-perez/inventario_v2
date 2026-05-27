@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/db/models/inventory_requests.dart';
 import 'package:inventario_v2/core/services/remote_logger.dart';
+import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/inventario_provider.dart';
 import 'package:inventario_v2/features/inventory/presentation/providers/warehouse_inventory_provider.dart'
     hide inventarioRepositoryProvider;
@@ -79,6 +80,7 @@ class RegistrarTrasladoUseCase {
 
     _ref.invalidate(warehouseInventoryProvider(originWarehouseId));
     _ref.invalidate(warehouseInventoryProvider(destinationWarehouseId));
+    _ref.invalidate(dashboardProvider);
   }
 
   TransferItemRequest _mapItemToRequest(Map<String, dynamic> item) {

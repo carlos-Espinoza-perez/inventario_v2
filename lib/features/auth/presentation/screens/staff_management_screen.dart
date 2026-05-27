@@ -521,6 +521,8 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
         empresaId: currentUser.empresaId,
       );
 
+      ref.invalidate(staffAdminDataProvider);
+
       if (!mounted) return;
 
       // Mostrar diálogo con la contraseña temporal
