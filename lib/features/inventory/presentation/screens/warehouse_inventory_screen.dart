@@ -342,15 +342,6 @@ class _WarehouseInventoryScreenState
                     context.push('/warehouse-transfer/${widget.warehouseId}');
                   },
                 ),
-                _ActionButton(
-                  icon: Icons.list_alt_outlined,
-                  color: Colors.blue,
-                  label: "Lista de Productos",
-                  onTap: () {
-                    context.pop();
-                    context.push('/product-list');
-                  },
-                ),
               ],
             ),
             const SizedBox(height: 20),

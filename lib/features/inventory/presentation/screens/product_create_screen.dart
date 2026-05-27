@@ -15,7 +15,6 @@ import 'package:inventario_v2/core/providers/supabase_provider.dart';
 import 'package:inventario_v2/core/services/image_storage_service.dart';
 import 'package:inventario_v2/features/inventory/data/providers/categoria_provider.dart';
 import 'package:inventario_v2/features/inventory/presentation/widgets/autocomplete_field_product_create.dart';
-import 'package:inventario_v2/features/inventory/presentation/widgets/autocomplete_grouped_field_product_create.dart';
 
 class ProductCreateScreen extends ConsumerStatefulWidget {
   final Producto? productToEdit;
@@ -37,39 +36,52 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
   final Color _primaryColor = Colors.cyan.shade800;
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _categoryCtrl = TextEditingController();
+  final TextEditingController _subCategoryCtrl = TextEditingController();
   final TextEditingController _brandCtrl = TextEditingController();
   final TextEditingController _detailCtrl = TextEditingController();
 
   String? _selectedImagePath;
   bool _isSaving = false;
+  final Set<String> _selectedTallas = {};
 
   final List<String> _brands = const [
-    "Levi's",
-    'Nike',
-    'Original',
-    'Tommy Hilfiger',
-    'Lovable',
     'Anabell',
     'Apolo',
+    'Aurora',
     'Azucena',
     'Azura',
+    'Crocs',
     'Differ',
     'Elena',
     'Emeli Engreida',
     'GQ',
+    'Gotica',
     'Happy',
+    'Hot',
     'Isabella',
     'Jingo',
     'Kallua',
+    "Levi's",
     'Liverpool',
+    'Lovable',
     'Lucatonica',
     'Mobex',
+    'NY',
+    'Nike',
+    'Original',
+    'Penguin',
     'Piecitos',
+    'Probox',
     'Rasi',
     'Roca',
+    'Senador',
+    'SF',
+    'Tommy Hilfiger',
+    'Toxica',
     'Triyons',
     'Vicio',
     'Wearwold',
+    'Wrangler',
     'Yumbo',
   ];
 
@@ -89,7 +101,11 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
       configureAppBar();
       _populateFieldsForEdit();
     });
-    _categoryCtrl.addListener(_updateSmartName);
+    _categoryCtrl.addListener(() {
+      if (mounted) setState(() {});
+      _updateSmartName();
+    });
+    _subCategoryCtrl.addListener(_updateSmartName);
     _brandCtrl.addListener(_updateSmartName);
     _detailCtrl.addListener(_updateSmartName);
   }
@@ -106,7 +122,10 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
         if (specs is Map<String, dynamic>) {
           _brandCtrl.text = specs['brand']?.toString() ?? '';
           _detailCtrl.text = specs['detail']?.toString() ?? '';
-          _categoryCtrl.text = specs['category']?.toString() ?? '';
+          _categoryCtrl.text = specs['parent_category']?.toString() ?? specs['category']?.toString() ?? '';
+          if (specs['parent_category'] != null) {
+            _subCategoryCtrl.text = specs['category']?.toString() ?? '';
+          }
         }
       } catch (_) {}
     }
@@ -116,6 +135,7 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
   void dispose() {
     _nameController.dispose();
     _categoryCtrl.dispose();
+    _subCategoryCtrl.dispose();
     _brandCtrl.dispose();
     _detailCtrl.dispose();
     super.dispose();
@@ -124,7 +144,13 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
   void _updateSmartName() {
     if (widget.productToEdit != null) return;
     final parts = <String>[];
-    if (_categoryCtrl.text.isNotEmpty) parts.add(_categoryCtrl.text.trim());
+    
+    if (_subCategoryCtrl.text.isNotEmpty) {
+      parts.add(_subCategoryCtrl.text.trim());
+    } else if (_categoryCtrl.text.isNotEmpty) {
+      parts.add(_categoryCtrl.text.trim());
+    }
+
     if (_brandCtrl.text.isNotEmpty &&
         _brandCtrl.text.trim().toLowerCase() != 'generico') {
       parts.add(_brandCtrl.text.trim());
@@ -149,39 +175,61 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
     _updateSmartName();
   }
 
-  Map<String, List<String>> _mapCategoriasToGroupedOptions(
-    List<Categoria> categorias,
-  ) {
-    final groupedOptions = <String, List<String>>{};
-    final padres = {
-      for (final cat in categorias.where((c) => c.categoriaPadreId == null))
-        cat.id: cat.nombre,
-    };
-    for (final parentName in padres.values) {
-      groupedOptions[parentName] = [];
-    }
-    for (final hijo in categorias.where((c) => c.categoriaPadreId != null)) {
-      final nombrePadre = padres[hijo.categoriaPadreId];
-      if (nombrePadre != null) {
-        groupedOptions[nombrePadre]!.add(hijo.nombre);
-      }
-    }
-    return groupedOptions;
-  }
-
   @override
   Widget build(BuildContext context) {
     final categorias = ref.watch(listCategoriasAllProvider).value ?? [];
-    final groupedOptions = _mapCategoriasToGroupedOptions(categorias);
 
-    if (_categoryCtrl.text.isEmpty && widget.productToEdit != null) {
+    if (_categoryCtrl.text.isEmpty && _subCategoryCtrl.text.isEmpty && widget.productToEdit != null) {
       final current = categorias
           .where((c) => c.id == widget.productToEdit!.categoriaId)
           .firstOrNull;
       if (current != null) {
-        _categoryCtrl.text = current.nombre;
+        if (current.categoriaPadreId != null) {
+          final parent = categorias.where((c) => c.id == current.categoriaPadreId).firstOrNull;
+          if (parent != null) {
+            _categoryCtrl.text = parent.nombre;
+          }
+          _subCategoryCtrl.text = current.nombre;
+        } else {
+          _categoryCtrl.text = current.nombre;
+        }
       }
     }
+
+    Categoria? currentSelectedCategory;
+    final catName = _subCategoryCtrl.text.isNotEmpty ? _subCategoryCtrl.text.trim() : _categoryCtrl.text.trim();
+    if (catName.isNotEmpty) {
+      currentSelectedCategory = categorias.where((c) => c.nombre == catName).firstOrNull;
+    }
+    
+    List<String> suggestedTallas = [];
+    if (currentSelectedCategory?.especificacionJson != null && currentSelectedCategory!.especificacionJson!.isNotEmpty) {
+      try {
+        final Map<String, dynamic> spec = jsonDecode(currentSelectedCategory.especificacionJson!);
+        if (spec['tallas_permitidas'] is List) {
+          suggestedTallas = (spec['tallas_permitidas'] as List).map((e) => e.toString()).toList();
+        }
+      } catch (_) {}
+    }
+
+    final parentCategories = categorias
+        .where((c) => c.categoriaPadreId == null)
+        .map((c) => c.nombre)
+        .toList();
+
+    final selectedParent = categorias
+        .where((c) => c.nombre == _categoryCtrl.text && c.categoriaPadreId == null)
+        .firstOrNull;
+        
+    final hasChildren = selectedParent != null && 
+        categorias.any((c) => c.categoriaPadreId == selectedParent.id);
+
+    final childCategories = selectedParent != null
+        ? categorias
+            .where((c) => c.categoriaPadreId == selectedParent.id)
+            .map((c) => c.nombre)
+            .toList()
+        : <String>[];
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -302,12 +350,21 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
                 ),
                 child: Column(
                   children: [
-                    OpenAutocompleteGroupedField(
+                    OpenAutocompleteField(
                       controller: _categoryCtrl,
-                      label: 'Categoria',
-                      groupedOptions: groupedOptions,
+                      label: 'Categoría',
+                      options: parentCategories,
                       icon: Icons.category_outlined,
                     ),
+                    if (hasChildren) ...[
+                      const SizedBox(height: 20),
+                      OpenAutocompleteField(
+                        controller: _subCategoryCtrl,
+                        label: 'Subcategoría',
+                        options: childCategories,
+                        icon: Icons.account_tree_outlined,
+                      ),
+                    ],
                     const SizedBox(height: 20),
                     OpenAutocompleteField(
                       controller: _brandCtrl,
@@ -318,6 +375,7 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
                     const SizedBox(height: 20),
                     TextField(
                       controller: _detailCtrl,
+                      textInputAction: TextInputAction.next,
                       decoration: InputDecoration(
                         labelText: 'Modelo / Rasgos (Opcional)',
                         hintText: 'Ej: Air Max, Rayado...',
@@ -350,6 +408,7 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
                 ),
                 child: TextField(
                   controller: _nameController,
+                  textInputAction: TextInputAction.done,
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -377,6 +436,36 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
                   ),
                 ),
               ),
+              if (widget.productToEdit == null && suggestedTallas.isNotEmpty) ...[
+                const SizedBox(height: 25),
+                const Text(
+                  'Selecciona las tallas a crear:',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: suggestedTallas.map((talla) {
+                    final isSelected = _selectedTallas.contains(talla);
+                    return FilterChip(
+                      label: Text(talla),
+                      selected: isSelected,
+                      onSelected: (selected) {
+                        setState(() {
+                          if (selected) {
+                            _selectedTallas.add(talla);
+                          } else {
+                            _selectedTallas.remove(talla);
+                          }
+                        });
+                      },
+                      selectedColor: _primaryColor.withValues(alpha: 0.2),
+                      checkmarkColor: _primaryColor,
+                    );
+                  }).toList(),
+                ),
+              ],
               const SizedBox(height: 80),
             ],
           ),
@@ -401,21 +490,54 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
         throw Exception('No se pudo resolver la sesion activa.');
       }
 
-      Categoria? categoriaSeleccionada;
       final categoriaNombre = _categoryCtrl.text.trim();
+      final subCategoriaNombre = _subCategoryCtrl.text.trim();
+      
+      final categoriasAll = ref.read(listCategoriasAllProvider).value ?? [];
+      final parentCatEntity = categoriasAll.where((c) => c.nombre == categoriaNombre && c.categoriaPadreId == null).firstOrNull;
+      final checkHasChildren = parentCatEntity != null && categoriasAll.any((c) => c.categoriaPadreId == parentCatEntity.id);
+
+      if (checkHasChildren && subCategoriaNombre.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Por favor, selecciona una Subcategoría')),
+        );
+        setState(() => _isSaving = false);
+        return;
+      }
+
+      Categoria? parentCategoria;
       if (categoriaNombre.isNotEmpty) {
-        categoriaSeleccionada = await db.inventoryDao.findCategoriaByName(
+        parentCategoria = await db.inventoryDao.findCategoriaByName(
           empresaId: sesion.empresa.id,
           name: categoriaNombre,
         );
       }
-      categoriaSeleccionada ??= await db.inventoryDao.saveCategoria(
+      parentCategoria ??= await db.inventoryDao.saveCategoria(
         categoriaId: null,
         empresaId: sesion.empresa.id,
         nombre: categoriaNombre.isEmpty ? 'General' : categoriaNombre,
         categoriaPadreId: null,
         usuarioRegistroId: sesion.usuario.id,
       );
+
+      Categoria? categoriaSeleccionada;
+      if (subCategoriaNombre.isNotEmpty) {
+        Categoria? childCategoria = await db.inventoryDao.findCategoriaByName(
+          empresaId: sesion.empresa.id,
+          name: subCategoriaNombre,
+        );
+        childCategoria ??= await db.inventoryDao.saveCategoria(
+          categoriaId: null,
+          empresaId: sesion.empresa.id,
+          nombre: subCategoriaNombre,
+          categoriaPadreId: parentCategoria.id,
+          usuarioRegistroId: sesion.usuario.id,
+        );
+        categoriaSeleccionada = childCategoria;
+      } else {
+        categoriaSeleccionada = parentCategoria;
+      }
 
       String? localPathFinal = widget.productToEdit?.imagenLocal;
       String? webUrlFinal = widget.productToEdit?.imagenUrl;
@@ -444,6 +566,7 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
       final specs = jsonEncode({
         'brand': _brandCtrl.text.trim(),
         'category': categoriaSeleccionada.nombre,
+        'parent_category': parentCategoria.nombre,
         'detail': _detailCtrl.text.trim(),
       });
 
@@ -460,6 +583,7 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
         precioBase: widget.productToEdit?.precioBase ?? 0,
         defaultSku: widget.initialBarcode,
         bodegaIds: bodegaIds,
+        tallasSeleccionadas: widget.productToEdit == null && _selectedTallas.isNotEmpty ? _selectedTallas.toList() : null,
       );
 
       if (!mounted) return;

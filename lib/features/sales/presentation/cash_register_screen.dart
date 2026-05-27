@@ -571,6 +571,9 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen>
       await repo.abrirCaja();
       ref.invalidate(dashboardProvider);
       if (mounted) {
+        if (context.canPop()) {
+          context.pop();
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Turno abierto correctamente'),

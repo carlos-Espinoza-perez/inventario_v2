@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/constants/permission_codes.dart';
@@ -20,6 +21,7 @@ class CategoryManageScreen extends ConsumerStatefulWidget {
 class _CategoryManageScreenState extends ConsumerState<CategoryManageScreen>
     with AppBarConfigMixin {
   final TextEditingController _nameCtrl = TextEditingController();
+  final TextEditingController _tallasCtrl = TextEditingController();
   String? _parentId;
 
   @override
@@ -40,6 +42,7 @@ class _CategoryManageScreenState extends ConsumerState<CategoryManageScreen>
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _tallasCtrl.dispose();
     super.dispose();
   }
 
@@ -49,6 +52,17 @@ class _CategoryManageScreenState extends ConsumerState<CategoryManageScreen>
   }) async {
     _nameCtrl.text = category?.nombre ?? '';
     _parentId = category?.categoriaPadreId;
+    
+    _tallasCtrl.text = '';
+    if (category?.especificacionJson != null && category!.especificacionJson!.isNotEmpty) {
+      try {
+        final Map<String, dynamic> spec = jsonDecode(category.especificacionJson!);
+        if (spec.containsKey('tallas_permitidas')) {
+          final List<dynamic> tallas = spec['tallas_permitidas'];
+          _tallasCtrl.text = tallas.join(', ');
+        }
+      } catch (_) {}
+    }
 
     await showDialog<void>(
       context: context,
@@ -69,6 +83,14 @@ class _CategoryManageScreenState extends ConsumerState<CategoryManageScreen>
                       hintText: 'Ej. Camisetas, Deportivo...',
                     ),
                     autofocus: true,
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _tallasCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Tallas Permitidas (Opcional)',
+                      hintText: 'Ej. S, M, L o 32, 34, 36',
+                    ),
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String?>(
@@ -152,12 +174,32 @@ class _CategoryManageScreenState extends ConsumerState<CategoryManageScreen>
         return;
       }
 
+      String? especificacionJson = existing?.especificacionJson;
+      final tallasStr = _tallasCtrl.text.trim();
+      
+      Map<String, dynamic> spec = {};
+      if (especificacionJson != null && especificacionJson.isNotEmpty) {
+        try {
+          spec = jsonDecode(especificacionJson);
+        } catch (_) {}
+      }
+      
+      if (tallasStr.isNotEmpty) {
+        final tallasList = tallasStr.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+        spec['tallas_permitidas'] = tallasList;
+        especificacionJson = jsonEncode(spec);
+      } else {
+        spec.remove('tallas_permitidas');
+        especificacionJson = spec.isEmpty ? null : jsonEncode(spec);
+      }
+
       await db.inventoryDao.saveCategoria(
         categoriaId: existing?.id,
         empresaId: user.empresaId,
         nombre: name,
         categoriaPadreId: _parentId,
         usuarioRegistroId: user.serverId,
+        especificacionJson: especificacionJson,
       );
 
       if (mounted) {
