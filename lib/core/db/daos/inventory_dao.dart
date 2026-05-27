@@ -1566,49 +1566,59 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
   }) async {
     final resolvedEmpresaId = await getRequiredEmpresaId();
 
-    final rows =
-        await (select(inventarios).join([
-                innerJoin(
-                  productoVariantes,
-                  productoVariantes.id.equalsExp(
-                    inventarios.productoVarianteId,
-                  ),
-                ),
-                innerJoin(
-                  productos,
-                  productos.id.equalsExp(productoVariantes.productoId),
-                ),
-              ])
-              ..where(inventarios.estado.equals(true))
-              ..where(productos.estado.equals(true))
-              ..where(productoVariantes.estado.equals(true))
-              ..where(productos.empresaId.equals(resolvedEmpresaId))
-              ..where(inventarios.cantidadActual.isBiggerThanValue(0.0))
-              ..where(
-                inventarios.cantidadActual.isSmallerOrEqualValue(
-                  threshold.toDouble(),
-                ),
-              )
-              ..where(
-                bodegaIds == null || bodegaIds.isEmpty
-                    ? const Constant(true)
-                    : inventarios.bodegaId.isIn(bodegaIds.toList()),
-              )
-              ..orderBy([OrderingTerm.asc(inventarios.cantidadActual)]))
-            .get();
+    final totalStockExp = inventarios.cantidadActual.sum();
+    final avgCostExp = inventarios.costoPromedio.avg();
+
+    final query = select(inventarios).join([
+      innerJoin(
+        productoVariantes,
+        productoVariantes.id.equalsExp(
+          inventarios.productoVarianteId,
+        ),
+      ),
+      innerJoin(
+        productos,
+        productos.id.equalsExp(productoVariantes.productoId),
+      ),
+    ])
+      ..where(inventarios.estado.equals(true))
+      ..where(productos.estado.equals(true))
+      ..where(productoVariantes.estado.equals(true))
+      ..where(productos.empresaId.equals(resolvedEmpresaId))
+      ..where(
+        bodegaIds == null || bodegaIds.isEmpty
+            ? const Constant(true)
+            : inventarios.bodegaId.isIn(bodegaIds.toList()),
+      );
+
+    query.groupBy([
+      productos.id
+    ],
+        having: totalStockExp.isBiggerThanValue(0.0) &
+            totalStockExp.isSmallerOrEqualValue(threshold.toDouble()));
+
+    query.orderBy([OrderingTerm.asc(totalStockExp)]);
+
+    final rows = await query.get();
 
     return rows
         .take(limit)
-        .map(
-          (row) => DashboardLowStockItem(
-            inventarioId: row.readTable(inventarios).id,
-            productoId: row.readTable(productos).id,
-            nombre: row.readTable(productos).nombre,
-            sku: row.readTable(productoVariantes).sku,
-            cantidadActual: row.readTable(inventarios).cantidadActual,
-            costoPromedio: row.readTable(inventarios).costoPromedio,
-          ),
-        )
+        .map((row) {
+          final prod = row.readTable(productos);
+          final inv = row.readTable(inventarios);
+          final variant = row.readTable(productoVariantes);
+          final totalStock = row.read(totalStockExp) ?? 0.0;
+          final avgCost = row.read(avgCostExp) ?? inv.costoPromedio;
+
+          return DashboardLowStockItem(
+            inventarioId: inv.id,
+            productoId: prod.id,
+            nombre: prod.nombre,
+            sku: prod.codigoPersonalizado ?? variant.sku,
+            cantidadActual: totalStock,
+            costoPromedio: avgCost,
+          );
+        })
         .toList();
   }
 
