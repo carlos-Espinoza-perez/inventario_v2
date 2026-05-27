@@ -15,6 +15,8 @@ import 'package:inventario_v2/features/inventory/presentation/screens/warehouse_
 import 'package:inventario_v2/features/inventory/presentation/screens/warehouse_inventory_screen.dart';
 import 'package:inventario_v2/features/inventory/presentation/screens/warehouse_screen.dart';
 import 'package:inventario_v2/features/inventory/presentation/screens/warehouse_transfer_screen.dart';
+import 'package:inventario_v2/features/inventory/presentation/screens/category_manage_screen.dart';
+import 'package:inventario_v2/features/inventory/presentation/screens/category_tree_screen.dart';
 import 'package:inventario_v2/features/assistant/presentation/screens/assistant_screen.dart';
 import 'package:inventario_v2/features/report/presentation/reports_dashboard_screen.dart';
 import 'package:inventario_v2/features/report/presentation/sales_report_screen.dart';
@@ -321,6 +323,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const PermissionGuard(
               requiredPermission: PermissionCode.productRead,
               child: ProductListScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/category-manage',
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.categoryRead,
+              child: CategoryManageScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/category-tree',
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.categoryRead,
+              child: CategoryTreeScreen(),
             ),
           ),
 

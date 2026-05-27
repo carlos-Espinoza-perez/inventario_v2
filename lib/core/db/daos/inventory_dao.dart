@@ -513,10 +513,10 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
     required double precioBase,
     String? defaultSku,
     required Iterable<String> bodegaIds,
+    List<String>? tallasSeleccionadas,
   }) async {
     final now = DateTime.now();
     final resolvedProductId = productId ?? const Uuid().v4();
-    final resolvedVariantId = const Uuid().v4();
     final resolvedSku = (defaultSku == null || defaultSku.isEmpty)
         ? 'GEN-${resolvedProductId.substring(0, 8).toUpperCase()}'
         : defaultSku;
@@ -545,69 +545,76 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
         ),
       );
 
-      final existingVariant =
-          await (select(productoVariantes)
-                ..where((tbl) => tbl.productoId.equals(resolvedProductId))
-                ..orderBy([(tbl) => OrderingTerm.asc(tbl.createdAt)])
-                ..limit(1))
-              .getSingleOrNull();
+      final existingVariants = await (select(productoVariantes)
+            ..where((tbl) => tbl.productoId.equals(resolvedProductId))
+          ).get();
 
-      final variantId = existingVariant?.id ?? resolvedVariantId;
-      await into(productoVariantes).insertOnConflictUpdate(
-        ProductoVariantesCompanion.insert(
-          id: variantId,
-          productoId: resolvedProductId,
-          sku: resolvedSku,
-          talla: const Value('General'),
-          color: const Value('General'),
-          precioEspecifico: Value(precioBase),
-          costoEspecifico: Value(ultimoCosto),
-          usuarioRegistroId: Value(usuarioRegistroId),
-          estado: const Value(true),
-          createdAt: Value(now),
-          updatedAt: Value(now),
-          syncStatus: Value(
-            existingVariant == null ? 'pending_insert' : 'pending_update',
+      final List<String> tallas = (tallasSeleccionadas != null && tallasSeleccionadas.isNotEmpty)
+          ? tallasSeleccionadas
+          : ['General'];
+
+      for (final talla in tallas) {
+        final variant = existingVariants.where((v) => v.talla == talla).firstOrNull;
+        final variantId = variant?.id ?? const Uuid().v4();
+        
+        final String vSku = tallas.length == 1 ? resolvedSku : '$resolvedSku-$talla';
+
+        await into(productoVariantes).insertOnConflictUpdate(
+          ProductoVariantesCompanion.insert(
+            id: variantId,
+            productoId: resolvedProductId,
+            sku: vSku,
+            talla: Value(talla),
+            color: const Value('General'),
+            precioEspecifico: Value(precioBase),
+            costoEspecifico: Value(ultimoCosto),
+            usuarioRegistroId: Value(usuarioRegistroId),
+            estado: const Value(true),
+            createdAt: Value(variant?.createdAt ?? now),
+            updatedAt: Value(now),
+            syncStatus: Value(
+              variant == null ? 'pending_insert' : 'pending_update',
+            ),
           ),
-        ),
-      );
+        );
 
-      for (final bodegaId in bodegaIds) {
-        final existingInventory =
-            await (select(inventarios)
-                  ..where((tbl) => tbl.productoVarianteId.equals(variantId))
-                  ..where((tbl) => tbl.bodegaId.equals(bodegaId))
-                  ..limit(1))
-                .getSingleOrNull();
-        if (existingInventory == null) {
-          await into(inventarios).insert(
-            InventariosCompanion.insert(
-              id: const Uuid().v4(),
-              productoVarianteId: variantId,
-              bodegaId: bodegaId,
-              cantidadActual: const Value(0),
-              precioVenta: Value(precioBase),
-              costoPromedio: Value(ultimoCosto),
-              actualizadoPor: Value(usuarioRegistroId),
-              estado: const Value(true),
-              createdAt: Value(now),
-              updatedAt: Value(now),
-              fechaEliminacion: const Value.absent(),
-              syncStatus: const Value('pending_insert'),
-            ),
-          );
-        } else {
-          await (update(
-            inventarios,
-          )..where((tbl) => tbl.id.equals(existingInventory.id))).write(
-            InventariosCompanion(
-              precioVenta: Value(precioBase),
-              costoPromedio: Value(ultimoCosto),
-              actualizadoPor: Value(usuarioRegistroId),
-              updatedAt: Value(now),
-              syncStatus: const Value('pending_update'),
-            ),
-          );
+        for (final bodegaId in bodegaIds) {
+          final existingInventory =
+              await (select(inventarios)
+                    ..where((tbl) => tbl.productoVarianteId.equals(variantId))
+                    ..where((tbl) => tbl.bodegaId.equals(bodegaId))
+                    ..limit(1))
+                  .getSingleOrNull();
+          if (existingInventory == null) {
+            await into(inventarios).insert(
+              InventariosCompanion.insert(
+                id: const Uuid().v4(),
+                productoVarianteId: variantId,
+                bodegaId: bodegaId,
+                cantidadActual: const Value(0),
+                precioVenta: Value(precioBase),
+                costoPromedio: Value(ultimoCosto),
+                actualizadoPor: Value(usuarioRegistroId),
+                estado: const Value(true),
+                createdAt: Value(now),
+                updatedAt: Value(now),
+                fechaEliminacion: const Value.absent(),
+                syncStatus: const Value('pending_insert'),
+              ),
+            );
+          } else {
+            await (update(
+              inventarios,
+            )..where((tbl) => tbl.id.equals(existingInventory.id))).write(
+              InventariosCompanion(
+                precioVenta: Value(precioBase),
+                costoPromedio: Value(ultimoCosto),
+                actualizadoPor: Value(usuarioRegistroId),
+                updatedAt: Value(now),
+                syncStatus: const Value('pending_update'),
+              ),
+            );
+          }
         }
       }
 
@@ -1763,6 +1770,7 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
     required String nombre,
     String? categoriaPadreId,
     required String usuarioRegistroId,
+    String? especificacionJson,
   }) async {
     final now = DateTime.now();
     final resolvedId = categoriaId ?? const Uuid().v4();
@@ -1773,6 +1781,7 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
         nombre: nombre,
         categoriaPadreId: Value(categoriaPadreId),
         usuarioRegistroId: Value(usuarioRegistroId),
+        especificacionJson: Value(especificacionJson),
         estado: const Value(true),
         createdAt: Value(now),
         updatedAt: Value(now),

@@ -49,6 +49,60 @@ class _WarehouseScreenState extends ConsumerState<WarehouseScreen>
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Column(
         children: [
+          // SECCIÓN DE CATÁLOGO GLOBAL
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Catálogo global",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _CatalogActionItem(
+                      icon: Icons.inventory_2_outlined,
+                      label: "Productos",
+                      color: Colors.blue,
+                      onTap: () => context.push('/product-list'),
+                    ),
+                    _CatalogActionItem(
+                      icon: Icons.category_outlined,
+                      label: "Categorías",
+                      color: Colors.cyan,
+                      onTap: () => context.push('/category-manage'),
+                    ),
+                    _CatalogActionItem(
+                      icon: Icons.account_tree_outlined,
+                      label: "Árbol",
+                      color: Colors.indigo,
+                      onTap: () => context.push('/category-tree'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
           // HEADER (Igual a tu diseño)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -280,5 +334,51 @@ class _WarehouseScreenState extends ConsumerState<WarehouseScreen>
         );
       }
     }
+  }
+}
+
+class _CatalogActionItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _CatalogActionItem({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 26),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: Colors.grey[800],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
