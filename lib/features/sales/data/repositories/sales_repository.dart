@@ -7,6 +7,8 @@ import 'package:uuid/uuid.dart';
 class SalesRepository {
   SalesRepository(this._db);
 
+  static const _finalConsumerName = 'Consumidor final';
+
   final AppDatabase _db;
 
   Future<VentaCompletaResult> registrarVentaDesdeCheckout({
@@ -26,27 +28,17 @@ class SalesRepository {
     final currentUser = sesion.userView;
     final now = DateTime.now();
     final clienteName = (nombreCliente ?? '').trim();
-    final clienteId = clienteName.isNotEmpty
-        ? const Uuid().v4()
-        : 'final_consumer';
+    final cliente = await _buildClienteForSale(
+      clienteName: clienteName,
+      empresaId: currentUser.empresaId,
+      usuarioId: currentUser.serverId,
+      now: now,
+    );
     final ventaId = const Uuid().v4();
     final totalPagado = saleType == 'Contado' ? total : depositAmount;
     final saldoPendiente = saleType == 'Contado'
         ? 0.0
         : (total - depositAmount);
-
-    final cliente = clienteName.isEmpty
-        ? null
-        : ClientesCompanion.insert(
-            id: clienteId,
-            empresaId: currentUser.empresaId,
-            nombre: clienteName,
-            celular: const Value(''),
-            usuarioRegistroId: Value(currentUser.serverId),
-            createdAt: Value(now),
-            updatedAt: Value(now),
-            syncStatus: const Value('pending_insert'),
-          );
 
     final detalles = <VentaDetalleInput>[];
     for (final item in cartItems) {
@@ -83,7 +75,7 @@ class SalesRepository {
       venta: VentasCompanion.insert(
         id: ventaId,
         empresaId: currentUser.empresaId,
-        clienteId: clienteId,
+        clienteId: cliente.id,
         usuarioId: currentUser.serverId,
         cajaSesionId: cajaSesionId,
         tipoVenta: saleType == 'Contado'
@@ -103,10 +95,63 @@ class SalesRepository {
       ),
       detalles: detalles,
       pago: pago,
-      cliente: cliente,
+      cliente: cliente.companion,
       bodegaId: bodegaId,
     );
 
     return _db.salesDao.registrarVentaCompleta(request);
+  }
+
+  Future<({String id, ClientesCompanion? companion})> _buildClienteForSale({
+    required String clienteName,
+    required String empresaId,
+    required String usuarioId,
+    required DateTime now,
+  }) async {
+    if (clienteName.isNotEmpty) {
+      final clienteId = const Uuid().v4();
+      return (
+        id: clienteId,
+        companion: ClientesCompanion.insert(
+          id: clienteId,
+          empresaId: empresaId,
+          nombre: clienteName,
+          celular: const Value(''),
+          usuarioRegistroId: Value(usuarioId),
+          createdAt: Value(now),
+          updatedAt: Value(now),
+          syncStatus: const Value('pending_insert'),
+        ),
+      );
+    }
+
+    final existing =
+        await (_db.select(_db.clientes)
+              ..where(
+                (tbl) =>
+                    tbl.empresaId.equals(empresaId) &
+                    tbl.nombre.equals(_finalConsumerName),
+              )
+              ..limit(1))
+            .getSingleOrNull();
+
+    if (existing != null) {
+      return (id: existing.id, companion: null);
+    }
+
+    final clienteId = const Uuid().v4();
+    return (
+      id: clienteId,
+      companion: ClientesCompanion.insert(
+        id: clienteId,
+        empresaId: empresaId,
+        nombre: _finalConsumerName,
+        celular: const Value(''),
+        usuarioRegistroId: Value(usuarioId),
+        createdAt: Value(now),
+        updatedAt: Value(now),
+        syncStatus: const Value('pending_insert'),
+      ),
+    );
   }
 }
