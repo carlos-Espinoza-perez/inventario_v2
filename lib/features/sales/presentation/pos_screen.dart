@@ -302,7 +302,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   }
 
   Future<void> _processScannedCode(
-      String code, List<InventarioDTO> inventoryItems) async {
+    String code,
+    List<InventarioDTO> inventoryItems,
+  ) async {
     final repo = ref.read(inventarioRepositoryProvider);
     final lookup = await repo.buscarProductoPorCodigoONombre(code);
     if (lookup == null) {
@@ -604,8 +606,12 @@ class _ProductDetailModalState extends State<_ProductDetailModal> {
   @override
   void initState() {
     super.initState();
-    final initialPrice = widget.variants.isNotEmpty
-        ? (widget.variants[0]['precio'] as num?)?.toDouble() ?? 0.0
+    _selectedIndex = _initialSelectedIndex();
+    final initialVariant = widget.variants.isNotEmpty
+        ? widget.variants[_selectedIndex]
+        : null;
+    final initialPrice = initialVariant != null
+        ? (initialVariant['precio'] as num?)?.toDouble() ?? 0.0
         : 0.0;
     _precioController = TextEditingController(
       text: initialPrice.toStringAsFixed(2),
@@ -618,10 +624,31 @@ class _ProductDetailModalState extends State<_ProductDetailModal> {
     super.dispose();
   }
 
+  int _initialSelectedIndex() {
+    final firstWithStock = widget.variants.indexWhere(_hasStock);
+    return firstWithStock >= 0 ? firstWithStock : 0;
+  }
+
+  static double _stockOf(Map<String, dynamic> variant) {
+    return (variant['stock'] as num?)?.toDouble() ?? 0.0;
+  }
+
+  static bool _hasStock(Map<String, dynamic> variant) {
+    return _stockOf(variant) > 0;
+  }
+
   void _onVariantChanged(int index) {
-    setState(() => _selectedIndex = index);
-    final price =
-        (widget.variants[index]['precio'] as num?)?.toDouble() ?? 0.0;
+    final stock = _stockOf(widget.variants[index]);
+    setState(() {
+      _selectedIndex = index;
+      final maxQty = stock.toInt();
+      if (maxQty > 0 && _qty > maxQty) {
+        _qty = maxQty;
+      } else if (maxQty <= 0) {
+        _qty = 1;
+      }
+    });
+    final price = (widget.variants[index]['precio'] as num?)?.toDouble() ?? 0.0;
     _precioController.text = price.toStringAsFixed(2);
   }
 
@@ -629,6 +656,8 @@ class _ProductDetailModalState extends State<_ProductDetailModal> {
   Widget build(BuildContext context) {
     final variants = widget.variants;
     final current = variants.isEmpty ? null : variants[_selectedIndex];
+    final currentStock = current == null ? 0.0 : _stockOf(current);
+    final canAddCurrent = current != null && currentStock >= _qty;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -649,22 +678,39 @@ class _ProductDetailModalState extends State<_ProductDetailModal> {
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             ),
             const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              children: List.generate(variants.length, (index) {
-                final variant = variants[index];
-                return ChoiceChip(
-                  label: Text(variant['talla']?.toString() ?? 'General'),
-                  selected: index == _selectedIndex,
-                  onSelected: (_) => _onVariantChanged(index),
-                );
-              }),
-            ),
+            if (variants.isEmpty)
+              const Text('No hay variantes disponibles para este producto.')
+            else
+              Wrap(
+                spacing: 8,
+                children: List.generate(variants.length, (index) {
+                  final variant = variants[index];
+                  final hasStock = _hasStock(variant);
+                  final label = variant['talla']?.toString() ?? 'General';
+                  return ChoiceChip(
+                    label: Text(hasStock ? label : '$label (Sin stock)'),
+                    selected: index == _selectedIndex,
+                    onSelected: hasStock
+                        ? (_) => _onVariantChanged(index)
+                        : null,
+                  );
+                }),
+              ),
             const SizedBox(height: 16),
             if (current != null) ...[
               Text('SKU: ${current['sku']}'),
               Text('Color: ${current['color'] ?? 'N/A'}'),
               Text('Disponible: ${current['stock']}'),
+              if (currentStock <= 0) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Esta variante no tiene stock disponible.',
+                  style: TextStyle(
+                    color: Colors.red.shade700,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               TextField(
                 controller: _precioController,
@@ -693,8 +739,7 @@ class _ProductDetailModalState extends State<_ProductDetailModal> {
                     ),
                   ),
                   IconButton(
-                    onPressed:
-                        _qty < ((current['stock'] as num?)?.toInt() ?? 0)
+                    onPressed: _qty < currentStock.toInt()
                         ? () => setState(() => _qty++)
                         : null,
                     icon: const Icon(Icons.add),
@@ -706,17 +751,17 @@ class _ProductDetailModalState extends State<_ProductDetailModal> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: current == null
+                onPressed: !canAddCurrent
                     ? null
                     : () {
                         final editedPrice =
                             double.tryParse(_precioController.text) ??
                             (current['precio'] as num?)?.toDouble() ??
                             0.0;
-                        widget.onAddToCart(
-                          {...current, 'precio': editedPrice},
-                          _qty,
-                        );
+                        widget.onAddToCart({
+                          ...current,
+                          'precio': editedPrice,
+                        }, _qty);
                       },
                 child: const Text('AGREGAR AL CARRITO'),
               ),

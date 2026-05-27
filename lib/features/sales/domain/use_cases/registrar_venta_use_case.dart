@@ -5,7 +5,9 @@ import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/core/services/remote_logger.dart';
 import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
+import 'package:inventario_v2/features/inventory/presentation/providers/warehouse_inventory_provider.dart';
 import 'package:inventario_v2/features/sales/data/repositories/sales_repository.dart';
+import 'package:inventario_v2/features/sales/presentation/sales_dashboard_screen.dart';
 
 final registrarVentaUseCaseProvider = Provider((ref) {
   return RegistrarVentaUseCase(ref);
@@ -136,6 +138,8 @@ class RegistrarVentaUseCase {
     );
 
     // 4. Invalidar estados para refrescar la UI
+    _ref.invalidate(salesListProvider);
+    _ref.invalidate(warehouseInventoryProvider(effectiveBodegaId));
     _ref.invalidate(dashboardProvider);
   }
 
