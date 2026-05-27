@@ -1581,6 +1581,7 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
         productos.id.equalsExp(productoVariantes.productoId),
       ),
     ])
+      ..addColumns([totalStockExp, avgCostExp])
       ..where(inventarios.estado.equals(true))
       ..where(productos.estado.equals(true))
       ..where(productoVariantes.estado.equals(true))
