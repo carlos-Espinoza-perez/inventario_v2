@@ -7,7 +7,7 @@ import 'package:uuid/uuid.dart';
 class SalesRepository {
   SalesRepository(this._db);
 
-  static const _finalConsumerName = 'Consumidor final';
+  static const _finalConsumerName = 'Consumidor final (sin nombre)';
 
   final AppDatabase _db;
 
