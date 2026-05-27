@@ -397,7 +397,7 @@ class _GroupedInventoryProduct {
       talla: sortedTallas.length == 1 ? sortedTallas.first : 'General',
       categoria: categoria,
       stock: stock + product.stock,
-      costo: costo,
+      costo: costo > 0 ? costo : product.costo,
       imagen: imagen ?? product.imagen,
       tallasDisponibles: sortedTallas,
       precios: nextPrecios,

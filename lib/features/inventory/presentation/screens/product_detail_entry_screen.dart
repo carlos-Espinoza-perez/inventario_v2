@@ -87,7 +87,9 @@ final productEntryDataProvider =
           .fold(0.0, (sum, inv) => sum + inv.cantidadActual)
           .toInt();
       final lastCost = producto.ultimoCosto;
-      final lastPrice = producto.precioBase ?? 0.0;
+      final lastPrice = (producto.precioBase ?? 0.0) > 0
+          ? producto.precioBase!
+          : producto.ultimoPrecioVenta;
 
       return ProductEntryData(
         producto: producto,
@@ -166,6 +168,10 @@ class _ProductDetailEntryScreenState
     if (_isInitialized) return;
     double startCost = widget.initialCost ?? 0.0;
     double startPrice = widget.initialPrice ?? 0.0;
+
+    if (startCost == 0 && data.ultimoCosto > 0) startCost = data.ultimoCosto;
+    if (startPrice == 0 && data.ultimoPrecioVenta > 0) startPrice = data.ultimoPrecioVenta;
+
     String startMarginStr = "";
 
     if (startCost > 0 && startPrice > 0) {
@@ -181,8 +187,6 @@ class _ProductDetailEntryScreenState
           ? startPrice.toInt().toString()
           : startPrice.toStringAsFixed(2);
     }
-
-    if (startCost == 0 && data.ultimoCosto > 0) startCost = data.ultimoCosto;
 
     _costCtrl.text = startCost > 0 ? startCost.toStringAsFixed(2) : "";
     _priceCtrl.text = priceText;

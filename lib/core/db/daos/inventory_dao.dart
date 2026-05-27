@@ -1394,6 +1394,23 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
           syncStatus: const Value('pending_insert'),
         ),
       );
+
+      if (costoPromedio > 0 || (effectivePrecio != null && effectivePrecio > 0)) {
+        await (update(productoVariantes)
+              ..where((tbl) => tbl.id.equals(resolvedVarianteId)))
+            .write(
+          ProductoVariantesCompanion(
+            costoEspecifico: costoPromedio > 0
+                ? Value(costoPromedio)
+                : const Value.absent(),
+            precioEspecifico: effectivePrecio != null && effectivePrecio > 0
+                ? Value(effectivePrecio)
+                : const Value.absent(),
+            updatedAt: Value(now),
+            syncStatus: const Value('pending_update'),
+          ),
+        );
+      }
     } else {
       final nuevaCantidad = current.cantidadActual + cantidad;
       final nuevoCostoPromedio = nuevaCantidad > 0
@@ -1417,12 +1434,17 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
         ),
       );
 
-      if (effectivePrecio != null && effectivePrecio > 0) {
+      if ((effectivePrecio != null && effectivePrecio > 0) || costoPromedio > 0) {
         await (update(
           productoVariantes,
         )..where((tbl) => tbl.id.equals(current.productoVarianteId))).write(
           ProductoVariantesCompanion(
-            precioEspecifico: Value(effectivePrecio),
+            precioEspecifico: effectivePrecio != null && effectivePrecio > 0
+                ? Value(effectivePrecio)
+                : const Value.absent(),
+            costoEspecifico: costoPromedio > 0
+                ? Value(costoPromedio)
+                : const Value.absent(),
             updatedAt: Value(now),
             syncStatus: const Value('pending_update'),
           ),
