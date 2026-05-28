@@ -638,11 +638,22 @@ class SyncRepository {
               .upsert(payload, onConflict: onConflict);
           await _markSynced(localTable, [id]);
         } catch (itemError) {
-          AppLogger.error(
-            '[Sync][Push] Error en registro individual $id en $remoteTable | payload: $payload',
-            itemError,
-          );
-          await _markSyncError(localTable, [id], itemError.toString());
+          final errorStr = itemError.toString();
+          // Si intentamos actualizar un usuario que ya fue borrado de auth.users (falla FK 23503)
+          if (localTable == 'usuarios' &&
+              errorStr.contains('23503') &&
+              errorStr.contains('usuarios_id_fkey')) {
+            AppLogger.info(
+              '[Sync][Push] Ignorando push para usuario ya eliminado remotamente: $id',
+            );
+            await _markSynced(localTable, [id]);
+          } else {
+            AppLogger.error(
+              '[Sync][Push] Error en registro individual $id en $remoteTable | payload: $payload',
+              itemError,
+            );
+            await _markSyncError(localTable, [id], errorStr);
+          }
         }
       }
     }
