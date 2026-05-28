@@ -179,4 +179,27 @@ class StaffAccountRepository {
       );
     }
   }
+
+  /// Elimina a un usuario staff de Supabase Auth
+  Future<void> deleteStaffAccount({
+    required String targetUserId,
+    required String empresaId,
+  }) async {
+    final response = await _supabase.functions.invoke(
+      'delete-staff-user',
+      body: {
+        'target_user_id': targetUserId,
+        'empresa_id': empresaId,
+      },
+    );
+
+    if (response.status != 200) {
+      final data = response.data;
+      throw Exception(
+        data is Map<String, dynamic>
+            ? (data['error'] ?? 'No se pudo eliminar el usuario de autenticación')
+            : 'No se pudo eliminar el usuario de autenticación',
+      );
+    }
+  }
 }
