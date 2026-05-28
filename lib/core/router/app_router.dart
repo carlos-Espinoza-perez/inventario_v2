@@ -81,7 +81,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           state.matchedLocation == '/login' ||
           state.matchedLocation == '/create-company' ||
           state.matchedLocation == '/create-user' ||
-          isForcePasswordRoute ||
           isLoginCallback;
 
       // 2. LOGICA DE ENLACES DE ERROR (Deep Link Expired)
@@ -109,7 +108,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // como login o recuperacion; si las mandamos al splash se reconstruyen
       // y el usuario pierde lo que habia escrito.
       if (isLoading) {
-        if (isAuthRoute) return null;
+        if (isAuthRoute || isForcePasswordRoute) return null;
         if (!isSplash) return '/splash';
         return null; // Si ya esta en splash, quedarse ahi.
       }
