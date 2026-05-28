@@ -1,5 +1,6 @@
 {
   "releaseNotes": [
-    "Permiso de instalacion con mensaje explicativo antes de abrir Ajustes"
+    "Primera versión base de la aplicación de Inventario",
+    "Estabilización de arquitectura, UI y seguridad (PKCE)"
   ]
 }
