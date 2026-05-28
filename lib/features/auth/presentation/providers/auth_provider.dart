@@ -58,6 +58,16 @@ class AuthController extends _$AuthController {
           state = const AsyncData(null);
         }
 
+        // Cuando el usuario inicia sesion activamente (no restauracion de cache)
+        // y tiene must_change_password, activar el flujo de cambio forzado.
+        if (event == AuthChangeEvent.signedIn) {
+          final mustChange =
+              session?.user.userMetadata?['must_change_password'] == true;
+          if (mustChange) {
+            _passwordRecoveryPending = true;
+          }
+        }
+
         if (event == AuthChangeEvent.initialSession ||
             event == AuthChangeEvent.signedIn ||
             event == AuthChangeEvent.passwordRecovery) {

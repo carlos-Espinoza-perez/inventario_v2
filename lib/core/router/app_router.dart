@@ -44,7 +44,6 @@ import '../../features/sync/presentation/screens/sync_status_screen.dart';
 import '../../features/sync/presentation/screens/log_viewer_screen.dart';
 import '../../features/auth/presentation/screens/force_password_change_screen.dart';
 import '../../features/auth/presentation/screens/invalid_link_screen.dart';
-import '../../core/providers/supabase_provider.dart';
 
 import '../../features/auth/presentation/screens/staff_management_screen.dart';
 import '../../features/auth/presentation/screens/role_management_screen.dart';
@@ -126,22 +125,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // 4. LOGICA LOGUEADO (Carga termino, hay usuario)
       if (estaLogueado) {
-        final supabase = ref.read(supabaseClientProvider);
-        final mustChangePassword =
-            supabase.auth.currentUser?.userMetadata?['must_change_password'] ==
-            true;
-
-        if (mustChangePassword && !isForcePasswordRoute) {
-          return '/force-password-change';
-        }
-
-        if (!mustChangePassword && isForcePasswordRoute) {
-          return '/dashboard';
-        }
-
         // Si intenta ver el splash o el login estando ya autenticado,
         // lo mandamos al Dashboard.
-        if (isSplash || isAuthRoute) {
+        if (isSplash || isAuthRoute || isForcePasswordRoute) {
           return '/dashboard';
         }
         // Dejarlo navegar a cualquier otra ruta protegida.
