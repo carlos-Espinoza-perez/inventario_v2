@@ -142,7 +142,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
         // Si intenta ver el splash o el login estando ya autenticado,
         // lo mandamos al Dashboard.
-        if (isSplash || isAuthRoute) {
+        if (isSplash || (isAuthRoute && !isForcePasswordRoute)) {
           return '/dashboard';
         }
         // Dejarlo navegar a cualquier otra ruta protegida.
