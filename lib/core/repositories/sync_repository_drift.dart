@@ -671,6 +671,24 @@ class SyncRepository {
                   );
                 }
               } catch (e) {
+                final errorStr = e.toString();
+                if (errorStr.contains('FOREIGN KEY constraint failed') ||
+                    errorStr.contains('code 787')) {
+                  final map = payload.newRecord;
+                  await _createGhostUsersIfMissing(map);
+                  try {
+                    await onUpsert(map);
+                    AppLogger.debug(
+                      '[Sync][Realtime] Registro actualizado tras crear fantasma',
+                    );
+                    return;
+                  } catch (retryErr) {
+                    AppLogger.error(
+                      '[Sync][Realtime] Error retry en $remoteTableName',
+                      retryErr,
+                    );
+                  }
+                }
                 AppLogger.error(
                   '[Sync][Realtime] Error en $remoteTableName',
                   e,
@@ -701,10 +719,27 @@ class SyncRepository {
             successCount++;
           }
         } catch (itemErr) {
-          AppLogger.error(
-            '[Sync][Pull] Fallo al insertar fila en $localTableName: $row',
-            itemErr,
-          );
+          final errorStr = itemErr.toString();
+          if (errorStr.contains('FOREIGN KEY constraint failed') ||
+              errorStr.contains('code 787')) {
+            final map = Map<String, dynamic>.from(row);
+            await _createGhostUsersIfMissing(map);
+            try {
+              await onUpsert(map);
+              successCount++;
+              continue;
+            } catch (retryErr) {
+              AppLogger.error(
+                '[Sync][Pull] Retry fallo al insertar fila en $localTableName: $row',
+                retryErr,
+              );
+            }
+          } else {
+            AppLogger.error(
+              '[Sync][Pull] Fallo al insertar fila en $localTableName: $row',
+              itemErr,
+            );
+          }
         }
       }
       AppLogger.info(
@@ -737,6 +772,52 @@ class SyncRepository {
     await _db.customStatement(
       "UPDATE $tableName SET sync_status = 'sync_error', updated_at = CURRENT_TIMESTAMP WHERE id IN ($escapedIds)",
     );
+  }
+
+  Future<void> _createGhostUsersIfMissing(Map<String, dynamic> map) async {
+    final possibleUserFields = [
+      'usuario_registro_id',
+      'usuario_id',
+      'usuario_apertura_id',
+      'usuario_cierre_id',
+      'actualizado_por',
+      'vendedor_id',
+    ];
+    String? empresaId = map['empresa_id']?.toString();
+
+    // Si no hay empresa_id en el map, buscamos una empresa por defecto
+    if (empresaId == null || empresaId.isEmpty) {
+      final res = await _db
+          .customSelect('SELECT id FROM empresas LIMIT 1')
+          .getSingleOrNull();
+      empresaId = res?.read<String>('id') ?? '';
+    }
+
+    if (empresaId.isEmpty) return; // No podemos crear el fantasma sin empresa
+
+    for (final field in possibleUserFields) {
+      final userId = map[field]?.toString();
+      if (userId != null && userId.isNotEmpty) {
+        final exists = await _db
+            .customSelect("SELECT 1 FROM usuarios WHERE id = '$userId' LIMIT 1")
+            .getSingleOrNull();
+        if (exists == null) {
+          AppLogger.info(
+            '[Sync] Creando usuario fantasma para resolver FK: $userId ($field)',
+          );
+          try {
+            await _db.customStatement(
+              "INSERT INTO usuarios (id, created_at, updated_at, sync_status, empresa_id, nombre_completo, email, rol_id, estado, fecha_eliminacion) "
+              "VALUES ('$userId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', 'Usuario Eliminado', 'eliminado_$userId@sistema.local', NULL, 0, CURRENT_TIMESTAMP)",
+            );
+          } catch (e) {
+            AppLogger.warn(
+              '[Sync] Error al crear usuario fantasma $userId: $e',
+            );
+          }
+        }
+      }
+    }
   }
 
   bool _isValidPayload(Map<String, dynamic> json) {
