@@ -702,8 +702,8 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen>
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Desactivar personal'),
-        content: Text('Se desactivará a ${user.nombreCompleto}.'),
+        title: const Text('Desactivar y eliminar personal'),
+        content: Text('Se desactivará a ${user.nombreCompleto} del sistema y se eliminará su acceso.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -719,9 +719,49 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen>
 
     if (confirm != true) return;
 
-    final db = ref.read(driftDatabaseProvider);
-    await db.authDao.deactivateUser(user.id);
-    ref.invalidate(staffAdminDataProvider);
+    final auth = ref.read(authControllerProvider.notifier);
+    final currentUser = auth.usuarioActual ?? await auth.getUser();
+    if (currentUser == null || !mounted) return;
+
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final repository = StaffAccountRepository(
+        ref.read(supabaseClientProvider),
+        ref.read(driftDatabaseProvider),
+      );
+
+      // Eliminar de Supabase Auth
+      await repository.deleteStaffAccount(
+        targetUserId: user.id,
+        empresaId: currentUser.empresaId,
+      );
+
+      // Desactivar localmente
+      final db = ref.read(driftDatabaseProvider);
+      await db.authDao.deactivateUser(user.id);
+      ref.invalidate(staffAdminDataProvider);
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Usuario ${user.nombreCompleto} eliminado.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString()),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
   }
 }
 
