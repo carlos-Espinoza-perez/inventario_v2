@@ -1552,26 +1552,26 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
   }
 
   Future<double> getValorTotalInventario({Set<String>? bodegaIds}) async {
-    final rows =
-        await (select(inventarios).join([
-                innerJoin(
-                  productoVariantes,
-                  productoVariantes.id.equalsExp(
-                    inventarios.productoVarianteId,
-                  ),
-                ),
-                innerJoin(
-                  productos,
-                  productos.id.equalsExp(productoVariantes.productoId),
-                ),
-              ])
-              ..where(inventarios.estado.equals(true))
-              ..where(
-                bodegaIds == null || bodegaIds.isEmpty
-                    ? const Constant(true)
-                    : inventarios.bodegaId.isIn(bodegaIds.toList()),
-              ))
-            .get();
+    if (bodegaIds != null && bodegaIds.isEmpty) return 0.0;
+
+    final query = select(inventarios).join([
+      innerJoin(
+        productoVariantes,
+        productoVariantes.id.equalsExp(
+          inventarios.productoVarianteId,
+        ),
+      ),
+      innerJoin(
+        productos,
+        productos.id.equalsExp(productoVariantes.productoId),
+      ),
+    ])..where(inventarios.estado.equals(true));
+
+    if (bodegaIds != null) {
+      query.where(inventarios.bodegaId.isIn(bodegaIds.toList()));
+    }
+
+    final rows = await query.get();
 
     var total = 0.0;
     for (final row in rows) {
@@ -1593,6 +1593,8 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
     int threshold = 5,
     int limit = 10,
   }) async {
+    if (bodegaIds != null && bodegaIds.isEmpty) return [];
+
     final resolvedEmpresaId = await getRequiredEmpresaId();
 
     final totalStockExp = inventarios.cantidadActual.sum();
@@ -1614,18 +1616,16 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
       ..where(inventarios.estado.equals(true))
       ..where(productos.estado.equals(true))
       ..where(productoVariantes.estado.equals(true))
-      ..where(productos.empresaId.equals(resolvedEmpresaId))
-      ..where(
-        bodegaIds == null || bodegaIds.isEmpty
-            ? const Constant(true)
-            : inventarios.bodegaId.isIn(bodegaIds.toList()),
-      );
+      ..where(productos.empresaId.equals(resolvedEmpresaId));
+
+    if (bodegaIds != null) {
+      query.where(inventarios.bodegaId.isIn(bodegaIds.toList()));
+    }
 
     query.groupBy([
       productos.id
     ],
-        having: totalStockExp.isBiggerThanValue(0.0) &
-            totalStockExp.isSmallerOrEqualValue(threshold.toDouble()));
+        having: totalStockExp.isSmallerOrEqualValue(threshold.toDouble()));
 
     query.orderBy([OrderingTerm.asc(totalStockExp)]);
 
@@ -1655,26 +1655,33 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
   Future<InventoryReportData> getInventoryReport({
     required Set<String> bodegaIds,
   }) async {
-    final rows =
-        await (select(inventarios).join([
-                innerJoin(
-                  productoVariantes,
-                  productoVariantes.id.equalsExp(
-                    inventarios.productoVarianteId,
-                  ),
-                ),
-                innerJoin(
-                  productos,
-                  productos.id.equalsExp(productoVariantes.productoId),
-                ),
-              ])
-              ..where(inventarios.estado.equals(true))
-              ..where(
-                bodegaIds.isEmpty
-                    ? const Constant(true)
-                    : inventarios.bodegaId.isIn(bodegaIds.toList()),
-              ))
-            .get();
+    if (bodegaIds.isEmpty) {
+      return InventoryReportData(
+        valorTotal: 0,
+        totalItems: 0,
+        criticos: 0,
+        medios: 0,
+        saludables: 0,
+        lowStock: [],
+      );
+    }
+
+    final query = select(inventarios).join([
+      innerJoin(
+        productoVariantes,
+        productoVariantes.id.equalsExp(
+          inventarios.productoVarianteId,
+        ),
+      ),
+      innerJoin(
+        productos,
+        productos.id.equalsExp(productoVariantes.productoId),
+      ),
+    ])..where(inventarios.estado.equals(true));
+
+    query.where(inventarios.bodegaId.isIn(bodegaIds.toList()));
+
+    final rows = await query.get();
 
     var valorTotal = 0.0;
     var criticos = 0;
@@ -1682,25 +1689,44 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
     var saludables = 0;
     final lowStock = <InventoryLowStockData>[];
 
+    final groupedByProduct = <String, Map<String, dynamic>>{};
+
     for (final row in rows) {
       final inventario = row.readTable(inventarios);
       final variante = row.readTable(productoVariantes);
       final producto = row.readTable(productos);
-      final cantidad = inventario.cantidadActual.toInt();
       final costo = _resolveCosto(
         variante.costoEspecifico,
         inventario.costoPromedio,
         producto.ultimoCosto,
       );
 
-      valorTotal += inventario.cantidadActual * costo;
+      final pId = producto.id;
+      groupedByProduct.putIfAbsent(pId, () => {
+        'producto': producto,
+        'sku': producto.codigoPersonalizado ?? variante.sku,
+        'cantidad': 0,
+        'valor': 0.0,
+      });
+
+      groupedByProduct[pId]!['cantidad'] = (groupedByProduct[pId]!['cantidad'] as int) + inventario.cantidadActual.toInt();
+      groupedByProduct[pId]!['valor'] = (groupedByProduct[pId]!['valor'] as double) + (inventario.cantidadActual * costo);
+    }
+
+    for (final agg in groupedByProduct.values) {
+      final cantidad = agg['cantidad'] as int;
+      final valor = agg['valor'] as double;
+      final producto = agg['producto'] as Producto;
+      final sku = agg['sku'] as String;
+
+      valorTotal += valor;
 
       if (cantidad <= 5) {
         criticos++;
         lowStock.add(
           InventoryLowStockData(
             nombre: producto.nombre,
-            sku: variante.sku,
+            sku: sku,
             cantidadActual: cantidad,
             stockMinimo: 5,
           ),

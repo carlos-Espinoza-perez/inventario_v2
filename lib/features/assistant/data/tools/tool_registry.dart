@@ -175,7 +175,9 @@ class ToolRegistry {
 
     'sales.getDeudaCliente': (params, ctx) async {
       final clienteId = params['clienteId'] as String? ?? '';
-      final reporte = await _db.salesDao.getReceivablesReport();
+      final bodegaId = ctx['selectedWarehouseId'] as String?;
+      final bodegaIds = bodegaId != null ? {bodegaId} : const <String>{};
+      final reporte = await _db.salesDao.getReceivablesReport(bodegaIds: bodegaIds);
       final cliente = reporte.where((r) => r.clientId == clienteId).firstOrNull;
       if (cliente == null) {
         return ToolResult.notFound('Cliente sin deuda registrada.');
@@ -189,8 +191,10 @@ class ToolRegistry {
     },
 
     'sales.getResumenDeudas': (params, ctx) async {
-      final reporte = await _db.salesDao.getReceivablesReport();
-      final total = await _db.salesDao.getMontoTotalFiados();
+      final bodegaId = ctx['selectedWarehouseId'] as String?;
+      final bodegaIds = bodegaId != null ? {bodegaId} : const <String>{};
+      final reporte = await _db.salesDao.getReceivablesReport(bodegaIds: bodegaIds);
+      final total = await _db.salesDao.getMontoTotalFiados(bodegaIds: bodegaIds);
       return ToolResult.success({
         'totalFiados': total,
         'cantidadClientes': reporte.length,

@@ -105,9 +105,41 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
     };
   }
 
+  Future<bool?> _showExitConfirmation() {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Salir sin guardar?'),
+        content: const Text('Tienes productos en la orden de entrada. Si sales ahora, perderás estos datos.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('CANCELAR'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('SALIR'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: _orderLines.isEmpty,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldPop = await _showExitConfirmation();
+        if (shouldPop ?? false) {
+          if (context.mounted) {
+            Navigator.pop(context, result);
+          }
+        }
+      },
+      child: Scaffold(
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(20),
         decoration: const BoxDecoration(
@@ -321,7 +353,7 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
             ),
         ],
       ),
-    );
+    ));
   }
 
   Widget _buildEmptyState() {

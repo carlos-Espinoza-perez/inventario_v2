@@ -412,3 +412,4 @@ class _LowStockItem extends StatelessWidget {
     );
   }
 }
+

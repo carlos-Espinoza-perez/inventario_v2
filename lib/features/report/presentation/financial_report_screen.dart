@@ -317,3 +317,4 @@ class _LegendDot extends StatelessWidget {
     );
   }
 }
+

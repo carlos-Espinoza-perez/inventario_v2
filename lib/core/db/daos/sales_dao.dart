@@ -346,13 +346,23 @@ class SalesDao extends BaseDao with _$SalesDaoMixin {
     )..where((tbl) => _isPending(tbl.syncStatus))).get();
   }
 
-  Future<CajaSesione?> getCajaSesionActivaActual() async {
+  Future<CajaSesione?> getCajaSesionActivaActual({Set<String>? bodegaIds}) async {
+    if (bodegaIds != null && bodegaIds.isEmpty) return null;
+
     final context = await getRequiredContext();
     if (context.cajaSesionId == null) return null;
-    return (select(cajaSesiones)
-          ..where((tbl) => tbl.id.equals(context.cajaSesionId!))
-          ..limit(1))
-        .getSingleOrNull();
+    
+    final query = select(cajaSesiones).join([
+      innerJoin(cajas, cajas.id.equalsExp(cajaSesiones.cajaId)),
+    ])..where(cajaSesiones.id.equals(context.cajaSesionId!));
+
+    if (bodegaIds != null) {
+      query.where(cajas.bodegaId.isIn(bodegaIds.toList()));
+    }
+
+    query.limit(1);
+    final row = await query.getSingleOrNull();
+    return row?.readTable(cajaSesiones);
   }
 
   Future<Caja> _resolveOrCreateCajaActiva({
@@ -501,12 +511,15 @@ class SalesDao extends BaseDao with _$SalesDaoMixin {
 
   Future<double> getVentasEfectivoSesion(String cajaSesionId) async {
     final sumExp = pagosVentas.montoPagado.sum();
-    final row =
-        await (selectOnly(pagosVentas)
-              ..addColumns([sumExp])
-              ..where(pagosVentas.cajaSesionId.equals(cajaSesionId))
-              ..where(pagosVentas.estado.equals(true)))
-            .getSingle();
+    final query = selectOnly(pagosVentas).join([
+      innerJoin(ventas, ventas.id.equalsExp(pagosVentas.ventaId)),
+    ])
+      ..addColumns([sumExp])
+      ..where(pagosVentas.cajaSesionId.equals(cajaSesionId))
+      ..where(pagosVentas.estado.equals(true))
+      ..where(ventas.estado.equals(true));
+      
+    final row = await query.getSingle();
     return row.read(sumExp) ?? 0;
   }
 
@@ -547,6 +560,24 @@ class SalesDao extends BaseDao with _$SalesDaoMixin {
       }
     }
     return total;
+  }
+
+  Future<double> getCostoSesion(String cajaSesionId) async {
+    final rows =
+        await (select(detalleVentas).join([
+                innerJoin(ventas, ventas.id.equalsExp(detalleVentas.ventaId)),
+              ])
+              ..where(ventas.cajaSesionId.equals(cajaSesionId))
+              ..where(ventas.estado.equals(true)))
+            .get();
+
+    var totalCosto = 0.0;
+    for (final row in rows) {
+      final detalle = row.readTable(detalleVentas);
+      final costo = detalle.cantidad * detalle.costoHistoricoCompra;
+      totalCosto += costo;
+    }
+    return totalCosto;
   }
 
   Future<void> cerrarCaja({
@@ -655,6 +686,8 @@ class SalesDao extends BaseDao with _$SalesDaoMixin {
   }
 
   Future<double> getVentasDelDia({Set<String>? bodegaIds}) async {
+    if (bodegaIds != null && bodegaIds.isEmpty) return 0.0;
+    
     final today = DateTime.now();
     final start = DateTime(today.year, today.month, today.day);
     final end = start.add(const Duration(days: 1));
@@ -737,28 +770,47 @@ WHERE v.estado = 1
   }
 
   Future<List<RecentTransactionDrift>> getRecentTransactions({
-    int limit = 5,
+    int limit = 10,
+    Set<String>? bodegaIds,
   }) async {
+    if (bodegaIds != null && bodegaIds.isEmpty) return [];
+
     // Ventas con cliente en un solo JOIN
-    final ventasJoin =
-        await (select(ventas).join([
-              leftOuterJoin(clientes, clientes.id.equalsExp(ventas.clienteId)),
-            ])
-              ..where(ventas.estado.equals(true))
-              ..orderBy([OrderingTerm.desc(ventas.fechaVenta)])
-              ..limit(limit))
-            .get();
+    final query = select(ventas).join([
+      leftOuterJoin(clientes, clientes.id.equalsExp(ventas.clienteId)),
+      innerJoin(cajaSesiones, cajaSesiones.id.equalsExp(ventas.cajaSesionId)),
+      innerJoin(cajas, cajas.id.equalsExp(cajaSesiones.cajaId)),
+    ])
+      ..where(ventas.estado.equals(true));
+      
+    if (bodegaIds != null) {
+      query.where(cajas.bodegaId.isIn(bodegaIds));
+    }
+    
+    query
+      ..orderBy([OrderingTerm.desc(ventas.fechaVenta)])
+      ..limit(limit);
+      
+    final ventasJoin = await query.get();
 
     // Pagos con venta y cliente en un solo JOIN
-    final pagosJoin =
-        await (select(pagosVentas).join([
-              innerJoin(ventas, ventas.id.equalsExp(pagosVentas.ventaId)),
-              leftOuterJoin(clientes, clientes.id.equalsExp(ventas.clienteId)),
-            ])
-              ..where(pagosVentas.estado.equals(true))
-              ..orderBy([OrderingTerm.desc(pagosVentas.fechaRegistro)])
-              ..limit(limit))
-            .get();
+    final queryPagos = select(pagosVentas).join([
+      innerJoin(ventas, ventas.id.equalsExp(pagosVentas.ventaId)),
+      leftOuterJoin(clientes, clientes.id.equalsExp(ventas.clienteId)),
+      innerJoin(cajaSesiones, cajaSesiones.id.equalsExp(ventas.cajaSesionId)),
+      innerJoin(cajas, cajas.id.equalsExp(cajaSesiones.cajaId)),
+    ])
+      ..where(pagosVentas.estado.equals(true));
+
+    if (bodegaIds != null) {
+      queryPagos.where(cajas.bodegaId.isIn(bodegaIds));
+    }
+
+    queryPagos
+      ..orderBy([OrderingTerm.desc(pagosVentas.fechaRegistro)])
+      ..limit(limit);
+
+    final pagosJoin = await queryPagos.get();
 
     final items = <RecentTransactionDrift>[];
 
@@ -796,21 +848,50 @@ WHERE v.estado = 1
     return items.take(limit).toList();
   }
 
-  Future<double> getMontoTotalFiados() async {
+  Future<double> getMontoTotalFiados({required Set<String> bodegaIds}) async {
+    if (bodegaIds.isEmpty) return 0.0;
+
     final row =
         await (selectOnly(ventas)
               ..addColumns([ventas.saldoPendiente.sum()])
+              ..join([
+                innerJoin(cajaSesiones, cajaSesiones.id.equalsExp(ventas.cajaSesionId)),
+                innerJoin(cajas, cajas.id.equalsExp(cajaSesiones.cajaId)),
+              ])
               ..where(ventas.tipoVenta.equals('credito'))
               ..where(ventas.estado.equals(true))
-              ..where(ventas.estadoPago.isNotValue('pagado')))
+              ..where(ventas.estadoPago.isNotValue('pagado'))
+              ..where(cajas.bodegaId.isIn(bodegaIds)))
             .getSingle();
     return row.read(ventas.saldoPendiente.sum()) ?? 0;
   }
 
-  Future<SalesWeeklyReportData> getWeeklySalesReport() async {
+  Future<SalesWeeklyReportData> getWeeklySalesReport({
+    Set<String>? bodegaIds,
+  }) async {
+    if (bodegaIds != null && bodegaIds.isEmpty) {
+      return SalesWeeklyReportData(
+        ventasPorDia: List<double>.filled(7, 0),
+        totalSemana: 0,
+        ventasPorCategoria: {},
+        gananciaPorProducto: [],
+      );
+    }
+
     final now = DateTime.now();
     final monday = now.subtract(Duration(days: now.weekday - 1));
     final start = DateTime(monday.year, monday.month, monday.day);
+
+    final variables = <Variable<Object>>[Variable<DateTime>(start)];
+    final bodegaFilter = StringBuffer();
+    if (bodegaIds != null && bodegaIds.isNotEmpty) {
+      bodegaFilter.write(
+        ' AND ca.bodega_id IN (${List.filled(bodegaIds.length, '?').join(', ')})',
+      );
+      for (final id in bodegaIds) {
+        variables.add(Variable<String>(id));
+      }
+    }
 
     // Una sola query: ventas + detalles + productos + categorías
     final rows = await customSelect(
@@ -826,14 +907,17 @@ SELECT v.fecha_venta      AS fecha_venta,
        p.nombre           AS producto_nombre,
        COALESCE(cat.nombre, 'Sin categoria') AS categoria_nombre
 FROM ventas v
+INNER JOIN caja_sesiones cs ON cs.id = v.caja_sesion_id
+INNER JOIN cajas ca ON ca.id = cs.caja_id
 INNER JOIN detalle_ventas dv ON dv.venta_id = v.id
 INNER JOIN productos p ON p.id = dv.producto_id
 LEFT  JOIN categorias cat ON cat.id = p.categoria_id
 WHERE v.estado = 1
   AND v.fecha_venta >= ?
+$bodegaFilter
 ''',
-      variables: [Variable<DateTime>(start)],
-      readsFrom: {ventas, detalleVentas, productos},
+      variables: variables,
+      readsFrom: {ventas, detalleVentas, productos, cajaSesiones, cajas},
     ).get();
 
     final ventasDia = List<double>.filled(7, 0);
@@ -897,8 +981,8 @@ WHERE v.estado = 1
     );
   }
 
-  Future<List<SalesListItemDrift>> getSalesList() async {
-    return _getSalesListInternal();
+  Future<List<SalesListItemDrift>> getSalesList({Set<String>? bodegaIds}) async {
+    return _getSalesListInternal(bodegaIds: bodegaIds);
   }
 
   Future<List<SalesListItemDrift>> getSalesListBySession(
@@ -909,13 +993,27 @@ WHERE v.estado = 1
 
   Future<List<SalesListItemDrift>> _getSalesListInternal({
     String? sessionId,
+    Set<String>? bodegaIds,
   }) async {
+    if (bodegaIds != null && bodegaIds.isEmpty) return [];
+
     // Trae ventas + cliente + conteo de detalles en una sola query SQL
-    final whereClause =
-        sessionId != null ? 'AND v.caja_sesion_id = ?' : '';
-    final variables = <Variable<Object>>[
-      if (sessionId != null) Variable<String>(sessionId),
-    ];
+    final whereClause = StringBuffer();
+    final variables = <Variable<Object>>[];
+    
+    if (sessionId != null) {
+      whereClause.write(' AND v.caja_sesion_id = ?');
+      variables.add(Variable<String>(sessionId));
+    }
+    
+    if (bodegaIds != null && bodegaIds.isNotEmpty) {
+      whereClause.write(
+        ' AND ca.bodega_id IN (${List.filled(bodegaIds.length, '?').join(', ')})',
+      );
+      for (final id in bodegaIds) {
+        variables.add(Variable<String>(id));
+      }
+    }
 
     final rows = await customSelect(
       '''
@@ -929,6 +1027,8 @@ SELECT v.id              AS id,
        COALESCE(c.nombre, 'Cliente Desconocido') AS cliente_nombre,
        COUNT(dv.id)      AS items_count
 FROM ventas v
+INNER JOIN caja_sesiones cs ON cs.id = v.caja_sesion_id
+INNER JOIN cajas ca ON ca.id = cs.caja_id
 LEFT  JOIN clientes c ON c.id = v.cliente_id
 LEFT  JOIN detalle_ventas dv ON dv.venta_id = v.id
 WHERE 1=1 $whereClause
@@ -937,7 +1037,7 @@ GROUP BY v.id, v.caja_sesion_id, v.tipo_venta, v.estado_pago,
 ORDER BY v.fecha_venta DESC
 ''',
       variables: variables,
-      readsFrom: {ventas, clientes, detalleVentas},
+      readsFrom: {ventas, clientes, detalleVentas, cajaSesiones, cajas},
     ).get();
 
     return rows.map((row) {
@@ -1189,6 +1289,13 @@ WHERE v.estado = 1
     required DateTime end,
     Set<String>? bodegaIds,
   }) async {
+    if (bodegaIds != null && bodegaIds.isEmpty) {
+      return FinancialReportDrift(
+        ingresos: 0,
+        costoVenta: 0,
+        gastosOperativos: 0,
+      );
+    }
     final variables = <Variable<Object>>[
       Variable<DateTime>(start),
       Variable<DateTime>(end),
@@ -1281,6 +1388,10 @@ $expenseBodegaFilter
   Future<ReportDashboardStatsDrift> getTodayStats({
     Set<String>? bodegaIds,
   }) async {
+    if (bodegaIds != null && bodegaIds.isEmpty) {
+      return ReportDashboardStatsDrift(ventasHoy: 0, utilidadHoy: 0);
+    }
+    
     final now = DateTime.now();
     final start = DateTime(now.year, now.month, now.day);
     final end = start.add(const Duration(days: 1));

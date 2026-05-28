@@ -20,7 +20,7 @@ class SyncState {
 
   const SyncState({
     this.isSyncing = false,
-    this.isOnline = false,
+    this.isOnline = true,
     this.lastError,
     this.lastSync,
   });

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
+import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
 
 class SalesReportModel {
   final List<double> ventasPorDia;
@@ -24,7 +25,10 @@ final salesReportProvider = FutureProvider.autoDispose<SalesReportModel>((
   ref,
 ) async {
   final db = ref.watch(driftDatabaseProvider);
-  final report = await db.salesDao.getWeeklySalesReport();
+  final validBodegaIds = await ref.watch(validBodegasIdsProvider.future);
+  final report = await db.salesDao.getWeeklySalesReport(
+    bodegaIds: validBodegaIds,
+  );
   return SalesReportModel(
     ventasPorDia: report.ventasPorDia,
     totalSemana: report.totalSemana,
@@ -444,3 +448,4 @@ class _SalesReportScreenState extends ConsumerState<SalesReportScreen>
     });
   }
 }
+

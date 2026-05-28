@@ -68,7 +68,7 @@ class DashboardState {
   });
 }
 
-final dashboardProvider = FutureProvider<DashboardState>((ref) async {
+final dashboardProvider = FutureProvider.autoDispose<DashboardState>((ref) async {
   // Se re-ejecuta cuando termina una sincronización exitosa con el servidor
   ref.watch(autoSyncProvider.select((s) => s.value?.lastSync));
 
@@ -78,8 +78,12 @@ final dashboardProvider = FutureProvider<DashboardState>((ref) async {
   final montoTotalInventario = await db.inventoryDao.getValorTotalInventario(
     bodegaIds: validBodegaIds,
   );
-  final montoTotalFiados = await db.salesDao.getMontoTotalFiados();
-  final cajaAbierta = await db.salesDao.getCajaSesionActivaActual();
+  final montoTotalFiados = await db.salesDao.getMontoTotalFiados(
+    bodegaIds: validBodegaIds,
+  );
+  final cajaAbierta = await db.salesDao.getCajaSesionActivaActual(
+    bodegaIds: validBodegaIds,
+  );
   final ventasDelDia = await db.salesDao.getVentasDelDia(
     bodegaIds: validBodegaIds,
   );
@@ -90,7 +94,10 @@ final dashboardProvider = FutureProvider<DashboardState>((ref) async {
     bodegaIds: validBodegaIds,
     limit: 5,
   );
-  final transacciones = await db.salesDao.getRecentTransactions(limit: 5);
+  final transacciones = await db.salesDao.getRecentTransactions(
+    bodegaIds: validBodegaIds,
+    limit: 5,
+  );
 
   var ventasEnCurso = 0.0;
   var gananciasEsperadas = 0.0;
@@ -121,3 +128,4 @@ final dashboardProvider = FutureProvider<DashboardState>((ref) async {
         .toList(),
   );
 });
+

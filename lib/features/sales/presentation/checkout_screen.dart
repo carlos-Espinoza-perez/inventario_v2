@@ -70,6 +70,41 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
+              "Resumen del Carrito",
+              style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: widget.cartItems.length,
+                separatorBuilder: (context, index) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final item = widget.cartItems[index];
+                  final name = item['name'] as String;
+                  final size = item['size'] as String;
+                  final qty = item['qty'] as int;
+                  final price = item['price'] as double;
+                  return ListTile(
+                    dense: true,
+                    title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    subtitle: Text('Variante: $size', style: const TextStyle(fontSize: 11)),
+                    trailing: Text(
+                      '${qty}x ${NumberFormat.simpleCurrency().format(price)}',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
               "Cliente",
               style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
             ),
