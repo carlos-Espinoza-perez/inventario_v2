@@ -748,13 +748,13 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen>
       ref.invalidate(staffAdminDataProvider);
 
       if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
+      Navigator.of(context, rootNavigator: true).pop(); // Close loading dialog
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Usuario ${user.nombreCompleto} eliminado.')),
       );
     } catch (error) {
       if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
+      Navigator.of(context, rootNavigator: true).pop(); // Close loading dialog
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(error.toString()),
