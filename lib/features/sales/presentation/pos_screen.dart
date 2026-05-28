@@ -786,21 +786,41 @@ class _BodegaSelectorView extends ConsumerWidget {
       body: bodegasAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
-        data: (bodegas) => ListView.builder(
-          padding: const EdgeInsets.all(24),
-          itemCount: bodegas.length,
-          itemBuilder: (context, index) {
-            final bodega = bodegas[index];
-            return Card(
-              child: ListTile(
-                title: Text(bodega.nombre),
-                onTap: () {
-                  ref.read(selectedBodegaProvider.notifier).state = bodega;
-                },
+        data: (bodegas) {
+          if (bodegas.isEmpty) {
+            return const Center(
+              child: Text(
+                'No hay bodegas disponibles.',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             );
-          },
-        ),
+          }
+
+          if (bodegas.length == 1) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (ref.read(selectedBodegaProvider) == null) {
+                ref.read(selectedBodegaProvider.notifier).state = bodegas.first;
+              }
+            });
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(24),
+            itemCount: bodegas.length,
+            itemBuilder: (context, index) {
+              final bodega = bodegas[index];
+              return Card(
+                child: ListTile(
+                  title: Text(bodega.nombre),
+                  onTap: () {
+                    ref.read(selectedBodegaProvider.notifier).state = bodega;
+                  },
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }

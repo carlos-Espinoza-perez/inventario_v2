@@ -27,9 +27,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final asyncData = ref.watch(dashboardProvider);
     final syncErrorCount = ref.watch(syncErrorCountProvider).valueOrNull ?? 0;
     final isSyncing = ref.watch(autoSyncProvider.select((s) => s.value?.isSyncing ?? false));
+    final isOnline = ref.watch(autoSyncProvider.select((s) => s.value?.isOnline ?? true));
 
     return Column(
       children: [
+        if (!isOnline)
+          Container(
+            width: double.infinity,
+            color: Colors.grey.shade800,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.cloud_off, color: Colors.white, size: 16),
+                SizedBox(width: 8),
+                Text(
+                  'Modo Offline. Los datos se guardan localmente.',
+                  style: TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
         if (syncErrorCount > 0)
           _SyncErrorBanner(
             errorCount: syncErrorCount,

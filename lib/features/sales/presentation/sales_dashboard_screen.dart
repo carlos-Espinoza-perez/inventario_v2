@@ -9,12 +9,15 @@ import 'package:inventario_v2/core/providers/auto_sync_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
 
+import 'package:inventario_v2/features/inventory/data/providers/bodega_provider.dart';
+
 final salesListProvider = FutureProvider.autoDispose<List<SalesListItemDrift>>((ref) async {
   // Se re-ejecuta cuando termina una sincronización exitosa con el servidor
   ref.watch(autoSyncProvider.select((s) => s.value?.lastSync));
 
   final db = ref.watch(driftDatabaseProvider);
-  return db.salesDao.getSalesList();
+  final validBodegaIds = await ref.watch(validBodegasIdsProvider.future);
+  return db.salesDao.getSalesList(bodegaIds: validBodegaIds);
 });
 
 class SalesDashboardScreen extends ConsumerStatefulWidget {
@@ -394,3 +397,4 @@ class _StatusFilterChip extends StatelessWidget {
     );
   }
 }
+

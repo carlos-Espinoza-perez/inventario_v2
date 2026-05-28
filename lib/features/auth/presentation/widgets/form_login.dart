@@ -192,6 +192,7 @@ class FormLoginState extends ConsumerState<FormLogin> {
           TextFormField(
             controller: _emailCtrl,
             autofillHints: const [AutofillHints.email],
+            keyboardType: TextInputType.emailAddress,
             decoration: InputDecoration(
               border: const OutlineInputBorder(
                 borderRadius: BorderRadius.all(Radius.circular(8)),

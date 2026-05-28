@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
+import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/features/auth/presentation/providers/auth_provider.dart';
 import 'package:inventario_v2/features/dashboard/presentation/providers/dashboard_provider.dart';
 import 'package:inventario_v2/features/sales/data/repositories/caja_repository.dart';
@@ -25,6 +26,13 @@ final ventasCreditoProvider = FutureProvider.autoDispose.family<double, String>(
   (ref, cajaSesionId) async {
     final repo = ref.read(cajaRepositoryProvider);
     return repo.obtenerVentasCredito(cajaSesionId);
+  },
+);
+
+final costoVentasProvider = FutureProvider.autoDispose.family<double, String>(
+  (ref, cajaSesionId) async {
+    final db = ref.read(driftDatabaseProvider);
+    return db.salesDao.getCostoSesion(cajaSesionId);
   },
 );
 
@@ -240,6 +248,7 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen>
     final gastosAsync = ref.watch(gastosActivosProvider(cajaSesionId));
     final ventasEfectivoAsync = ref.watch(ventasEfectivoProvider(cajaSesionId));
     final ventasCreditoAsync = ref.watch(ventasCreditoProvider(cajaSesionId));
+    final costoVentasAsync = ref.watch(costoVentasProvider(cajaSesionId));
     final gananciasEsperadas =
         ref.watch(dashboardProvider).value?.gananciasEsperadas ?? 0.0;
 
@@ -346,13 +355,45 @@ class _CashRegisterScreenState extends ConsumerState<CashRegisterScreen>
                                       color: Colors.blue.shade200,
                                     ),
                                     _BalanceDetailItem(
-                                      label: 'Ganancia Est.',
+                                      label: 'Ganancia Bruta',
                                       value: gananciasEsperadas,
                                       icon: Icons.trending_up,
                                       color: Colors.yellow.shade200,
                                     ),
                                   ],
                                 ),
+                                loading: () => const SizedBox.shrink(),
+                                error: (e, _) => const SizedBox.shrink(),
+                              ),
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8),
+                                child: Divider(
+                                  color: Colors.white12,
+                                  height: 1,
+                                ),
+                              ),
+                              costoVentasAsync.when(
+                                data: (costoTotal) {
+                                  final gananciaNeta = gananciasEsperadas - totalGastos;
+                                  return Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      _BalanceDetailItem(
+                                        label: 'Costo Total (-)',
+                                        value: costoTotal,
+                                        icon: Icons.inventory_2,
+                                        color: Colors.purple.shade200,
+                                      ),
+                                      _BalanceDetailItem(
+                                        label: 'Ganancia Neta',
+                                        value: gananciaNeta,
+                                        icon: Icons.account_balance_wallet,
+                                        color: Colors.greenAccent.shade200,
+                                      ),
+                                    ],
+                                  );
+                                },
                                 loading: () => const SizedBox.shrink(),
                                 error: (e, _) => const SizedBox.shrink(),
                               ),
