@@ -6,6 +6,7 @@ import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
+import 'package:inventario_v2/core/services/app_logger.dart';
 import 'package:inventario_v2/features/auth/presentation/providers/auth_provider.dart';
 import 'package:inventario_v2/features/auth/presentation/providers/authorization_provider.dart';
 import 'package:inventario_v2/features/inventory/data/providers/categoria_provider.dart';
@@ -61,7 +62,9 @@ class _CategoryManageScreenState extends ConsumerState<CategoryManageScreen>
           final List<dynamic> tallas = spec['tallas_permitidas'];
           _tallasCtrl.text = tallas.join(', ');
         }
-      } catch (_) {}
+      } catch (e, st) {
+        AppLogger.error('Error decodificando tallas permitidas', e, st);
+      }
     }
 
     await showDialog<void>(
@@ -181,7 +184,9 @@ class _CategoryManageScreenState extends ConsumerState<CategoryManageScreen>
       if (especificacionJson != null && especificacionJson.isNotEmpty) {
         try {
           spec = jsonDecode(especificacionJson);
-        } catch (_) {}
+        } catch (e, st) {
+          AppLogger.error('Error decodificando especificacionJson', e, st);
+        }
       }
       
       if (tallasStr.isNotEmpty) {

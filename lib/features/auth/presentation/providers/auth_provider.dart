@@ -7,6 +7,7 @@ import 'package:inventario_v2/core/providers/auto_sync_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/core/providers/supabase_provider.dart';
 import 'package:inventario_v2/features/auth/data/repositories/auth_repository.dart';
+import 'package:inventario_v2/core/services/app_logger.dart';
 import 'package:inventario_v2/core/services/remote_logger.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -78,7 +79,7 @@ class AuthController extends _$AuthController {
             // evitamos el sync automático porque public.usuario está vacío temporalmente
             // hasta que se ejecute repo.createCompanyAndUser en la llamada de createUser.
             if (_draft != null) {
-              debugPrint('[Auth] Detectada creación de empresa en curso, omitiendo sincronización automática en stream.');
+              AppLogger.info('[Auth] Detectada creación de empresa en curso, omitiendo sincronización automática en stream.');
               return;
             }
 
@@ -87,7 +88,7 @@ class AuthController extends _$AuthController {
               await _syncSessionFromSupabaseUser(session.user.id);
               state = const AsyncData(null);
             } catch (e, st) {
-              debugPrint('[Auth] Error syncing session on auth event: $e');
+              AppLogger.error('[Auth] Error syncing session on auth event', e, st);
               RemoteLogger.error(
                 'Error al restaurar sesión desde Supabase',
                 module: 'auth',
@@ -178,7 +179,7 @@ class AuthController extends _$AuthController {
       _linkError = null;
       state = const AsyncData(null);
     } catch (e, st) {
-      debugPrint('[Auth] Error al completar cambio de password: $e');
+      AppLogger.error('[Auth] Error al completar cambio de password', e, st);
       state = AsyncError(e, st);
       rethrow;
     }
@@ -201,7 +202,7 @@ class AuthController extends _$AuthController {
       final db = ref.read(driftDatabaseProvider);
       final repo = AuthRepository(supabase, db);
 
-      debugPrint('[Auth] Iniciando registro: $correo');
+      AppLogger.info('[Auth] Iniciando registro: $correo');
 
       final authResponse = await supabase.auth.signUp(
         email: correo,
@@ -241,7 +242,7 @@ class AuthController extends _$AuthController {
 
       state = const AsyncValue.data(null);
     } catch (e, st) {
-      debugPrint('[Auth] Error en createUser: $e');
+      AppLogger.error('[Auth] Error en createUser', e, st);
       RemoteLogger.error(
         'Error al crear empresa/usuario',
         module: 'auth',
@@ -296,7 +297,7 @@ class AuthController extends _$AuthController {
       }
 
       _sesionActiva = await db.authDao.getSesionActiva();
-      debugPrint('[Auth] Login exitoso: ${_sesionActiva?.usuario.id}');
+      AppLogger.info('[Auth] Login exitoso: ${_sesionActiva?.usuario.id}');
       RemoteLogger.info(
         'Login exitoso',
         module: 'auth',
@@ -308,7 +309,7 @@ class AuthController extends _$AuthController {
       _sessionSyncError = null;
       _linkError = null;
     } catch (e, stackTrace) {
-      debugPrint('[Auth] Error en login: $e');
+      AppLogger.error('[Auth] Error en login', e, stackTrace);
       RemoteLogger.error(
         'Error en login',
         module: 'auth',
@@ -353,8 +354,8 @@ class AuthController extends _$AuthController {
       _sessionSyncError = null;
       _linkError = null;
       state = const AsyncData(null);
-    } catch (e) {
-      debugPrint('[Auth] No se pudo cerrar sesion: $e');
+    } catch (e, st) {
+      AppLogger.error('[Auth] No se pudo cerrar sesion', e, st);
       rethrow;
     } finally {
       _isLoggingOut = false;

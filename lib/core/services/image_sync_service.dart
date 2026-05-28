@@ -1,9 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:inventario_v2/core/services/app_logger.dart';
 
 class ImageSyncService {
   Future<void> preCacheImages(Iterable<dynamic> productos) async {
-    debugPrint('Iniciando sincronizacion de imagenes en segundo plano...');
+    AppLogger.info('Iniciando sincronizacion de imagenes en segundo plano...');
 
     var descargadas = 0;
     var existentes = 0;
@@ -25,14 +26,14 @@ class ImageSyncService {
         } else {
           existentes++;
         }
-      } catch (e) {
-        debugPrint('Error pre-cargando imagen para $nombre: $e');
+      } catch (e, st) {
+        AppLogger.error('Error pre-cargando imagen para $nombre', e, st);
       }
     }
 
-    debugPrint('Sincronizacion de imagenes terminada.');
-    debugPrint('Descargadas: $descargadas');
-    debugPrint('Ya en cache: $existentes');
+    AppLogger.info('Sincronizacion de imagenes terminada.');
+    AppLogger.info('Descargadas: $descargadas');
+    AppLogger.info('Ya en cache: $existentes');
   }
 
   String? _readString(dynamic producto, String key) {

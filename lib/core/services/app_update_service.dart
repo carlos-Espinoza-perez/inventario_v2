@@ -167,6 +167,8 @@ class AppUpdateService {
       if (file != null && await file.exists()) {
         await file.delete();
       }
-    } catch (_) {}
+    } catch (e, st) {
+      AppLogger.error('Error limpiando temp apk', e, st);
+    }
   }
 }

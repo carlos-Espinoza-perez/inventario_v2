@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:inventario_v2/core/db/exceptions/dao_exceptions.dart';
 import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
+import 'package:inventario_v2/core/services/app_logger.dart';
 import 'package:inventario_v2/features/sales/domain/use_cases/registrar_venta_use_case.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
@@ -357,8 +358,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen>
           ],
         ),
       );
-    } catch (e) {
-      debugPrint("Error procesando venta: $e");
+    } catch (e, st) {
+      AppLogger.error('Error procesando venta', e, st);
       final message = switch (e) {
         CajaSesionNoActivaException(:final message) => message,
         StockInsuficienteException(:final message) => message,

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/db/models/inventory_requests.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
+import 'package:inventario_v2/core/services/app_logger.dart';
 import 'package:inventario_v2/features/inventory/data/repository/inventario_repository.dart';
 
 final movimientoRepositoryProvider = Provider((ref) {
@@ -259,7 +260,7 @@ class MovimientoRepository {
           .toList();
     } catch (e, st) {
       // JSON malformado en DB: el detalle de movimiento sigue renderizando sin variantes
-      debugPrint('_decodeVariantes: JSON inválido en variantesJson — $e\n$st');
+      AppLogger.error('_decodeVariantes: JSON inválido en variantesJson', e, st);
       return const [];
     }
   }

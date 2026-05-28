@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:go_router/go_router.dart';
+import 'package:inventario_v2/core/services/app_logger.dart';
 
 // -----------------------------------------------------------------------------
 // 🧠 BASE DE DATOS LÓGICA (Tu diccionario)
@@ -242,8 +243,8 @@ class _MagicCameraScreenState extends State<MagicCameraScreen> {
           'imagePath': photo.path, // Devolvemos la foto HD
         });
       }
-    } catch (e) {
-      debugPrint("Error analizando foto: $e");
+    } catch (e, st) {
+      AppLogger.error("Error analizando foto", e, st);
       if (mounted) {
         setState(() => _isAnalyzing = false);
         ScaffoldMessenger.of(

@@ -12,6 +12,7 @@ import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/core/providers/supabase_provider.dart';
+import 'package:inventario_v2/core/services/app_logger.dart';
 import 'package:inventario_v2/core/services/image_storage_service.dart';
 import 'package:inventario_v2/features/inventory/data/providers/categoria_provider.dart';
 import 'package:inventario_v2/features/inventory/presentation/widgets/autocomplete_field_product_create.dart';
@@ -127,7 +128,9 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
             _subCategoryCtrl.text = specs['category']?.toString() ?? '';
           }
         }
-      } catch (_) {}
+      } catch (e, st) {
+        AppLogger.error('Error decodificando specs en product_create', e, st);
+      }
     }
   }
 
@@ -209,7 +212,9 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
         if (spec['tallas_permitidas'] is List) {
           suggestedTallas = (spec['tallas_permitidas'] as List).map((e) => e.toString()).toList();
         }
-      } catch (_) {}
+      } catch (e, st) {
+        AppLogger.error('Error decodificando tallas en product_create', e, st);
+      }
     }
 
     final parentCategories = categorias
@@ -557,7 +562,9 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
                 ref.read(supabaseClientProvider),
               );
               webUrlFinal = await storageService.uploadProductImage(savedImage);
-            } catch (_) {}
+            } catch (e, st) {
+              AppLogger.error('Error subiendo imagen en product_create', e, st);
+            }
           }
         }
       }

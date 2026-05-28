@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:path/path.dart' as p;
+import 'package:inventario_v2/core/services/app_logger.dart';
 
 class ImageStorageService {
   final SupabaseClient _supabase;
@@ -39,10 +40,10 @@ class ImageStorageService {
           .getPublicUrl(filePath);
 
       return publicUrl;
-    } catch (e) {
+    } catch (e, st) {
       // Aquí capturamos errores como falta de internet o permisos denegados.
       // Retornamos null para que la app sepa que no se pudo subir (y use la local).
-      debugPrint("Error subiendo imagen a Supabase: $e");
+      AppLogger.error("Error subiendo imagen a Supabase", e, st);
       return null;
     }
   }

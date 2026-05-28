@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/constants/app_constants.dart';
+import 'package:inventario_v2/core/services/app_logger.dart';
 import '../data/openai/openai_client.dart';
 import '../data/openai/openai_models.dart';
 import '../data/openai/openai_providers.dart';
@@ -689,7 +690,9 @@ ${recentHistory.isEmpty ? 'ninguno' : recentHistory}
         try {
           final dynamic entity = value;
           if (entity.id == productId) return entity.nombre as String?;
-        } catch (_) {}
+        } catch (e, st) {
+          AppLogger.error('Error resolviendo nombre de producto', e, st);
+        }
         continue;
       }
       final id =
@@ -770,7 +773,9 @@ ${recentHistory.isEmpty ? 'ninguno' : recentHistory}
     }
     try {
       return (entity as dynamic).nombre as String;
-    } catch (_) {}
+    } catch (e, st) {
+      AppLogger.error('Error extrayendo displayName', e, st);
+    }
     return entity.toString();
   }
 
@@ -782,7 +787,9 @@ ${recentHistory.isEmpty ? 'ninguno' : recentHistory}
     if (value is Map || value is List) return jsonEncode(value);
     try {
       return jsonEncode((value as dynamic).toJson());
-    } catch (_) {}
+    } catch (e, st) {
+      AppLogger.error('Error serializando valor json', e, st);
+    }
     return value.toString();
   }
 }

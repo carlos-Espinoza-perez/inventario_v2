@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/core/presentation/widgets/custom_text_field.dart';
+import 'package:inventario_v2/core/services/app_logger.dart';
 
 import 'package:inventario_v2/features/inventory/data/providers/inventario_provider.dart';
 import 'package:inventario_v2/features/inventory/presentation/widgets/product_label_widget.dart';
@@ -92,8 +93,8 @@ final productEntryDataProvider =
             if (val <= 1.0) val = val * 100;
             margen = val;
           }
-        } catch (e) {
-          debugPrint("Error specs: $e");
+        } catch (e, st) {
+          AppLogger.error("Error specs", e, st);
         }
       }
 
