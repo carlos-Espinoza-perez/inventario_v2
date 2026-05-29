@@ -1,6 +1,5 @@
 {
   "releaseNotes": [
-    "Primera versión base de la aplicación de Inventario",
-    "Estabilización de arquitectura, UI y seguridad (PKCE)"
+    "Release oficial 1.0.0 del sistema de Inventario"
   ]
 }
