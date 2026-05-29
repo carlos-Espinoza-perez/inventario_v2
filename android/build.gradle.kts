@@ -29,7 +29,7 @@ subprojects {
     if (project.name != "app") {
         project.afterEvaluate {
             project.extensions.findByType(LibraryExtension::class.java)?.let { ext ->
-                ext.compileSdk = 36
+                ext.compileSdk = 35
             }
         }
     }
