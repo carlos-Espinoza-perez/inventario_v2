@@ -35,7 +35,7 @@ val hasReleaseKeys = listOf(releaseKeyAlias, releaseKeyPassword, releaseStorePas
 
 android {
     namespace = "com.example.inventario_v2"
-    compileSdk = 36
+    compileSdk = 35
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
