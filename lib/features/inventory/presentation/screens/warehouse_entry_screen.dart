@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 import 'package:inventario_v2/core/db/models/product_catalog_models.dart';
 import 'package:inventario_v2/core/db/exceptions/dao_exceptions.dart';
 import 'package:inventario_v2/core/presentation/widgets/custom_text_field.dart';
@@ -297,16 +298,30 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
                           ),
                       ],
                     ),
-                    ElevatedButton.icon(
-                      onPressed: _isLoading
-                          ? null
-                          : _selectProductAndStartScanning,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.cyan.shade800,
-                        foregroundColor: Colors.white,
-                      ),
-                      icon: const Icon(Icons.add_circle_outline, size: 18),
-                      label: const Text('Catalogo'),
+                    Row(
+                      children: [
+                        TextButton.icon(
+                          onPressed: () => context.push('/product-create'),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Nuevo', style: TextStyle(fontSize: 12)),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.cyan.shade800,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        ElevatedButton.icon(
+                          onPressed: _isLoading
+                              ? null
+                              : _selectProductAndStartScanning,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.cyan.shade800,
+                            foregroundColor: Colors.white,
+                          ),
+                          icon: const Icon(Icons.search, size: 18),
+                          label: const Text('Catálogo'),
+                        ),
+                      ],
                     ),
                   ],
                 ),
