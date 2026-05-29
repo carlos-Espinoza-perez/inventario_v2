@@ -63,11 +63,11 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
           KEYSTORE_PATH: ${{ github.workspace }}/android/app/keystore.jks
-        run: flutter build apk --release
+        run: flutter build apk --release --split-per-abi
 
-      - name: Renombrar APK
+      - name: Renombrar APK (arm64-v8a)
         run: |
-          mv build/app/outputs/flutter-apk/app-release.apk \
+          mv build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
              build/app/outputs/flutter-apk/${{ steps.version.outputs.apk_name }}
 
       - name: Crear GitHub Release
@@ -79,7 +79,9 @@ jobs:
             ## Cambios en v${{ steps.version.outputs.version_name }}
 
             Revisa `app_update/version.json` para el detalle de notas de la versión.
-          files: build/app/outputs/flutter-apk/${{ steps.version.outputs.apk_name }}
+          files: |
+            build/app/outputs/flutter-apk/${{ steps.version.outputs.apk_name }}
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
           draft: false
           prerelease: false
 
