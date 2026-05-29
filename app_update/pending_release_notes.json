@@ -1,5 +1,7 @@
 {
   "releaseNotes": [
-    "Release oficial 1.0.0 del sistema de Inventario"
+    "Persistencia de productos al salir y volver de la vista de entrada.",
+    "Se agregó un botón para limpiar el borrador de entrada.",
+    "Botón rápido para agregar nuevos productos en la vista de entrada."
   ]
 }
