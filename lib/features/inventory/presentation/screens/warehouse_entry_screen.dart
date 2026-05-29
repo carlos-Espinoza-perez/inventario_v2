@@ -12,6 +12,7 @@ import 'barcode_capture_screen.dart';
 import 'product_create_screen.dart';
 import 'product_detail_entry_screen.dart';
 import 'product_selection_screen.dart';
+import 'package:inventario_v2/features/inventory/presentation/providers/warehouse_entry_draft_provider.dart';
 
 class WarehouseEntryScreen extends ConsumerStatefulWidget {
   final String bodegaId;
@@ -27,18 +28,33 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
   final TextEditingController _descriptionCtrl = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _focusDescripcion = FocusNode();
-  final List<Map<String, dynamic>> _orderLines = [];
 
   bool _isLoading = false;
   bool _isLoadingProduct = false;
 
-  double get _totalInvestment => _orderLines.fold(0.0, (sum, item) {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final draft = ref.read(warehouseEntryDraftProvider(widget.bodegaId));
+      if (draft.description.isNotEmpty) {
+        _descriptionCtrl.text = draft.description;
+      }
+    });
+    _descriptionCtrl.addListener(() {
+      ref.read(warehouseEntryDraftProvider(widget.bodegaId).notifier)
+         .updateDescription(_descriptionCtrl.text);
+    });
+  }
+
+  double _totalInvestment(List<Map<String, dynamic>> orderLines) => orderLines.fold(0.0, (sum, item) {
     final cost = (item['cost'] as num?)?.toDouble() ?? 0.0;
     final qty = ((item['items'] as List?)?.length ?? 0).toDouble();
     return sum + (cost * qty);
   });
 
-  int get _totalItemsCount => _orderLines.fold(
+  int _totalItemsCount(List<Map<String, dynamic>> orderLines) => orderLines.fold(
     0,
     (sum, item) => sum + ((item['items'] as List?)?.length ?? 0),
   );
@@ -51,7 +67,7 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
     super.dispose();
   }
 
-  Future<void> _saveEntireOrderToDB() async {
+  Future<void> _saveEntireOrderToDB(List<Map<String, dynamic>> orderLines) async {
     if (_descriptionCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -71,10 +87,12 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
       await registrarEntrada.ejecutar(
         bodegaId: widget.bodegaId,
         descripcion: _descriptionCtrl.text,
-        orderLines: _orderLines,
+        orderLines: orderLines,
       );
 
       if (!mounted) return;
+      ref.read(warehouseEntryDraftProvider(widget.bodegaId).notifier).clear();
+      _descriptionCtrl.clear();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Entrada de inventario registrada con exito'),
@@ -105,41 +123,12 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
     };
   }
 
-  Future<bool?> _showExitConfirmation() {
-    return showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('¿Salir sin guardar?'),
-        content: const Text('Tienes productos en la orden de entrada. Si sales ahora, perderás estos datos.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('CANCELAR'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('SALIR'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: _orderLines.isEmpty,
-      onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return;
-        final shouldPop = await _showExitConfirmation();
-        if (shouldPop ?? false) {
-          if (context.mounted) {
-            Navigator.pop(context, result);
-          }
-        }
-      },
-      child: Scaffold(
+    final draftState = ref.watch(warehouseEntryDraftProvider(widget.bodegaId));
+    final orderLines = draftState.orderLines;
+
+    return Scaffold(
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(20),
         decoration: const BoxDecoration(
@@ -154,9 +143,9 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
         ),
         child: SafeArea(
           child: ElevatedButton.icon(
-            onPressed: (_orderLines.isEmpty || _isLoading)
+            onPressed: (orderLines.isEmpty || _isLoading)
                 ? null
-                : _saveEntireOrderToDB,
+                : () => _saveEntireOrderToDB(orderLines),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.cyan.shade900,
               foregroundColor: Colors.white,
@@ -179,7 +168,7 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
             label: Text(
               _isLoading
                   ? 'GUARDANDO...'
-                  : 'FINALIZAR ENTRADA (${NumberFormat.simpleCurrency().format(_totalInvestment)})',
+                  : 'FINALIZAR ENTRADA (${NumberFormat.simpleCurrency().format(_totalInvestment(orderLines))})',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
           ),
@@ -209,20 +198,58 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Icon(
-                            Icons.description_outlined,
-                            color: Colors.cyan.shade800,
-                            size: 20,
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.description_outlined,
+                                color: Colors.cyan.shade800,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Informacion General',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Informacion General',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
+                          if (orderLines.isNotEmpty || _descriptionCtrl.text.isNotEmpty)
+                            TextButton.icon(
+                              onPressed: () async {
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('¿Limpiar borrador?'),
+                                    content: const Text('Se eliminarán todos los productos escaneados y la descripción actual.'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context, false),
+                                        child: const Text('CANCELAR'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context, true),
+                                        style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                        child: const Text('LIMPIAR'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirm == true && mounted) {
+                                  ref.read(warehouseEntryDraftProvider(widget.bodegaId).notifier).clear();
+                                  _descriptionCtrl.clear();
+                                }
+                              },
+                              icon: const Icon(Icons.cleaning_services, size: 18),
+                              label: const Text('Limpiar'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.red.shade600,
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              ),
                             ),
-                          ),
                         ],
                       ),
                       const SizedBox(height: 16),
@@ -249,7 +276,7 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        if (_orderLines.isNotEmpty)
+                        if (orderLines.isNotEmpty)
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
@@ -260,7 +287,7 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              '$_totalItemsCount unds',
+                              '${_totalItemsCount(orderLines)} unds',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.cyan.shade900,
@@ -331,14 +358,14 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                if (_orderLines.isEmpty)
+                if (orderLines.isEmpty)
                   _buildEmptyState()
                 else
                   ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _orderLines.length,
-                    itemBuilder: (context, index) => _buildOrderLineCard(index),
+                    itemCount: orderLines.length,
+                    itemBuilder: (context, index) => _buildOrderLineCard(index, orderLines),
                   ),
                 const SizedBox(height: 80),
               ],
@@ -353,7 +380,7 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
             ),
         ],
       ),
-    ));
+    );
   }
 
   Widget _buildEmptyState() {
@@ -392,8 +419,8 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
     );
   }
 
-  Widget _buildOrderLineCard(int index) {
-    final line = _orderLines[index];
+  Widget _buildOrderLineCard(int index, List<Map<String, dynamic>> orderLines) {
+    final line = orderLines[index];
     final qty = ((line['items'] as List?)?.length ?? 0);
     final cost = (line['cost'] as num?)?.toDouble() ?? 0.0;
     final totalLine = cost * qty;
@@ -481,7 +508,7 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
                   label: const Text('Editar Lote'),
                   onPressed: _isLoading
                       ? null
-                      : () => _editExistingProduct(index),
+                      : () => _editExistingProduct(index, orderLines),
                 ),
                 IconButton(
                   icon: const Icon(
@@ -491,7 +518,7 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
                   ),
                   onPressed: _isLoading
                       ? null
-                      : () => setState(() => _orderLines.removeAt(index)),
+                      : () => ref.read(warehouseEntryDraftProvider(widget.bodegaId).notifier).removeOrderLine(index),
                 ),
               ],
             ),
@@ -511,7 +538,7 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
     );
 
     if (result is Map<String, dynamic>) {
-      setState(() => _orderLines.add(result));
+      ref.read(warehouseEntryDraftProvider(widget.bodegaId).notifier).addOrderLine(result);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -524,8 +551,8 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
     }
   }
 
-  Future<void> _editExistingProduct(int index) async {
-    final line = _orderLines[index];
+  Future<void> _editExistingProduct(int index, List<Map<String, dynamic>> orderLines) async {
+    final line = orderLines[index];
     final existingItems = ((line['items'] as List?) ?? const [])
         .map((item) => Map<String, String>.from(item as Map))
         .toList();
@@ -544,7 +571,7 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
     );
 
     if (result is Map<String, dynamic>) {
-      setState(() => _orderLines[index] = result);
+      ref.read(warehouseEntryDraftProvider(widget.bodegaId).notifier).updateOrderLine(index, result);
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -682,7 +709,7 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
     );
 
     if (result is Map<String, dynamic>) {
-      setState(() => _orderLines.add(result));
+      ref.read(warehouseEntryDraftProvider(widget.bodegaId).notifier).addOrderLine(result);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
