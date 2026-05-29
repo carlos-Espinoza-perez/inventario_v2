@@ -62,6 +62,8 @@ android {
                 keyPassword = releaseKeyPassword
                 storeFile = file(releaseStoreFilePath!!)
                 storePassword = releaseStorePassword
+                enableV1Signing = true
+                enableV2Signing = true
             }
         }
     }
