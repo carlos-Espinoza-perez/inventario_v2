@@ -137,5 +137,6 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add app_update/version.json app_update/pending_release_notes.json
           git commit -m "chore: actualizar version.json para v${{ steps.version.outputs.version_name }} [skip ci]" || echo "No changes to commit"
+          git restore .
           git pull --rebase origin main
           git push origin HEAD:main

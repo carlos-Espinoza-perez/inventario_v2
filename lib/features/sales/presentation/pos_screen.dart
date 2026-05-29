@@ -343,7 +343,7 @@ class _PosScreenState extends ConsumerState<PosScreen> with AppBarConfigMixin {
 
     if (exactMatches.length == 1) {
       final item = exactMatches.first;
-      _addToCart(
+      final success = _addToCart(
         productId: item.productoId,
         variantId: item.varianteId,
         sku: item.sku,
@@ -354,7 +354,10 @@ class _PosScreenState extends ConsumerState<PosScreen> with AppBarConfigMixin {
         qty: 1,
         stock: item.stock,
       );
-      _searchController.clear();
+      if (success) {
+        _searchController.clear();
+        _showSuccessSnackbar(item.nombre);
+      }
       return;
     }
 
@@ -384,7 +387,7 @@ class _PosScreenState extends ConsumerState<PosScreen> with AppBarConfigMixin {
         variants: variants,
         onAddToCart: (variant, qty) {
           Navigator.pop(context);
-          _addToCart(
+          final success = _addToCart(
             productId: productId,
             variantId: variant['varianteId']?.toString(),
             sku: variant['sku']?.toString() ?? productId,
@@ -395,12 +398,16 @@ class _PosScreenState extends ConsumerState<PosScreen> with AppBarConfigMixin {
             qty: qty,
             stock: (variant['stock'] as num?)?.toDouble() ?? 0.0,
           );
+          if (success) {
+            _searchController.clear();
+            _showSuccessSnackbar(productName);
+          }
         },
       ),
     );
   }
 
-  void _addToCart({
+  bool _addToCart({
     required String productId,
     required String? variantId,
     required String sku,
@@ -424,13 +431,13 @@ class _PosScreenState extends ConsumerState<PosScreen> with AppBarConfigMixin {
             backgroundColor: Colors.red,
           ),
         );
-        return;
+        return false;
       }
 
       setState(() {
         _cart[existingIndex]['qty'] = currentQty + qty;
       });
-      return;
+      return true;
     }
 
     if (qty > stock) {
@@ -440,7 +447,7 @@ class _PosScreenState extends ConsumerState<PosScreen> with AppBarConfigMixin {
           backgroundColor: Colors.red,
         ),
       );
-      return;
+      return false;
     }
 
     setState(() {
@@ -456,6 +463,23 @@ class _PosScreenState extends ConsumerState<PosScreen> with AppBarConfigMixin {
         'stock': stock,
       });
     });
+    return true;
+  }
+
+  void _showSuccessSnackbar(String productName) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$productName agregado al carrito'),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(
+          bottom: MediaQuery.of(context).size.height - 150,
+          left: 20,
+          right: 20,
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   void _showCartDetails() async {
