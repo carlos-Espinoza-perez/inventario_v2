@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:go_router/go_router.dart';
 import 'package:inventario_v2/core/db/models/product_catalog_models.dart';
 import 'package:inventario_v2/core/db/exceptions/dao_exceptions.dart';
 import 'package:inventario_v2/core/presentation/widgets/custom_text_field.dart';
@@ -54,6 +53,20 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
     final qty = ((item['items'] as List?)?.length ?? 0).toDouble();
     return sum + (cost * qty);
   });
+
+  double _expectedSales(List<Map<String, dynamic>> orderLines) {
+    return orderLines.fold(0.0, (sum, line) {
+      final items = line['items'] as List? ?? [];
+      double lineSales = 0.0;
+      for (final item in items) {
+        final Map itemMap = item as Map;
+        final itemPrice = double.tryParse(itemMap['price']?.toString() ?? '') ?? 
+                          (line['price'] as num?)?.toDouble() ?? 0.0;
+        lineSales += itemPrice;
+      }
+      return sum + lineSales;
+    });
+  }
 
   int _totalItemsCount(List<Map<String, dynamic>> orderLines) => orderLines.fold(
     0,
@@ -301,7 +314,7 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
                     Row(
                       children: [
                         TextButton.icon(
-                          onPressed: () => context.push('/product-create'),
+                          onPressed: _isLoading ? null : _createNewProduct,
                           icon: const Icon(Icons.add, size: 18),
                           label: const Text('Nuevo', style: TextStyle(fontSize: 12)),
                           style: TextButton.styleFrom(
@@ -382,6 +395,10 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
                     itemCount: orderLines.length,
                     itemBuilder: (context, index) => _buildOrderLineCard(index, orderLines),
                   ),
+                if (orderLines.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _buildSummaryCard(orderLines),
+                ],
                 const SizedBox(height: 80),
               ],
             ),
@@ -428,6 +445,68 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
               color: Colors.grey.shade600,
               fontWeight: FontWeight.bold,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryCard(List<Map<String, dynamic>> orderLines) {
+    final cost = _totalInvestment(orderLines);
+    final sales = _expectedSales(orderLines);
+    final profit = sales - cost;
+    final currency = NumberFormat.simpleCurrency();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.cyan.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.cyan.shade100),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Costo total', style: TextStyle(color: Colors.grey)),
+              Text(
+                currency.format(cost),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Venta esperada', style: TextStyle(color: Colors.grey)),
+              Text(
+                currency.format(sales),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Divider(),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Ganancia esperada',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              Text(
+                currency.format(profit),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: profit >= 0 ? Colors.green.shade700 : Colors.red.shade700,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -648,6 +727,21 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
         await _assignBarcodeToExistingProduct(barcode);
         return;
     }
+  }
+
+  Future<void> _createNewProduct() async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const ProductCreateScreen(),
+      ),
+    );
+    if (!mounted || result == null) return;
+
+    await _goToProductDetail(
+      productId: result['productId'] as String,
+      categoriaId: result['categoriaId'] as String?,
+    );
   }
 
   Future<void> _createProductFromBarcode(String barcode) async {
