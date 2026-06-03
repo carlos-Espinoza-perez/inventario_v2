@@ -23,6 +23,7 @@ class PosScreen extends ConsumerStatefulWidget {
 class _PosScreenState extends ConsumerState<PosScreen> with AppBarConfigMixin {
   final List<Map<String, dynamic>> _cart = [];
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   String _searchQuery = '';
 
   @override
@@ -53,6 +54,7 @@ class _PosScreenState extends ConsumerState<PosScreen> with AppBarConfigMixin {
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -156,6 +158,7 @@ class _PosScreenState extends ConsumerState<PosScreen> with AppBarConfigMixin {
                                   const SizedBox(height: 4),
                                   TextField(
                                     controller: _searchController,
+                                    focusNode: _searchFocusNode,
                                     textInputAction: TextInputAction.search,
                                     onSubmitted: (_) =>
                                         _handleScannedProduct(items),
@@ -298,7 +301,10 @@ class _PosScreenState extends ConsumerState<PosScreen> with AppBarConfigMixin {
       context,
       MaterialPageRoute(builder: (_) => const BarcodeCaptureScreen()),
     );
-    if (code == null || code.isEmpty) return;
+    if (code == null || code.isEmpty) {
+      _searchFocusNode.requestFocus();
+      return;
+    }
     _searchController.text = code;
     await _processScannedCode(code, inventoryItems);
   }
@@ -356,6 +362,7 @@ class _PosScreenState extends ConsumerState<PosScreen> with AppBarConfigMixin {
       );
       if (success) {
         _searchController.clear();
+        _searchFocusNode.requestFocus();
         _showSuccessSnackbar(item.nombre);
       }
       return;
@@ -400,6 +407,7 @@ class _PosScreenState extends ConsumerState<PosScreen> with AppBarConfigMixin {
           );
           if (success) {
             _searchController.clear();
+            _searchFocusNode.requestFocus();
             _showSuccessSnackbar(productName);
           }
         },
@@ -466,20 +474,63 @@ class _PosScreenState extends ConsumerState<PosScreen> with AppBarConfigMixin {
     return true;
   }
 
+  OverlayEntry? _successOverlay;
+
   void _showSuccessSnackbar(String productName) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$productName agregado al carrito'),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.only(
-          bottom: MediaQuery.of(context).size.height - 150,
-          left: 20,
-          right: 20,
+    _successOverlay?.remove();
+    _successOverlay = null;
+
+    final overlay = Overlay.of(context);
+    final overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: MediaQuery.of(context).padding.top + kToolbarHeight + 10,
+        left: 20,
+        right: 20,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.green.shade600,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 8,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '$productName agregado al carrito',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        duration: const Duration(seconds: 2),
       ),
     );
+
+    _successOverlay = overlayEntry;
+    overlay.insert(overlayEntry);
+
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted && _successOverlay == overlayEntry) {
+        _successOverlay?.remove();
+        _successOverlay = null;
+      }
+    });
   }
 
   void _showCartDetails() async {
