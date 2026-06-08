@@ -108,6 +108,20 @@ class AuthController extends _$AuthController {
         }
       },
       onError: (Object error, StackTrace stackTrace) {
+        AppLogger.error('[Auth] Error en stream de auth', error, stackTrace);
+        
+        final errorStr = error.toString();
+        final isNetworkError = errorStr.contains('SocketException') ||
+            errorStr.contains('Network') ||
+            errorStr.contains('ClientException') ||
+            errorStr.contains('Failed host lookup');
+
+        if (isNetworkError) {
+          // Ignorar errores de red para no interrumpir el modo offline
+          // cuando falla el refresco de token en background.
+          return;
+        }
+
         if (error is AuthException &&
             (error.statusCode == 'otp_expired' ||
                 error.code == 'otp_expired' ||

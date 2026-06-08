@@ -36,13 +36,14 @@ Reglas generales:
 9. Si falta información crítica, comentar el bloqueo y no realizar cambios especulativos.
 10. Priorizar cambios pequeños, verificables y reversibles.
 
-## 3. Modo automático desde GitHub Issues
+## 3. Modo automático desde GitHub Issues (Flujo SDD Multi-Agente)
 
-El flujo objetivo del proyecto es permitir que un issue bien documentado pueda iniciar trabajo automático de IA, pero siempre con revisión humana antes del merge.
+El flujo objetivo del proyecto es permitir que un issue bien documentado pueda iniciar trabajo automático de IA, utilizando **Harness Engineering y Spec Driven Development (SDD)** con roles multi-agente, asegurando siempre revisión humana antes de codificar y antes del merge.
 
-Cuando un issue tenga el label `ai-ready`, el agente puede trabajar bajo estas reglas:
+Cuando un issue tenga el label `ai-ready`, el agente (la IA) DEBE adoptar el rol de **Leader** (`.agents/leader.md`) y trabajar bajo estas reglas:
 
-1. Trabajar únicamente el issue que activó el flujo.
+0. **Fase de Especificación Obligatoria:** Antes de tocar código fuente, el agente (adoptando el rol *Spec Author*) debe crear `docs/specs/issue-#N/` copiando las plantillas de `docs/specs/template/` y definir requerimientos, diseño y tareas. Luego debe **DETENERSE** y pedir aprobación humana.
+1. Trabajar únicamente el issue que activó el flujo, y sólo iniciar la implementación después de la aprobación explícita de los specs.
 2. No tomar otros issues relacionados salvo que el issue principal lo indique explícitamente.
 3. No mezclar varios bugs o mejoras en un mismo Pull Request.
 4. No cerrar el issue manualmente; el PR debe usar `Closes #N` para que GitHub lo cierre al hacer merge.
@@ -247,18 +248,19 @@ Closes #N
 ## Riesgos o pendientes
 ```
 
-## 15. Flujo esperado para Codex
+## 15. Flujo esperado para la IA (Harness)
 
-Cuando Codex trabaje un issue:
+Cuando la IA trabaje un issue:
 
-1. Leer completo el issue.
-2. Revisar este archivo `AGENTS.md`.
-3. Identificar archivos relacionados.
-4. Hacer cambios mínimos.
-5. Ejecutar validaciones.
-6. Crear una rama con nombre descriptivo.
-7. Abrir Pull Request.
-8. No hacer merge.
+1. Leer completo el issue y este archivo `AGENTS.md`.
+2. Actuar como **Leader** y derivar a **Spec Author** para crear los specs en `docs/specs/issue-#N/`.
+3. Pedir revisión humana de los specs.
+4. Actuar como **Implementer** ejecutando paso a paso el `tasks.md`.
+5. Hacer cambios mínimos y no tocar zonas sensibles sin permiso.
+6. Actuar como **Reviewer** para verificar requerimientos y ejecutar validaciones locales (`flutter analyze`).
+7. Crear una rama con nombre descriptivo (ej. `feat/issue-N`).
+8. Abrir Pull Request con `Closes #N`.
+9. No hacer merge automático.
 
 ## 16. Issues recomendados para primera fase
 
