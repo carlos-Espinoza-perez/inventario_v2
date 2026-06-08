@@ -260,7 +260,7 @@ Cuando la IA trabaje un issue:
 6. Actuar como **Reviewer** para verificar requerimientos y ejecutar validaciones locales (`flutter analyze`).
 7. Crear una rama con nombre descriptivo (ej. `feat/issue-N`).
 8. Abrir Pull Request con `Closes #N`.
-9. No hacer merge automático.
+9. No hacer merge automático (salvo que el usuario ordene el auto-merge explícitamente en el chat tras su revisión local).
 
 ## 16. Issues recomendados para primera fase
 
@@ -283,4 +283,4 @@ Estos últimos requieren más análisis, datos de prueba y validación manual.
 
 La IA puede proponer y corregir, pero la aprobación final debe ser humana.
 
-Nunca activar merge automático para cambios generados por IA durante la fase inicial.
+Nunca activar merge automático para cambios generados por IA, **a menos que** el usuario te indique explícitamente en el chat local (con cualquier frase equivalente a "aprobado localmente, haz merge", "ya lo revisé, súbelo", "listo") que procedas. En ese caso, la IA tiene autorización para usar `git push` y GitHub CLI (`gh pr create` y `gh pr merge`) para automatizar la integración completa.
