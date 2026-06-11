@@ -943,6 +943,19 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
         .getSingleOrNull();
   }
 
+  Future<List<Producto>> searchProductosList(String query) async {
+    final normalized = query.trim();
+    if (normalized.isEmpty) return [];
+
+    return (select(productos)
+          ..where((tbl) => 
+            tbl.nombre.like('%$normalized%') | 
+            tbl.codigoPersonalizado.like('%$normalized%')
+          )
+          ..limit(15))
+        .get();
+  }
+
   Stream<List<Producto>> watchProductosPorEmpresa([String? empresaId]) {
     return Stream.fromFuture(
       empresaId == null ? getRequiredEmpresaId() : Future.value(empresaId),

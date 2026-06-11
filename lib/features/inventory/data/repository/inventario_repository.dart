@@ -107,6 +107,10 @@ class InventarioRepository {
     );
   }
 
+  Future<List<Producto>> buscarProductosPorSimilitud(String query) {
+    return _db.inventoryDao.searchProductosList(query);
+  }
+
   Future<void> asignarCodigoAProducto({
     required String productId,
     required String barcode,

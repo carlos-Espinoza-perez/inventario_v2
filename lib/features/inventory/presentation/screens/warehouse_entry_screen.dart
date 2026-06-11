@@ -342,34 +342,70 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: 'Buscar por codigo o nombre...',
-                          prefixIcon: const Icon(Icons.search),
-                          suffixIcon: _isLoadingProduct
-                              ? Transform.scale(
+                      child: SearchAnchor(
+                        builder: (BuildContext context, SearchController controller) {
+                          return SearchBar(
+                            controller: controller,
+                            hintText: 'Buscar por codigo o nombre...',
+                            leading: const Icon(Icons.search),
+                            elevation: const WidgetStatePropertyAll(0.0),
+                            backgroundColor: WidgetStatePropertyAll(Colors.grey.shade100),
+                            shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                            padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 16)),
+                            onTap: () => controller.openView(),
+                            onChanged: (_) => controller.openView(),
+                            trailing: [
+                              if (_isLoadingProduct)
+                                Transform.scale(
                                   scale: 0.5,
-                                  child: const CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
+                                  child: const CircularProgressIndicator(strokeWidth: 2),
                                 )
-                              : (_searchController.text.isNotEmpty
-                                    ? IconButton(
-                                        icon: const Icon(Icons.clear, size: 20),
-                                        onPressed: _searchController.clear,
-                                      )
-                                    : null),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                          ),
-                        ),
-                        onSubmitted: (value) {
-                          _handleScannedProduct(value);
-                          _searchController.clear();
+                              else if (controller.text.isNotEmpty)
+                                IconButton(
+                                  icon: const Icon(Icons.clear, size: 20),
+                                  onPressed: controller.clear,
+                                ),
+                            ],
+                          );
+                        },
+                        suggestionsBuilder: (BuildContext context, SearchController controller) async {
+                          final query = controller.text.trim();
+                          if (query.isEmpty) return const Iterable<Widget>.empty();
+                          
+                          final repo = ref.read(inventarioRepositoryProvider);
+                          final productos = await repo.buscarProductosPorSimilitud(query);
+                          
+                          if (productos.isEmpty) {
+                            return [
+                              const ListTile(
+                                leading: Icon(Icons.info_outline),
+                                title: Text('No se encontraron productos'),
+                              )
+                            ];
+                          }
+                          
+                          return productos.map((producto) => ListTile(
+                            leading: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: Colors.cyan.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(Icons.inventory_2, color: Colors.cyan.shade800, size: 20),
+                            ),
+                            title: Text(producto.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text(producto.codigoPersonalizado ?? 'Sin código'),
+                            onTap: () {
+                              controller.closeView('');
+                              FocusScope.of(context).unfocus();
+                              _goToProductDetail(
+                                productId: producto.id,
+                                categoriaId: producto.categoriaId,
+                                preferredBarcode: producto.codigoPersonalizado,
+                              );
+                            },
+                          ));
                         },
                       ),
                     ),
