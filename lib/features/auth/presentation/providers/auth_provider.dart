@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/db/models/sesion_activa_drift.dart';
 import 'package:inventario_v2/core/providers/auto_sync_provider.dart';
