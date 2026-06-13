@@ -413,7 +413,8 @@ class SyncRepository {
 
     final res = await _db
         .customSelect(
-          "SELECT sync_status, updated_at FROM $tableName WHERE id = '$id' LIMIT 1",
+          "SELECT sync_status, updated_at FROM $tableName WHERE id = ? LIMIT 1",
+          variables: [Variable.withString(id)],
         )
         .getSingleOrNull();
 
@@ -493,15 +494,18 @@ class SyncRepository {
 
       // 1. Redirigir FK en inventarios
       await _db.customStatement(
-        "UPDATE inventarios SET producto_variante_id = '$remoteId', sync_status = 'pending_update' WHERE producto_variante_id = '$localId'",
+        "UPDATE inventarios SET producto_variante_id = ?, sync_status = 'pending_update' WHERE producto_variante_id = ?",
+        [Variable.withString(remoteId), Variable.withString(localId)],
       );
       // 2. Redirigir FK en detalle_movimientos
       await _db.customStatement(
-        "UPDATE detalle_movimientos SET producto_variante_id = '$remoteId', sync_status = 'pending_update' WHERE producto_variante_id = '$localId'",
+        "UPDATE detalle_movimientos SET producto_variante_id = ?, sync_status = 'pending_update' WHERE producto_variante_id = ?",
+        [Variable.withString(remoteId), Variable.withString(localId)],
       );
       // 3. Redirigir FK en detalle_ventas
       await _db.customStatement(
-        "UPDATE detalle_ventas SET producto_variante_id = '$remoteId', sync_status = 'pending_update' WHERE producto_variante_id = '$localId'",
+        "UPDATE detalle_ventas SET producto_variante_id = ?, sync_status = 'pending_update' WHERE producto_variante_id = ?",
+        [Variable.withString(remoteId), Variable.withString(localId)],
       );
       // 4. Insertar/actualizar la variante remota localmente con el UUID correcto
       try {
@@ -518,7 +522,8 @@ class SyncRepository {
       }
       // 5. Marcar la variante local duplicada como synced (apunta al remoto)
       await _db.customStatement(
-        "UPDATE producto_variantes SET sync_status = 'synced' WHERE id = '$localId'",
+        "UPDATE producto_variantes SET sync_status = 'synced' WHERE id = ?",
+        [Variable.withString(localId)],
       );
     }
   }
@@ -558,16 +563,21 @@ class SyncRepository {
       // solo marcamos el duplicado como synced para que no se intente subir.
       // Si no existe aún, renombramos para enviarlo con el UUID correcto.
       final alreadyLocal = await _db
-          .customSelect("SELECT 1 FROM inventarios WHERE id = '$remoteId' LIMIT 1")
+          .customSelect(
+            "SELECT 1 FROM inventarios WHERE id = ? LIMIT 1",
+            variables: [Variable.withString(remoteId)],
+          )
           .getSingleOrNull();
 
       if (alreadyLocal != null) {
         await _db.customStatement(
-          "UPDATE inventarios SET sync_status = 'synced' WHERE id = '$localId'",
+          "UPDATE inventarios SET sync_status = 'synced' WHERE id = ?",
+          [Variable.withString(localId)],
         );
       } else {
         await _db.customStatement(
-          "UPDATE inventarios SET id = '$remoteId', sync_status = 'pending_update' WHERE id = '$localId'",
+          "UPDATE inventarios SET id = ?, sync_status = 'pending_update' WHERE id = ?",
+          [Variable.withString(remoteId), Variable.withString(localId)],
         );
       }
     }
@@ -767,9 +777,11 @@ class SyncRepository {
 
   Future<void> _markSynced(String tableName, List<String> ids) async {
     if (ids.isEmpty) return;
-    final escapedIds = ids.map((id) => "'$id'").join(',');
+    final questions = List.filled(ids.length, '?').join(',');
+    final vars = ids.map((id) => Variable.withString(id)).toList();
     await _db.customStatement(
-      "UPDATE $tableName SET sync_status = 'synced', updated_at = CURRENT_TIMESTAMP WHERE id IN ($escapedIds)",
+      "UPDATE $tableName SET sync_status = 'synced', updated_at = CURRENT_TIMESTAMP WHERE id IN ($questions)",
+      vars,
     );
   }
 
@@ -779,9 +791,11 @@ class SyncRepository {
     String errorMessage,
   ) async {
     if (ids.isEmpty) return;
-    final escapedIds = ids.map((id) => "'$id'").join(',');
+    final questions = List.filled(ids.length, '?').join(',');
+    final vars = ids.map((id) => Variable.withString(id)).toList();
     await _db.customStatement(
-      "UPDATE $tableName SET sync_status = 'sync_error', updated_at = CURRENT_TIMESTAMP WHERE id IN ($escapedIds)",
+      "UPDATE $tableName SET sync_status = 'sync_error', updated_at = CURRENT_TIMESTAMP WHERE id IN ($questions)",
+      vars,
     );
   }
 

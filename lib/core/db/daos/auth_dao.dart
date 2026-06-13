@@ -1,5 +1,5 @@
 import 'package:drift/drift.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
 
 import '../app_database.dart';
@@ -33,8 +33,8 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
   }
 
   Future<String?> getActiveUserId() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('active_user_id');
+    const storage = FlutterSecureStorage();
+    return await storage.read(key: 'active_user_id');
   }
 
   Future<Usuario?> getUsuarioActual() async {
@@ -206,7 +206,8 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
         ..orderBy([(tbl) => OrderingTerm.asc(tbl.nombre)]);
 
       if (query.trim().isNotEmpty) {
-        warehousesQuery.where((tbl) => tbl.nombre.like('%${query.trim()}%'));
+        final cleanQuery = query.trim().replaceAll('%', '').replaceAll('_', '');
+        warehousesQuery.where((tbl) => tbl.nombre.like('%$cleanQuery%'));
       }
 
       yield* warehousesQuery.watch();
@@ -233,7 +234,8 @@ class AuthDao extends BaseDao with _$AuthDaoMixin {
         ..orderBy([(tbl) => OrderingTerm.asc(tbl.nombre)]);
 
       if (query.trim().isNotEmpty) {
-        warehousesQuery.where((tbl) => tbl.nombre.like('%${query.trim()}%'));
+        final cleanQuery = query.trim().replaceAll('%', '').replaceAll('_', '');
+        warehousesQuery.where((tbl) => tbl.nombre.like('%$cleanQuery%'));
       }
 
       yield await warehousesQuery.get();

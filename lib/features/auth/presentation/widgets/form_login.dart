@@ -27,6 +27,13 @@ class FormLoginState extends ConsumerState<FormLogin> {
     });
   }
 
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
   void _onLogin() async {
     if (_formKey.currentState!.validate()) {
       FocusScope.of(context).unfocus();

@@ -145,10 +145,10 @@ class _MagicCameraScreenState extends State<MagicCameraScreen> {
       orElse: () => cameras.first,
     );
 
-    // Resolución MAXIMA posible para la foto (Mejor precisión IA)
+    // Resolución HIGH en lugar de MAX para evitar memory exceptions
     _controller = CameraController(
       camera,
-      ResolutionPreset.max,
+      ResolutionPreset.high,
       enableAudio: false,
     );
 

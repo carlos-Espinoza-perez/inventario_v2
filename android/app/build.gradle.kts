@@ -34,7 +34,7 @@ val hasReleaseKeys = listOf(releaseKeyAlias, releaseKeyPassword, releaseStorePas
     .all { !it.isNullOrBlank() }
 
 android {
-    namespace = "com.example.inventario_v2"
+    namespace = "com.inventario.pos"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
@@ -48,7 +48,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.inventario_v2"
+        applicationId = "com.inventario.pos"
         minSdk = flutter.minSdkVersion
         targetSdk = 35
         versionCode = flutter.versionCode

@@ -937,8 +937,9 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
             .getSingleOrNull();
     if (byCode != null) return byCode;
 
+    final cleanQuery = normalized.replaceAll('%', '').replaceAll('_', '');
     return (select(productos)
-          ..where((tbl) => tbl.nombre.like('%$normalized%'))
+          ..where((tbl) => tbl.nombre.like('%$cleanQuery%'))
           ..limit(1))
         .getSingleOrNull();
   }
@@ -947,10 +948,11 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
     final normalized = query.trim();
     if (normalized.isEmpty) return [];
 
+    final cleanQuery = normalized.replaceAll('%', '').replaceAll('_', '');
     return (select(productos)
           ..where((tbl) => 
-            tbl.nombre.like('%$normalized%') | 
-            tbl.codigoPersonalizado.like('%$normalized%')
+            tbl.nombre.like('%$cleanQuery%') | 
+            tbl.codigoPersonalizado.like('%$cleanQuery%')
           )
           ..limit(15))
         .get();
