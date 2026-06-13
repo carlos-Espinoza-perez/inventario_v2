@@ -512,7 +512,9 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen>
           ],
         ),
       ),
-    );
+    ).whenComplete(() {
+      amountCtrl.dispose();
+    });
   }
 }
 

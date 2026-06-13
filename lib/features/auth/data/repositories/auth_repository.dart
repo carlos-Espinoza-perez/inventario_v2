@@ -3,7 +3,8 @@ import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/db/daos/auth_dao.dart';
 import 'package:inventario_v2/core/utils/password_hasher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
 
 class AuthRepository {
   final SupabaseClient _supabase;
@@ -62,8 +63,8 @@ class AuthRepository {
         permisos: permisos,
       );
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('active_user_id', userId);
+      const storage = FlutterSecureStorage();
+      await storage.write(key: 'active_user_id', value: userId);
     } on PostgrestException catch (e) {
       throw Exception('Error de base de datos: ${e.message}');
     } catch (e) {
@@ -117,8 +118,8 @@ class AuthRepository {
       throw Exception('Contraseña incorrecta.');
     }
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('active_user_id', user.id);
+    const storage = FlutterSecureStorage();
+    await storage.write(key: 'active_user_id', value: user.id);
   }
 
   Future<void> syncSupabaseUserToLocal(String userId) async {
@@ -153,8 +154,8 @@ class AuthRepository {
         permisos: permisos,
       );
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('active_user_id', userId);
+      const storage = FlutterSecureStorage();
+      await storage.write(key: 'active_user_id', value: userId);
     } catch (e) {
       throw Exception('Error syncing session data from Supabase: $e');
     }

@@ -1,6 +1,6 @@
 import 'dart:async';
-
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
@@ -183,31 +183,8 @@ class AutoSync extends _$AutoSync {
   }
 
   void _initDriftWatchers(AppDatabase db) {
-    final streams = [
-      db.select(db.empresas).watch().skip(1),
-      db.select(db.roles).watch().skip(1),
-      db.select(db.accesosRol).watch().skip(1),
-      db.select(db.usuarios).watch().skip(1),
-      db.select(db.bodegas).watch().skip(1),
-      db.select(db.bodegasUsuarios).watch().skip(1),
-      db.select(db.cajas).watch().skip(1),
-      db.select(db.cajaSesiones).watch().skip(1),
-      db.select(db.cajaMovimientosExtras).watch().skip(1),
-      db.select(db.categorias).watch().skip(1),
-      db.select(db.productos).watch().skip(1),
-      db.select(db.productoVariantes).watch().skip(1),
-      db.select(db.inventarios).watch().skip(1),
-      db.select(db.clientes).watch().skip(1),
-      db.select(db.movimientos).watch().skip(1),
-      db.select(db.detalleMovimientos).watch().skip(1),
-      db.select(db.ventas).watch().skip(1),
-      db.select(db.detalleVentas).watch().skip(1),
-      db.select(db.pagosVentas).watch().skip(1),
-    ];
-
-    for (final stream in streams) {
-      _tableSubscriptions.add(stream.listen((_) => _onLocalChange()));
-    }
+    final stream = db.customSelect('SELECT 1', readsFrom: db.allTables.cast<ResultSetImplementation>().toSet()).watch().skip(1);
+    _tableSubscriptions.add(stream.listen((_) => _onLocalChange()));
   }
 
   void _onLocalChange() {

@@ -10,7 +10,7 @@ import 'package:inventario_v2/features/auth/data/repositories/auth_repository.da
 import 'package:inventario_v2/core/services/app_logger.dart';
 import 'package:inventario_v2/core/services/remote_logger.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 part 'auth_provider.g.dart';
@@ -350,8 +350,8 @@ class AuthController extends _$AuthController {
     try {
       await supabase.auth.signOut();
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('active_user_id');
+      const storage = FlutterSecureStorage();
+      await storage.delete(key: 'active_user_id');
 
       await db.authDao.clearSesion();
 
