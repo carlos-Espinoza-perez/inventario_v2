@@ -164,19 +164,23 @@ class _PosScreenState extends ConsumerState<PosScreen> with AppBarConfigMixin {
                                         _handleScannedProduct(items),
                                     decoration: InputDecoration(
                                       hintText:
-                                          'Buscar o escanear por nombre / SKU...',
+                                          'Buscar o escanear producto...',
                                       prefixIcon: const Icon(Icons.search),
-                                      suffixIcon: IconButton(
-                                        onPressed: () =>
-                                            _openBarcodeScanner(items),
-                                        icon: const Icon(Icons.qr_code_scanner),
+                                      suffixIcon: Padding(
+                                        padding: const EdgeInsets.only(right: 8.0),
+                                        child: IconButton(
+                                          onPressed: () =>
+                                              _openBarcodeScanner(items),
+                                          icon: const Icon(Icons.qr_code_scanner, color: Colors.blue),
+                                        ),
                                       ),
                                       border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
+                                        borderRadius: BorderRadius.circular(16),
                                         borderSide: BorderSide.none,
                                       ),
                                       filled: true,
-                                      fillColor: Colors.grey[100],
+                                      fillColor: Colors.grey[200],
+                                      contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
                                     ),
                                   ),
                                 ],
@@ -195,12 +199,12 @@ class _PosScreenState extends ConsumerState<PosScreen> with AppBarConfigMixin {
                                   16,
                                   16,
                                   16,
-                                  100,
+                                  120,
                                 ),
                                 gridDelegate:
                                     const SliverGridDelegateWithFixedCrossAxisCount(
                                       crossAxisCount: 2,
-                                      childAspectRatio: 0.72,
+                                      childAspectRatio: 0.68,
                                       crossAxisSpacing: 16,
                                       mainAxisSpacing: 16,
                                     ),
@@ -221,9 +225,9 @@ class _PosScreenState extends ConsumerState<PosScreen> with AppBarConfigMixin {
                   ),
                   if (_cart.isNotEmpty)
                     Positioned(
-                      bottom: 20,
-                      left: 20,
-                      right: 20,
+                      bottom: 16,
+                      left: 16,
+                      right: 16,
                       child: Material(
                         elevation: 8,
                         borderRadius: BorderRadius.circular(20),
@@ -231,36 +235,58 @@ class _PosScreenState extends ConsumerState<PosScreen> with AppBarConfigMixin {
                           borderRadius: BorderRadius.circular(20),
                           onTap: _showCartDetails,
                           child: Container(
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
                             decoration: BoxDecoration(
-                              color: Colors.blue[900],
+                              color: Colors.blue[800],
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Row(
                               children: [
-                                Text(
-                                  '${_cart.length}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                    shape: BoxShape.circle,
                                   ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
                                   child: Text(
-                                    NumberFormat.simpleCurrency().format(
-                                      _total,
-                                    ),
+                                    '${_cart.length}',
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 18,
+                                      fontSize: 16,
                                     ),
                                   ),
                                 ),
-                                const Text(
-                                  'Ver carrito',
-                                  style: TextStyle(color: Colors.white),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Text(
+                                        'Total a cobrar',
+                                        style: TextStyle(color: Colors.white70, fontSize: 13),
+                                      ),
+                                      Text(
+                                        NumberFormat.simpleCurrency().format(_total),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 20,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Row(
+                                  children: const [
+                                    Text(
+                                      'COBRAR',
+                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                    ),
+                                    SizedBox(width: 8),
+                                    Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+                                  ],
                                 ),
                               ],
                             ),
@@ -608,10 +634,12 @@ class _ProductGridCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(20),
+      elevation: 2,
+      shadowColor: Colors.black12,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(
@@ -619,39 +647,50 @@ class _ProductGridCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Container(
+                  width: double.infinity,
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   child: product.imagen != null && product.imagen!.isNotEmpty
                       ? ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(16),
                           child: Image.network(
                             product.imagen!,
                             fit: BoxFit.cover,
                           ),
                         )
-                      : const Center(child: Icon(Icons.inventory_2)),
+                      : Center(child: Icon(Icons.inventory_2, size: 40, color: Colors.grey[300])),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               Text(
                 product.nombre,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.bold),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               ),
-              Text(
-                product.skus.take(2).join(' · '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: Colors.grey[600]),
-              ),
+              const SizedBox(height: 4),
               Text(
                 NumberFormat.simpleCurrency().format(product.precioMinimo),
-                style: const TextStyle(fontWeight: FontWeight.bold),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Colors.green[700]),
               ),
-              Text('Stock: ${product.stock.toStringAsFixed(0)}'),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: product.stock > 0 ? Colors.blue[50] : Colors.red[50],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Stock: ${product.stock.toStringAsFixed(0)}',
+                  style: TextStyle(
+                    color: product.stock > 0 ? Colors.blue[800] : Colors.red[800], 
+                    fontWeight: FontWeight.bold, 
+                    fontSize: 11
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -760,16 +799,34 @@ class _ProductDetailModalState extends State<_ProductDetailModal> {
             else
               Wrap(
                 spacing: 8,
+                runSpacing: 8,
                 children: List.generate(variants.length, (index) {
                   final variant = variants[index];
                   final hasStock = _hasStock(variant);
+                  final isSelected = index == _selectedIndex;
                   final label = variant['talla']?.toString() ?? 'General';
-                  return ChoiceChip(
-                    label: Text(hasStock ? label : '$label (Sin stock)'),
-                    selected: index == _selectedIndex,
-                    onSelected: hasStock
-                        ? (_) => _onVariantChanged(index)
-                        : null,
+                  return InkWell(
+                    onTap: hasStock ? () => _onVariantChanged(index) : null,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isSelected 
+                            ? Colors.blue[600] 
+                            : (hasStock ? Colors.grey[200] : Colors.grey[100]),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        hasStock ? label : '$label (Sin stock)',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: isSelected 
+                              ? Colors.white 
+                              : (hasStock ? Colors.black87 : Colors.grey[400]),
+                        ),
+                      ),
+                    ),
                   );
                 }),
               ),
@@ -803,31 +860,55 @@ class _ProductDetailModalState extends State<_ProductDetailModal> {
               ),
               const SizedBox(height: 12),
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  IconButton(
-                    onPressed: _qty > 1 ? () => setState(() => _qty--) : null,
-                    icon: const Icon(Icons.remove),
-                  ),
-                  Text(
-                    '$_qty',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: _qty < currentStock.toInt()
-                        ? () => setState(() => _qty++)
-                        : null,
-                    icon: const Icon(Icons.add),
+                  const Text('Cantidad', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Row(
+                    children: [
+                      InkWell(
+                        onTap: _qty > 1 ? () => setState(() => _qty--) : null,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: _qty > 1 ? Colors.blue[50] : Colors.grey[100],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.remove, size: 24, color: _qty > 1 ? Colors.blue[800] : Colors.grey[400]),
+                        ),
+                      ),
+                      Container(
+                        width: 60,
+                        alignment: Alignment.center,
+                        child: Text(
+                          '$_qty',
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 24),
+                        ),
+                      ),
+                      InkWell(
+                        onTap: _qty < currentStock.toInt() ? () => setState(() => _qty++) : null,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: _qty < currentStock.toInt() ? Colors.blue[50] : Colors.grey[100],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.add, size: 24, color: _qty < currentStock.toInt() ? Colors.blue[800] : Colors.grey[400]),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ],
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
+              height: 54,
+              child: ElevatedButton.icon(
                 onPressed: !canAddCurrent
                     ? null
                     : () {
@@ -840,7 +921,16 @@ class _ProductDetailModalState extends State<_ProductDetailModal> {
                           'precio': editedPrice,
                         }, _qty);
                       },
-                child: const Text('AGREGAR AL CARRITO'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green[600],
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                icon: const Icon(Icons.shopping_cart, size: 22),
+                label: const Text(
+                  'AGREGAR AL CARRITO',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
           ],
@@ -881,16 +971,54 @@ class _BodegaSelectorView extends ConsumerWidget {
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(16),
             itemCount: bodegas.length,
             itemBuilder: (context, index) {
               final bodega = bodegas[index];
-              return Card(
-                child: ListTile(
-                  title: Text(bodega.nombre),
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: InkWell(
                   onTap: () {
                     ref.read(selectedBodegaProvider.notifier).state = bodega;
                   },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        )
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.warehouse, color: Colors.blue, size: 24),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Text(
+                            bodega.nombre,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
+                      ],
+                    ),
+                  ),
                 ),
               );
             },

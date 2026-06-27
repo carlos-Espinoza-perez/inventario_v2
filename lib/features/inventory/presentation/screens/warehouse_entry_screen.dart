@@ -82,16 +82,9 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
   }
 
   Future<void> _saveEntireOrderToDB(List<Map<String, dynamic>> orderLines) async {
-    if (_descriptionCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Agrega una descripción para este movimiento'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      _focusDescripcion.requestFocus();
-      return;
-    }
+    final descripcion = _descriptionCtrl.text.trim().isEmpty 
+        ? 'Ingreso de inventario' 
+        : _descriptionCtrl.text.trim();
 
     setState(() => _isLoading = true);
 
@@ -100,7 +93,7 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
 
       await registrarEntrada.ejecutar(
         bodegaId: widget.bodegaId,
-        descripcion: _descriptionCtrl.text,
+        descripcion: descripcion,
         orderLines: orderLines,
       );
 
@@ -370,10 +363,9 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
                         },
                         suggestionsBuilder: (BuildContext context, SearchController controller) async {
                           final query = controller.text.trim();
-                          if (query.isEmpty) return const Iterable<Widget>.empty();
                           
                           final repo = ref.read(inventarioRepositoryProvider);
-                          final productos = await repo.buscarProductosPorSimilitud(query);
+                          final productos = await repo.searchCatalogItems(query, widget.bodegaId);
                           
                           if (productos.isEmpty) {
                             return [
@@ -384,28 +376,40 @@ class _WarehouseEntryScreenState extends ConsumerState<WarehouseEntryScreen> {
                             ];
                           }
                           
-                          return productos.map((producto) => ListTile(
-                            leading: Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: Colors.cyan.shade50,
-                                borderRadius: BorderRadius.circular(8),
+                          return productos.map((item) {
+                            final producto = item.producto;
+                            return ListTile(
+                              leading: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Colors.cyan.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(Icons.inventory_2, color: Colors.cyan.shade800, size: 20),
                               ),
-                              child: Icon(Icons.inventory_2, color: Colors.cyan.shade800, size: 20),
-                            ),
-                            title: Text(producto.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
-                            subtitle: Text(producto.codigoPersonalizado ?? 'Sin código'),
-                            onTap: () {
-                              controller.closeView('');
-                              FocusScope.of(context).unfocus();
-                              _goToProductDetail(
-                                productId: producto.id,
-                                categoriaId: producto.categoriaId,
-                                preferredBarcode: producto.codigoPersonalizado,
-                              );
-                            },
-                          ));
+                              title: Text(producto.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(producto.codigoPersonalizado ?? 'Sin código'),
+                                  Text(
+                                    'Stock: ${item.stock} | Precio: \$${item.precioVenta.toStringAsFixed(2)} | Costo: \$${item.costoPromedio.toStringAsFixed(2)}',
+                                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                  ),
+                                ],
+                              ),
+                              onTap: () {
+                                controller.closeView('');
+                                FocusScope.of(context).unfocus();
+                                _goToProductDetail(
+                                  productId: producto.id,
+                                  categoriaId: producto.categoriaId,
+                                  preferredBarcode: producto.codigoPersonalizado,
+                                );
+                              },
+                            );
+                          });
                         },
                       ),
                     ),

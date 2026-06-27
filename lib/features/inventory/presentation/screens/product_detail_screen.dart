@@ -1178,7 +1178,12 @@ List<Map<String, dynamic>> _groupVariantRows(List<Map<String, dynamic>> rows) {
   }
 
   final result =
-      grouped.values.map((item) {
+      grouped.values.where((item) {
+        final stock = item['stock'] as double;
+        final talla = item['talla'] as String;
+        if (talla == 'Sin talla especifica' && stock <= 0) return false;
+        return true;
+      }).map((item) {
         final skus = item['skus'] as Set<String>;
         final variantIds = item['varianteIds'] as Set<String>;
         final prices = item['precios'] as List<double>;

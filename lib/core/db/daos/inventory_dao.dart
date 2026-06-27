@@ -359,36 +359,46 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
   Future<List<ProductCatalogItemDrift>> getCatalogItems({
     String? empresaId,
     String? bodegaId,
+    String? query,
     int? limit,
     int offset = 0,
   }) async {
     final resolvedEmpresaId = empresaId ?? await getRequiredEmpresaId();
     final resolvedBodegaId = bodegaId ?? (await getRequiredContext()).bodegaId;
 
-    final rows =
-        await (select(productos).join([
-                leftOuterJoin(
-                  productoVariantes,
-                  productoVariantes.productoId.equalsExp(productos.id) &
-                      productoVariantes.estado.equals(true),
-                ),
-                if (resolvedBodegaId != null && resolvedBodegaId.isNotEmpty)
-                  leftOuterJoin(
-                    inventarios,
-                    inventarios.productoVarianteId.equalsExp(
-                          productoVariantes.id,
-                        ) &
-                        inventarios.bodegaId.equals(resolvedBodegaId) &
-                        inventarios.estado.equals(true),
-                  ),
-              ])
-              ..where(
-                productos.empresaId.equals(resolvedEmpresaId) &
-                    productos.estado.equals(true),
-              )
-              ..orderBy([OrderingTerm.asc(productos.nombre)])
-              ..limit(limit ?? 1000, offset: offset))
-            .get();
+    final q = select(productos).join([
+      leftOuterJoin(
+        productoVariantes,
+        productoVariantes.productoId.equalsExp(productos.id) &
+            productoVariantes.estado.equals(true),
+      ),
+      if (resolvedBodegaId != null && resolvedBodegaId.isNotEmpty)
+        leftOuterJoin(
+          inventarios,
+          inventarios.productoVarianteId.equalsExp(
+                productoVariantes.id,
+              ) &
+              inventarios.bodegaId.equals(resolvedBodegaId) &
+              inventarios.estado.equals(true),
+        ),
+    ])
+    ..where(
+      productos.empresaId.equals(resolvedEmpresaId) &
+          productos.estado.equals(true),
+    );
+
+    if (query != null && query.trim().isNotEmpty) {
+      final cleanQuery = query.trim().replaceAll('%', '').replaceAll('_', '');
+      final words = cleanQuery.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+      for (final word in words) {
+        q.where(productos.nombre.like('%$word%') | productos.codigoPersonalizado.like('%$word%'));
+      }
+    }
+
+    final rows = await (q
+      ..orderBy([OrderingTerm.asc(productos.nombre)])
+      ..limit(limit ?? 1000, offset: offset))
+    .get();
 
     final grouped = <String, ProductCatalogItemDrift>{};
     for (final row in rows) {
@@ -946,16 +956,24 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
 
   Future<List<Producto>> searchProductosList(String query) async {
     final normalized = query.trim();
-    if (normalized.isEmpty) return [];
+    if (normalized.isEmpty) {
+      return (select(productos)
+            ..where((tbl) => tbl.estado.equals(true))
+            ..orderBy([(tbl) => OrderingTerm.asc(tbl.nombre)])
+            ..limit(15))
+          .get();
+    }
 
     final cleanQuery = normalized.replaceAll('%', '').replaceAll('_', '');
-    return (select(productos)
-          ..where((tbl) => 
-            tbl.nombre.like('%$cleanQuery%') | 
-            tbl.codigoPersonalizado.like('%$cleanQuery%')
-          )
-          ..limit(15))
-        .get();
+    final words = cleanQuery.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    
+    final q = select(productos)..where((tbl) => tbl.estado.equals(true));
+    
+    for (final word in words) {
+      q.where((tbl) => tbl.nombre.like('%$word%') | tbl.codigoPersonalizado.like('%$word%'));
+    }
+    
+    return (q..limit(15)).get();
   }
 
   Stream<List<Producto>> watchProductosPorEmpresa([String? empresaId]) {

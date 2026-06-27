@@ -403,7 +403,7 @@ class _GroupedInventoryProduct {
       stock: product.stock,
       costo: product.costo,
       imagen: product.imagen,
-      tallasDisponibles: _isRealSize(talla) ? <String>[talla] : <String>[],
+      tallasDisponibles: (_isRealSize(talla) && product.stock > 0) ? <String>[talla] : <String>[],
       precios: product.precio > 0 ? <double>[product.precio] : <double>[],
     );
   }
@@ -411,7 +411,7 @@ class _GroupedInventoryProduct {
   _GroupedInventoryProduct add(InventarioDTO product) {
     final talla = product.talla.trim();
     final nextTallas = {...tallasDisponibles};
-    if (_isRealSize(talla)) {
+    if (_isRealSize(talla) && product.stock > 0) {
       nextTallas.add(talla);
     }
 

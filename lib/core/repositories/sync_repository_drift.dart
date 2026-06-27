@@ -495,17 +495,17 @@ class SyncRepository {
       // 1. Redirigir FK en inventarios
       await _db.customStatement(
         "UPDATE inventarios SET producto_variante_id = ?, sync_status = 'pending_update' WHERE producto_variante_id = ?",
-        [Variable.withString(remoteId), Variable.withString(localId)],
+        [remoteId, localId],
       );
       // 2. Redirigir FK en detalle_movimientos
       await _db.customStatement(
         "UPDATE detalle_movimientos SET producto_variante_id = ?, sync_status = 'pending_update' WHERE producto_variante_id = ?",
-        [Variable.withString(remoteId), Variable.withString(localId)],
+        [remoteId, localId],
       );
       // 3. Redirigir FK en detalle_ventas
       await _db.customStatement(
         "UPDATE detalle_ventas SET producto_variante_id = ?, sync_status = 'pending_update' WHERE producto_variante_id = ?",
-        [Variable.withString(remoteId), Variable.withString(localId)],
+        [remoteId, localId],
       );
       // 4. Insertar/actualizar la variante remota localmente con el UUID correcto
       try {
@@ -523,7 +523,7 @@ class SyncRepository {
       // 5. Marcar la variante local duplicada como synced (apunta al remoto)
       await _db.customStatement(
         "UPDATE producto_variantes SET sync_status = 'synced' WHERE id = ?",
-        [Variable.withString(localId)],
+        [localId],
       );
     }
   }
@@ -572,12 +572,12 @@ class SyncRepository {
       if (alreadyLocal != null) {
         await _db.customStatement(
           "UPDATE inventarios SET sync_status = 'synced' WHERE id = ?",
-          [Variable.withString(localId)],
+          [localId],
         );
       } else {
         await _db.customStatement(
           "UPDATE inventarios SET id = ?, sync_status = 'pending_update' WHERE id = ?",
-          [Variable.withString(remoteId), Variable.withString(localId)],
+          [remoteId, localId],
         );
       }
     }
@@ -696,7 +696,7 @@ class SyncRepository {
                 if (errorStr.contains('FOREIGN KEY constraint failed') ||
                     errorStr.contains('code 787')) {
                   final map = payload.newRecord;
-                  await _createGhostUsersIfMissing(map);
+                  await _createGhostEntitiesIfMissing(map);
                   try {
                     await onUpsert(map);
                     AppLogger.debug(
@@ -744,7 +744,7 @@ class SyncRepository {
           if (errorStr.contains('FOREIGN KEY constraint failed') ||
               errorStr.contains('code 787')) {
             final map = Map<String, dynamic>.from(row);
-            await _createGhostUsersIfMissing(map);
+            await _createGhostEntitiesIfMissing(map);
             try {
               await onUpsert(map);
               successCount++;
@@ -778,10 +778,9 @@ class SyncRepository {
   Future<void> _markSynced(String tableName, List<String> ids) async {
     if (ids.isEmpty) return;
     final questions = List.filled(ids.length, '?').join(',');
-    final vars = ids.map((id) => Variable.withString(id)).toList();
     await _db.customStatement(
       "UPDATE $tableName SET sync_status = 'synced', updated_at = CURRENT_TIMESTAMP WHERE id IN ($questions)",
-      vars,
+      ids,
     );
   }
 
@@ -792,10 +791,9 @@ class SyncRepository {
   ) async {
     if (ids.isEmpty) return;
     final questions = List.filled(ids.length, '?').join(',');
-    final vars = ids.map((id) => Variable.withString(id)).toList();
     await _db.customStatement(
       "UPDATE $tableName SET sync_status = 'sync_error', updated_at = CURRENT_TIMESTAMP WHERE id IN ($questions)",
-      vars,
+      ids,
     );
   }
 
@@ -832,7 +830,7 @@ class SyncRepository {
           );
           try {
             await _db.customStatement(
-              "INSERT INTO usuarios (id, created_at, updated_at, sync_status, empresa_id, nombre_completo, email, rol_id, estado, fecha_eliminacion) "
+              "INSERT INTO usuarios (id, created_at, updated_at, sync_status, empresa_id, nombre_completo, correo, rol_id, estado, fecha_eliminacion) "
               "VALUES ('$userId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', 'Usuario Eliminado', 'eliminado_$userId@sistema.local', NULL, 0, CURRENT_TIMESTAMP)",
             );
           } catch (e) {
@@ -843,6 +841,145 @@ class SyncRepository {
         }
       }
     }
+  }
+
+  Future<void> _createGhostProductsIfMissing(Map<String, dynamic> map) async {
+    String? empresaId = map['empresa_id']?.toString();
+    if (empresaId == null || empresaId.isEmpty) {
+      final res = await _db
+          .customSelect('SELECT id FROM empresas LIMIT 1')
+          .getSingleOrNull();
+      empresaId = res?.read<String>('id') ?? '';
+    }
+    if (empresaId.isEmpty) return;
+
+    final ventaId = map['venta_id']?.toString();
+    if (ventaId != null && ventaId.isNotEmpty) {
+      final exists = await _db
+          .customSelect("SELECT 1 FROM ventas WHERE id = '$ventaId' LIMIT 1")
+          .getSingleOrNull();
+      if (exists == null) {
+        AppLogger.info('[Sync] Creando venta fantasma para resolver FK: $ventaId');
+        final dummyId = '00000000-0000-0000-0000-000000000000';
+        try {
+          // Crear dependencias dummy NOT NULL
+          await _db.customStatement(
+            "INSERT OR IGNORE INTO roles (id, created_at, updated_at, sync_status, empresa_id, nombre, user_admin, usuario_registro_id, estado, fecha_eliminacion) "
+            "VALUES ('$dummyId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', 'Rol Eliminado', 0, NULL, 0, CURRENT_TIMESTAMP)"
+          );
+          await _db.customStatement(
+            "INSERT OR IGNORE INTO usuarios (id, created_at, updated_at, sync_status, empresa_id, rol_id, nombre_completo, correo, password_hash, pin_offline, usuario_registro_id, bodega_default_id, estado, fecha_eliminacion) "
+            "VALUES ('$dummyId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', '$dummyId', 'Usuario Eliminado', NULL, NULL, NULL, NULL, NULL, 0, CURRENT_TIMESTAMP)"
+          );
+          await _db.customStatement(
+            "INSERT OR IGNORE INTO bodegas (id, created_at, updated_at, sync_status, empresa_id, nombre, direccion, es_punto_venta, usuario_registro_id, estado, fecha_eliminacion) "
+            "VALUES ('$dummyId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', 'Bodega Eliminada', '', 0, NULL, 0, CURRENT_TIMESTAMP)"
+          );
+          await _db.customStatement(
+            "INSERT OR IGNORE INTO clientes (id, created_at, updated_at, sync_status, empresa_id, nombre, identificacion, celular, direccion, monto_credito_maximo, saldo_deudor_actual, usuario_registro_id, estado, fecha_eliminacion) "
+            "VALUES ('$dummyId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', 'Cliente Eliminado', NULL, NULL, NULL, 0, 0, NULL, 0, CURRENT_TIMESTAMP)"
+          );
+          await _db.customStatement(
+            "INSERT OR IGNORE INTO cajas (id, created_at, updated_at, sync_status, empresa_id, bodega_id, nombre, usuario_registro_id, estado, fecha_eliminacion) "
+            "VALUES ('$dummyId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', '$dummyId', 'Caja Eliminada', NULL, 0, CURRENT_TIMESTAMP)"
+          );
+          await _db.customStatement(
+            "INSERT OR IGNORE INTO caja_sesiones (id, created_at, updated_at, sync_status, caja_id, usuario_apertura_id, usuario_cierre_id, fecha_apertura, fecha_cierre, monto_inicial, total_ventas_sistema, total_efectivo_real, diferencia, estado_sesion, fecha_eliminacion) "
+            "VALUES ('$dummyId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$dummyId', '$dummyId', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0, 0, 0, 0, 'cerrada', CURRENT_TIMESTAMP)"
+          );
+          await _db.customStatement(
+            "INSERT OR IGNORE INTO ventas (id, created_at, updated_at, sync_status, empresa_id, cliente_id, usuario_id, caja_sesion_id, tipo_venta, estado_pago, total_venta, total_pagado, saldo_pendiente, fecha_venta, fecha_vencimiento, estado, fecha_eliminacion) "
+            "VALUES ('$ventaId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', '$dummyId', '$dummyId', '$dummyId', 'EFECTIVO', 'PAGADO', 0, 0, 0, CURRENT_TIMESTAMP, NULL, 0, CURRENT_TIMESTAMP)"
+          );
+        } catch (e) {
+          AppLogger.warn('[Sync] Error al crear venta fantasma $ventaId: $e');
+        }
+      }
+    }
+
+    final categoriaId = map['categoria_id']?.toString();
+    if (categoriaId != null && categoriaId.isNotEmpty) {
+      final exists = await _db
+          .customSelect("SELECT 1 FROM categorias WHERE id = '$categoriaId' LIMIT 1")
+          .getSingleOrNull();
+      if (exists == null) {
+        AppLogger.info('[Sync] Creando categoria fantasma para resolver FK: $categoriaId');
+        try {
+          await _db.customStatement(
+            "INSERT INTO categorias (id, created_at, updated_at, sync_status, empresa_id, nombre, categoria_padre_id, especificacion_json, usuario_registro_id, estado, fecha_eliminacion) "
+            "VALUES ('$categoriaId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', 'Categoria Eliminada', NULL, NULL, NULL, 0, CURRENT_TIMESTAMP)"
+          );
+        } catch (e) {
+          AppLogger.warn('[Sync] Error al crear categoria fantasma $categoriaId: $e');
+        }
+      }
+    }
+
+    final bodegaId = map['bodega_id']?.toString();
+    if (bodegaId != null && bodegaId.isNotEmpty) {
+      final exists = await _db
+          .customSelect("SELECT 1 FROM bodegas WHERE id = '$bodegaId' LIMIT 1")
+          .getSingleOrNull();
+      if (exists == null) {
+        AppLogger.info('[Sync] Creando bodega fantasma para resolver FK: $bodegaId');
+        try {
+          await _db.customStatement(
+            "INSERT INTO bodegas (id, created_at, updated_at, sync_status, empresa_id, nombre, direccion, es_punto_venta, usuario_registro_id, estado, fecha_eliminacion) "
+            "VALUES ('$bodegaId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', 'Bodega Eliminada', '', 0, NULL, 0, CURRENT_TIMESTAMP)"
+          );
+        } catch (e) {
+          AppLogger.warn('[Sync] Error al crear bodega fantasma $bodegaId: $e');
+        }
+      }
+    }
+
+    final productoId = map['producto_id']?.toString();
+    if (productoId != null && productoId.isNotEmpty) {
+      final exists = await _db
+          .customSelect("SELECT 1 FROM productos WHERE id = '$productoId' LIMIT 1")
+          .getSingleOrNull();
+      if (exists == null) {
+        AppLogger.info('[Sync] Creando producto fantasma para resolver FK: $productoId');
+        try {
+          await _db.customStatement(
+            "INSERT INTO productos (id, created_at, updated_at, sync_status, empresa_id, categoria_id, nombre, precio_base, ultimo_costo, ultimo_precio_venta, usuario_registro_id, estado, fecha_eliminacion) "
+            "VALUES ('$productoId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', NULL, 'Producto Eliminado', 0, 0, 0, NULL, 0, CURRENT_TIMESTAMP)"
+          );
+        } catch (e) {
+          AppLogger.warn('[Sync] Error al crear producto fantasma $productoId: $e');
+        }
+      }
+    }
+
+    final varianteId = map['producto_variante_id']?.toString();
+    if (varianteId != null && varianteId.isNotEmpty) {
+      final exists = await _db
+          .customSelect("SELECT 1 FROM producto_variantes WHERE id = '$varianteId' LIMIT 1")
+          .getSingleOrNull();
+      if (exists == null) {
+        AppLogger.info('[Sync] Creando variante fantasma para resolver FK: $varianteId');
+        try {
+          final pIdForVar = productoId ?? '00000000-0000-0000-0000-000000000000';
+          if (pIdForVar == '00000000-0000-0000-0000-000000000000') {
+             await _db.customStatement(
+                "INSERT OR IGNORE INTO productos (id, created_at, updated_at, sync_status, empresa_id, categoria_id, nombre, precio_base, ultimo_costo, ultimo_precio_venta, usuario_registro_id, estado, fecha_eliminacion) "
+                "VALUES ('$pIdForVar', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', NULL, 'Producto Eliminado', 0, 0, 0, NULL, 0, CURRENT_TIMESTAMP)"
+             );
+          }
+          await _db.customStatement(
+            "INSERT INTO producto_variantes (id, created_at, updated_at, sync_status, producto_id, sku, talla, precio_especifico, costo_especifico, usuario_registro_id, estado, fecha_eliminacion) "
+            "VALUES ('$varianteId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$pIdForVar', 'VARI-ELIMINADA', 'Variante Eliminada', 0, 0, NULL, 0, CURRENT_TIMESTAMP)"
+          );
+        } catch (e) {
+          AppLogger.warn('[Sync] Error al crear variante fantasma $varianteId: $e');
+        }
+      }
+    }
+  }
+
+  Future<void> _createGhostEntitiesIfMissing(Map<String, dynamic> map) async {
+    await _createGhostUsersIfMissing(map);
+    await _createGhostProductsIfMissing(map);
   }
 
   bool _isValidPayload(Map<String, dynamic> json) {
@@ -1138,7 +1275,7 @@ class SyncRepository {
       ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
       'empresa_id': r.empresaId,
       'cliente_id': r.clienteId,
-      'usuario_registro_id': r.usuarioId,
+      'usuario_id': r.usuarioId,
       'caja_sesion_id': r.cajaSesionId,
       'tipo_venta': r.tipoVenta,
       'estado_pago': r.estadoPago,
@@ -1174,7 +1311,7 @@ class SyncRepository {
     'venta_id': r.ventaId,
     'caja_sesion_id': r.cajaSesionId,
     'monto_pagado': r.montoPagado,
-    'metodo_de_pago': r.metodoPago,
+    'metodo_pago': r.metodoPago,
     'referencia': r.referencia,
     'usuario_registro_id': r.usuarioRegistroId,
     'estado': r.estado,

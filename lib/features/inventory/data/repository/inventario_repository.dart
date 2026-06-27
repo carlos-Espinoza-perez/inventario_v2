@@ -1,12 +1,31 @@
 import 'package:drift/drift.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/db/models/inventory_requests.dart';
+import 'package:inventario_v2/core/db/models/product_catalog_models.dart';
 import 'package:inventario_v2/core/db/models/producto_stock_drift.dart';
+import 'package:inventario_v2/core/utils/fuzzy_search.dart';
 
 class InventarioRepository {
   final AppDatabase _db;
 
   InventarioRepository(this._db);
+
+  Future<List<ProductCatalogItemDrift>> searchCatalogItems(String query, String bodegaId) async {
+    final queryTrimmed = query.trim();
+    if (queryTrimmed.isEmpty) {
+      return _db.inventoryDao.getCatalogItems(bodegaId: bodegaId, limit: 15);
+    }
+    
+    final allItems = await _db.inventoryDao.getCatalogItems(bodegaId: bodegaId, limit: 2000);
+    final queryWords = queryTrimmed.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    
+    final filtered = allItems.where((item) {
+      final targetText = '${item.producto.nombre} ${item.producto.codigoPersonalizado ?? ''}';
+      return queryWords.every((qWord) => FuzzySearch.isMatch(qWord, targetText));
+    }).toList();
+    
+    return filtered.take(15).toList();
+  }
 
   Future<List<Inventario>> getInventariosByProductId(String productId) async {
     final variants = await _db.inventoryDao.getVariantesByProductoId(productId);
@@ -107,8 +126,21 @@ class InventarioRepository {
     );
   }
 
-  Future<List<Producto>> buscarProductosPorSimilitud(String query) {
-    return _db.inventoryDao.searchProductosList(query);
+  Future<List<Producto>> buscarProductosPorSimilitud(String query) async {
+    final queryTrimmed = query.trim();
+    if (queryTrimmed.isEmpty) {
+      return _db.inventoryDao.searchProductosList('');
+    }
+    
+    final allProducts = await (_db.select(_db.productos)..where((tbl) => tbl.estado.equals(true))..limit(2000)).get();
+    final queryWords = queryTrimmed.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    
+    final filtered = allProducts.where((producto) {
+      final targetText = '${producto.nombre} ${producto.codigoPersonalizado ?? ''}';
+      return queryWords.every((qWord) => FuzzySearch.isMatch(qWord, targetText));
+    }).toList();
+    
+    return filtered.take(15).toList();
   }
 
   Future<void> asignarCodigoAProducto({
