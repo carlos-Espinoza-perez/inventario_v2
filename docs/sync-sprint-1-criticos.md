@@ -375,10 +375,10 @@ Aplicar el mismo patrón para `movimientos` + `detalle_movimientos`.
 
 ## Checklist de cierre del Sprint 1
 
-- [ ] 1.1 — SQL Injection: validación UUID + parámetros posicionales en ghost entities
-- [ ] 1.2 — Columna `metodo_pago` / `metodo_de_pago` unificada
-- [ ] 1.3 — `fecha_registro_pago` enviado correctamente en push de pagos
-- [ ] 1.4 — `bodega_default_id` incluido en push y pull de usuarios
-- [ ] 1.5 — Push coordinado venta + detalle_venta (y movimiento + detalle_movimiento)
+- [x] 1.1 — SQL Injection: validación UUID + parámetros posicionales en ghost entities
+- [x] 1.2 — Columna `metodo_pago` / `metodo_de_pago` unificada
+- [x] 1.3 — `fecha_registro_pago` enviado correctamente en push de pagos
+- [x] 1.4 — `bodega_default_id` incluido en push y pull de usuarios
+- [x] 1.5 — Push coordinado venta + detalle_venta (y movimiento + detalle_movimiento)
 - [ ] Prueba de regresión: sincronización completa con dataset de prueba antes y después
 - [ ] Code review de los cambios antes de merge a `main`

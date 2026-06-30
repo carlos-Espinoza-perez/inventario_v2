@@ -966,14 +966,39 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
 
     final cleanQuery = normalized.replaceAll('%', '').replaceAll('_', '');
     final words = cleanQuery.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
-    
+
     final q = select(productos)..where((tbl) => tbl.estado.equals(true));
-    
+
     for (final word in words) {
       q.where((tbl) => tbl.nombre.like('%$word%') | tbl.codigoPersonalizado.like('%$word%'));
     }
-    
+
     return (q..limit(15)).get();
+  }
+
+  /// Igual que [searchProductosList] pero con límite configurable.
+  /// Usado como pre-filtro SQL antes de aplicar búsqueda fuzzy en memoria.
+  Future<List<Producto>> searchProductosListExpanded(
+    String query, {
+    int limit = 100,
+  }) async {
+    final normalized = query.trim();
+    if (normalized.isEmpty) {
+      return (select(productos)
+            ..where((tbl) => tbl.estado.equals(true))
+            ..orderBy([(tbl) => OrderingTerm.asc(tbl.nombre)])
+            ..limit(limit))
+          .get();
+    }
+
+    final cleanQuery = normalized.replaceAll('%', '').replaceAll('_', '');
+    final words = cleanQuery.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+
+    final q = select(productos)..where((tbl) => tbl.estado.equals(true));
+    for (final word in words) {
+      q.where((tbl) => tbl.nombre.like('%$word%') | tbl.codigoPersonalizado.like('%$word%'));
+    }
+    return (q..limit(limit)).get();
   }
 
   Stream<List<Producto>> watchProductosPorEmpresa([String? empresaId]) {

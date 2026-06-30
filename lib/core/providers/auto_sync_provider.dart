@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/core/providers/supabase_provider.dart';
+import 'package:inventario_v2/core/repositories/sync_cursor_store.dart';
 import 'package:inventario_v2/core/repositories/sync_repository.dart';
 import 'package:inventario_v2/core/services/app_logger.dart';
 import 'package:inventario_v2/core/services/remote_logger.dart';
@@ -17,12 +18,16 @@ class SyncState {
   final bool isOnline;
   final String? lastError;
   final DateTime? lastSync;
+  final int retryCount;
+  final int pendingCount;
 
   const SyncState({
     this.isSyncing = false,
     this.isOnline = true,
     this.lastError,
     this.lastSync,
+    this.retryCount = 0,
+    this.pendingCount = 0,
   });
 
   SyncState copyWith({
@@ -30,14 +35,22 @@ class SyncState {
     bool? isOnline,
     String? lastError,
     DateTime? lastSync,
+    int? retryCount,
+    int? pendingCount,
   }) {
     return SyncState(
       isSyncing: isSyncing ?? this.isSyncing,
       isOnline: isOnline ?? this.isOnline,
       lastError: lastError,
       lastSync: lastSync ?? this.lastSync,
+      retryCount: retryCount ?? this.retryCount,
+      pendingCount: pendingCount ?? this.pendingCount,
     );
   }
+
+  bool get hasPendingData => pendingCount > 0;
+  bool get hasError => lastError != null;
+  bool get isCritical => !isOnline && pendingCount > 0;
 }
 
 @riverpod
@@ -52,6 +65,24 @@ class AutoSync extends _$AutoSync {
   late StreamSubscription<List<ConnectivityResult>> _connectivitySub;
   final List<StreamSubscription> _tableSubscriptions = [];
   Timer? _debounceTimer;
+  Timer? _retryTimer;
+
+  bool _isSyncing = false;
+  int _syncRetryCount = 0;
+  static const int _maxRetryCount = 8;
+  static const Duration _baseDelay = Duration(seconds: 2);
+  static const Duration _maxDelay = Duration(minutes: 5);
+
+  /// Calcula delay exponencial con jitter para evitar thundering herd.
+  Duration _backoffDelay() {
+    if (_syncRetryCount == 0) return Duration.zero;
+    final exp = _baseDelay * (1 << _syncRetryCount.clamp(0, 10));
+    final capped = exp > _maxDelay ? _maxDelay : exp;
+    final jitter = Duration(
+      milliseconds: (capped.inMilliseconds * 0.25 * (_syncRetryCount % 7 / 7.0)).toInt(),
+    );
+    return capped + jitter;
+  }
 
   @override
   Future<SyncState> build() async {
@@ -68,6 +99,7 @@ class AutoSync extends _$AutoSync {
     ref.onDispose(() {
       _connectivitySub.cancel();
       _debounceTimer?.cancel();
+      _retryTimer?.cancel();
       for (final sub in _tableSubscriptions) {
         sub.cancel();
       }
@@ -83,22 +115,27 @@ class AutoSync extends _$AutoSync {
   }
 
   Future<void> runFullSync() async {
-    final currentState = state.value;
-    if (currentState?.isSyncing == true) {
+    // Check sincrónico primero — cierra la ventana de race condition
+    if (_isSyncing) {
       AppLogger.debug('[AutoSync] Full Sync omitido: ya está en progreso.');
       return;
     }
+    _isSyncing = true;
+
+    final currentState = state.value;
 
     final db = ref.read(driftDatabaseProvider);
     final sesion = await db.authDao.getSesionActiva();
     if (sesion == null) {
       AppLogger.debug('[AutoSync] Full Sync omitido: no hay sesión activa.');
+      _isSyncing = false;
       return;
     }
 
     final connectivity = await Connectivity().checkConnectivity();
     if (connectivity.contains(ConnectivityResult.none)) {
       AppLogger.warn('[AutoSync] Full Sync omitido: sin conexión a internet.');
+      _isSyncing = false;
       return;
     }
 
@@ -124,7 +161,12 @@ class AutoSync extends _$AutoSync {
       AppLogger.info('[AutoSync] 1. Subiendo cambios locales...');
       await repo.pushCambiosLocales();
       AppLogger.info('[AutoSync] 2. Descargando cambios remotos...');
-      await repo.pullRemoteChanges();
+      final isFirstSync =
+          await SyncCursorStore.getLastPullAt('ventas') == null;
+      await repo.pullRemoteChanges(forceFull: isFirstSync);
+
+      _syncRetryCount = 0;
+      final pendingCount = await repo.countTotalPending();
 
       AppLogger.info('[AutoSync] === SINCRONIZACIÓN COMPLETA FINALIZADA CON ÉXITO ===');
       RemoteLogger.info(
@@ -134,15 +176,18 @@ class AutoSync extends _$AutoSync {
         userId: userId,
         empresaId: empresaId,
       );
+      _isSyncing = false;
       state = AsyncData(
         (currentState ?? const SyncState()).copyWith(
           isSyncing: false,
           lastError: null,
           lastSync: DateTime.now(),
+          retryCount: 0,
+          pendingCount: pendingCount,
         ),
       );
     } catch (e, st) {
-      AppLogger.error('[AutoSync] Fallo en Full Sync', e, st);
+      AppLogger.error('[AutoSync] Fallo en Full Sync (intento $_syncRetryCount)', e, st);
       RemoteLogger.error(
         'Fallo en sincronización completa',
         module: 'sync',
@@ -152,10 +197,28 @@ class AutoSync extends _$AutoSync {
         exception: e,
         stackTrace: st,
       );
+
+      if (_syncRetryCount < _maxRetryCount) {
+        _syncRetryCount++;
+        final delay = _backoffDelay();
+        AppLogger.info(
+          '[AutoSync] Reintentando en ${delay.inSeconds}s (intento $_syncRetryCount/$_maxRetryCount)',
+        );
+        _retryTimer?.cancel();
+        _retryTimer = Timer(delay, runFullSync);
+      } else {
+        AppLogger.warn(
+          '[AutoSync] Máximo de reintentos alcanzado. Sync suspendido hasta próxima reconexión.',
+        );
+        _syncRetryCount = 0;
+      }
+
+      _isSyncing = false;
       state = AsyncData(
         (currentState ?? const SyncState()).copyWith(
           isSyncing: false,
           lastError: e.toString(),
+          retryCount: _syncRetryCount,
         ),
       );
     }
@@ -177,8 +240,14 @@ class AutoSync extends _$AutoSync {
     );
 
     if (hasConnection && wasOffline) {
-      runFullSync();
-      RemoteLogger.flushPending();
+      _syncRetryCount = 0;
+      // Jitter para desincronizar múltiples dispositivos que reconectan a la vez
+      final jitter = Duration(milliseconds: DateTime.now().millisecondsSinceEpoch % 3000);
+      _retryTimer?.cancel();
+      _retryTimer = Timer(jitter, () {
+        runFullSync();
+        RemoteLogger.flushPending();
+      });
     }
   }
 
@@ -193,15 +262,28 @@ class AutoSync extends _$AutoSync {
   }
 
   Future<void> triggerSyncNow() async {
+    // Check sincrónico primero — cierra la ventana de race condition
+    if (_isSyncing) return;
+    _isSyncing = true;
+
     final currentState = state.value;
-    if (currentState == null || currentState.isSyncing) return;
+    if (currentState == null) {
+      _isSyncing = false;
+      return;
+    }
 
     final db = ref.read(driftDatabaseProvider);
     final sesion = await db.authDao.getSesionActiva();
-    if (sesion == null) return;
+    if (sesion == null) {
+      _isSyncing = false;
+      return;
+    }
 
     final connectivity = await Connectivity().checkConnectivity();
-    if (connectivity.contains(ConnectivityResult.none)) return;
+    if (connectivity.contains(ConnectivityResult.none)) {
+      _isSyncing = false;
+      return;
+    }
 
     AppLogger.info('[AutoSync] === Disparando Push de Cambios Locales Inmediato ===');
     try {
@@ -210,12 +292,15 @@ class AutoSync extends _$AutoSync {
       );
       final repo = await ref.read(syncRepositoryProvider.future);
       await repo.pushCambiosLocales();
+      final pendingCount = await repo.countTotalPending();
       AppLogger.info('[AutoSync] === Push Inmediato Finalizado con Éxito ===');
+      _isSyncing = false;
       state = AsyncData(
         currentState.copyWith(
           isSyncing: false,
           lastError: null,
           lastSync: DateTime.now(),
+          pendingCount: pendingCount,
         ),
       );
     } catch (e, st) {
@@ -227,6 +312,7 @@ class AutoSync extends _$AutoSync {
         exception: e,
         stackTrace: st,
       );
+      _isSyncing = false;
       state = AsyncData(
         currentState.copyWith(isSyncing: false, lastError: e.toString()),
       );

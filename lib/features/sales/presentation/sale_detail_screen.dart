@@ -407,114 +407,150 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen>
   }
 
   void _showAddPaymentModal(BuildContext context, double currentBalance) {
-    final amountCtrl = TextEditingController();
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          left: 20,
-          right: 20,
-          top: 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Registrar Nuevo Abono',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      builder: (ctx) => _AddPaymentModalContent(
+        currentBalance: currentBalance,
+        onSave: (amount) async {
+          final db = ref.read(driftDatabaseProvider);
+          await db.salesDao.registrarAbonoVenta(
+            ventaId: widget.saleId,
+            monto: amount,
+          );
+          if (!context.mounted) return;
+          Navigator.pop(ctx);
+          ref.invalidate(saleDetailProvider(widget.saleId));
+          ref.invalidate(salesListProvider);
+          ref.invalidate(dashboardProvider);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Abono registrado con exito'),
+              backgroundColor: Colors.green,
             ),
-            const SizedBox(height: 10),
-            Text(
-              'Saldo actual: ${NumberFormat.simpleCurrency().format(currentBalance)}',
-              style: TextStyle(color: Colors.grey[600]),
+          );
+        },
+        onError: (e) {
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error al registrar: $e'),
+              backgroundColor: Colors.red,
             ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: amountCtrl,
-              keyboardType: TextInputType.number,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Monto a abonar',
-                prefixIcon: Icon(Icons.attach_money),
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: () async {
-                  final amount = double.tryParse(
-                    amountCtrl.text.replaceAll(',', '.'),
-                  ) ??
-                      0.0;
-                  if (amount <= 0 || amount > currentBalance) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Monto invalido. Debe ser mayor a 0 y menor o igual a ${NumberFormat.simpleCurrency().format(currentBalance)}',
-                        ),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                    return;
-                  }
-
-                  try {
-                    final db = ref.read(driftDatabaseProvider);
-                    await db.salesDao.registrarAbonoVenta(
-                      ventaId: widget.saleId,
-                      monto: amount,
-                    );
-                    if (!context.mounted) {
-                      return;
-                    }
-                    Navigator.pop(ctx);
-                    ref.invalidate(saleDetailProvider(widget.saleId));
-                    ref.invalidate(salesListProvider);
-                    ref.invalidate(dashboardProvider);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Abono registrado con exito'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  } catch (e) {
-                    if (!context.mounted) {
-                      return;
-                    }
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error al registrar: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green[700],
-                ),
-                child: const Text(
-                  'GUARDAR ABONO',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
+          );
+        },
       ),
-    ).whenComplete(() {
-      amountCtrl.dispose();
-    });
+    );
+  }
+}
+
+class _AddPaymentModalContent extends StatefulWidget {
+  final double currentBalance;
+  final Future<void> Function(double amount) onSave;
+  final void Function(Object e) onError;
+
+  const _AddPaymentModalContent({
+    required this.currentBalance,
+    required this.onSave,
+    required this.onError,
+  });
+
+  @override
+  State<_AddPaymentModalContent> createState() =>
+      _AddPaymentModalContentState();
+}
+
+class _AddPaymentModalContentState extends State<_AddPaymentModalContent> {
+  late final TextEditingController _amountCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountCtrl = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+        left: 20,
+        right: 20,
+        top: 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Registrar Nuevo Abono',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Saldo actual: ${NumberFormat.simpleCurrency().format(widget.currentBalance)}',
+            style: TextStyle(color: Colors.grey[600]),
+          ),
+          const SizedBox(height: 20),
+          TextField(
+            controller: _amountCtrl,
+            keyboardType: TextInputType.number,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Monto a abonar',
+              prefixIcon: Icon(Icons.attach_money),
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              onPressed: () async {
+                final amount = double.tryParse(
+                      _amountCtrl.text.replaceAll(',', '.'),
+                    ) ??
+                    0.0;
+                if (amount <= 0 || amount > widget.currentBalance) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Monto invalido. Debe ser mayor a 0 y menor o igual a ${NumberFormat.simpleCurrency().format(widget.currentBalance)}',
+                      ),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+                try {
+                  await widget.onSave(amount);
+                } catch (e) {
+                  widget.onError(e);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green[700],
+              ),
+              child: const Text(
+                'GUARDAR ABONO',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
   }
 }
 

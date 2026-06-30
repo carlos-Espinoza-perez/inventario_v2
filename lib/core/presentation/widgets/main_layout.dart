@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // 1. Importar Riverpod
 import 'package:go_router/go_router.dart';
 import 'package:inventario_v2/core/providers/auto_sync_provider.dart';
+import 'package:inventario_v2/core/presentation/widgets/sync_status_banner.dart';
 import 'package:inventario_v2/features/dashboard/presentation/widgets/bottom_app_bar_dashboard.dart';
 import 'package:inventario_v2/features/dashboard/presentation/widgets/top_app_bar_dashboard.dart';
 
@@ -21,13 +22,20 @@ class MainLayout extends ConsumerWidget {
       appBar: TopAppBarDashboard(location: location),
 
       body: SafeArea(
-        child: Stack(
+        child: Column(
           children: [
-            child,
-            Positioned(
-              top: 16,
-              right: 16,
-              child: _SyncStatusIndicator(isSyncing: syncState.isLoading),
+            const SyncStatusBanner(),
+            Expanded(
+              child: Stack(
+                children: [
+                  child,
+                  Positioned(
+                    top: 16,
+                    right: 16,
+                    child: _SyncStatusIndicator(isSyncing: syncState.isLoading),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

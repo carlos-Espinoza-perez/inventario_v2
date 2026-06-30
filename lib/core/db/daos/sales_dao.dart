@@ -328,6 +328,12 @@ class SalesDao extends BaseDao with _$SalesDaoMixin {
     return (select(ventas)..where((tbl) => _isPending(tbl.syncStatus))).get();
   }
 
+  Future<List<Venta>> getVentasSyncError() {
+    return (select(ventas)
+          ..where((tbl) => tbl.syncStatus.equals('sync_error')))
+        .get();
+  }
+
   Future<List<DetalleVenta>> getPendingDetalleVentas() {
     return (select(
       detalleVentas,

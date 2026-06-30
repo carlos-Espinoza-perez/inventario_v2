@@ -15,15 +15,21 @@ class InventarioRepository {
     if (queryTrimmed.isEmpty) {
       return _db.inventoryDao.getCatalogItems(bodegaId: bodegaId, limit: 15);
     }
-    
-    final allItems = await _db.inventoryDao.getCatalogItems(bodegaId: bodegaId, limit: 2000);
+
+    // Pre-filtrado SQL: máximo 100 candidatos con LIKE, evita cargar miles en RAM
+    final sqlCandidates = await _db.inventoryDao.getCatalogItems(
+      bodegaId: bodegaId,
+      query: queryTrimmed,
+      limit: 100,
+    );
+    if (sqlCandidates.isEmpty) return [];
+
     final queryWords = queryTrimmed.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
-    
-    final filtered = allItems.where((item) {
+    final filtered = sqlCandidates.where((item) {
       final targetText = '${item.producto.nombre} ${item.producto.codigoPersonalizado ?? ''}';
       return queryWords.every((qWord) => FuzzySearch.isMatch(qWord, targetText));
     }).toList();
-    
+
     return filtered.take(15).toList();
   }
 
@@ -131,15 +137,20 @@ class InventarioRepository {
     if (queryTrimmed.isEmpty) {
       return _db.inventoryDao.searchProductosList('');
     }
-    
-    final allProducts = await (_db.select(_db.productos)..where((tbl) => tbl.estado.equals(true))..limit(2000)).get();
+
+    // Pre-filtrado SQL con LIKE: máximo 100 candidatos antes del fuzzy
+    final sqlCandidates = await _db.inventoryDao.searchProductosListExpanded(
+      queryTrimmed,
+      limit: 100,
+    );
+    if (sqlCandidates.isEmpty) return [];
+
     final queryWords = queryTrimmed.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
-    
-    final filtered = allProducts.where((producto) {
+    final filtered = sqlCandidates.where((producto) {
       final targetText = '${producto.nombre} ${producto.codigoPersonalizado ?? ''}';
       return queryWords.every((qWord) => FuzzySearch.isMatch(qWord, targetText));
     }).toList();
-    
+
     return filtered.take(15).toList();
   }
 

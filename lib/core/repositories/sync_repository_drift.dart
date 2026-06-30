@@ -7,6 +7,7 @@ import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/services/app_logger.dart';
 import 'package:inventario_v2/core/services/image_sync_service.dart';
 import 'package:inventario_v2/core/utils/uuid_validator.dart';
+import 'package:inventario_v2/core/repositories/sync_cursor_store.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SyncRepository {
@@ -89,7 +90,7 @@ class SyncRepository {
     await _push(
       'codigo_producto',
       'producto_variantes',
-      await _db.inventoryDao.getPendingProductoVariantes(),
+      pendingVariantes,
       _productoVarianteToJson,
     );
     final pendingInventarios = await _db.inventoryDao.getPendingInventarios();
@@ -97,7 +98,7 @@ class SyncRepository {
     await _push(
       'inventario_producto',
       'inventarios',
-      await _db.inventoryDao.getPendingInventarios(),
+      pendingInventarios,
       _inventarioToJson,
       onConflict: 'id',
     );
@@ -107,36 +108,126 @@ class SyncRepository {
       await _db.salesDao.getPendingClientes(),
       _clienteToJson,
     );
-    await _push(
-      'movimiento_producto',
-      'movimientos',
-      await _db.inventoryDao.getPendingMovimientos(),
-      _movimientoToJson,
-    );
-    await _push(
-      'detalle_movimiento_producto',
-      'detalle_movimientos',
-      await _db.inventoryDao.getPendingDetalleMovimientos(),
-      _detalleMovimientoToJson,
-    );
-    await _push(
-      'venta_producto',
-      'ventas',
-      await _db.salesDao.getPendingVentas(),
-      _ventaToJson,
-    );
-    await _push(
-      'detalle_venta',
-      'detalle_ventas',
-      await _db.salesDao.getPendingDetalleVentas(),
-      _detalleVentaToJson,
-    );
-    await _push(
-      'historial_pago',
-      'pagos_ventas',
-      await _db.salesDao.getPendingPagosVentas(),
-      _pagoVentaToJson,
-    );
+    await _pushMovimientosCoordinado();
+    await _pushVentasCoordinado();
+    // Guard: no intentar subir pagos si la venta padre tiene sync_error.
+    // La RLS de historial_pago valida via JOIN a venta_producto.empresa_id,
+    // y si la venta no llegó al servidor la validación falla con 42501.
+    final ventasError = await _db.salesDao.getVentasSyncError();
+    final idsVentasError = ventasError.map((v) => v.id).toSet();
+    final pagosPendientes = await _db.salesDao.getPendingPagosVentas();
+    final pagosValidos = idsVentasError.isEmpty
+        ? pagosPendientes
+        : pagosPendientes
+            .where((p) => !idsVentasError.contains(p.ventaId))
+            .toList();
+    await _push('historial_pago', 'pagos_ventas', pagosValidos, _pagoVentaToJson);
+  }
+
+  Future<void> _pushVentasCoordinado() async {
+    final pendingVentas = await _db.salesDao.getPendingVentas();
+    if (pendingVentas.isNotEmpty) {
+      await _push('venta_producto', 'ventas', pendingVentas, _ventaToJson);
+    }
+
+    final pendingDetalles = await _db.salesDao.getPendingDetalleVentas();
+    if (pendingDetalles.isEmpty) return;
+
+    final detallesPorVenta = <String, List<DetalleVenta>>{};
+    for (final d in pendingDetalles) {
+      detallesPorVenta.putIfAbsent(d.ventaId, () => []).add(d);
+    }
+
+    for (final entry in detallesPorVenta.entries) {
+      final ventaId = entry.key;
+      final detalles = entry.value;
+      try {
+        final payloads = detalles.map(_detalleVentaToJson).toList();
+        final response = await _supabase
+            .from('detalle_venta')
+            .upsert(payloads)
+            .select('id, ultima_actualizacion');
+        final serverTs = <String, String>{
+          for (final r in response)
+            if (r['id'] != null && r['ultima_actualizacion'] != null)
+              r['id'].toString(): r['ultima_actualizacion'].toString()
+        };
+        await _markSyncedWithTimestamps('detalle_ventas', detalles.map((d) => d.id).toList(), serverTs);
+      } catch (e) {
+        AppLogger.warn(
+          '[Sync] Detalles de venta $ventaId fallaron. Revirtiendo padre a pending_update.',
+        );
+        await _db.transaction(() async {
+          await _db.customStatement(
+            "UPDATE ventas SET sync_status = 'pending_update' WHERE id = ? AND sync_status = 'synced'",
+            [ventaId],
+          );
+          await _markSyncError(
+            'detalle_ventas',
+            detalles.map((d) => d.id).toList(),
+            e.toString(),
+          );
+        });
+      }
+    }
+  }
+
+  Future<void> _pushMovimientosCoordinado() async {
+    final pendingMovimientos = await _db.inventoryDao.getPendingMovimientos();
+    if (pendingMovimientos.isNotEmpty) {
+      await _push(
+        'movimiento_producto',
+        'movimientos',
+        pendingMovimientos,
+        _movimientoToJson,
+      );
+    }
+
+    final pendingDetalles =
+        await _db.inventoryDao.getPendingDetalleMovimientos();
+    if (pendingDetalles.isEmpty) return;
+
+    final detallesPorMovimiento = <String, List<DetalleMovimiento>>{};
+    for (final d in pendingDetalles) {
+      detallesPorMovimiento.putIfAbsent(d.movimientoId, () => []).add(d);
+    }
+
+    for (final entry in detallesPorMovimiento.entries) {
+      final movimientoId = entry.key;
+      final detalles = entry.value;
+      try {
+        final payloads = detalles.map(_detalleMovimientoToJson).toList();
+        final response = await _supabase
+            .from('detalle_movimiento_producto')
+            .upsert(payloads)
+            .select('id, ultima_actualizacion');
+        final serverTs = <String, String>{
+          for (final r in response)
+            if (r['id'] != null && r['ultima_actualizacion'] != null)
+              r['id'].toString(): r['ultima_actualizacion'].toString()
+        };
+        await _markSyncedWithTimestamps(
+          'detalle_movimientos',
+          detalles.map((d) => d.id).toList(),
+          serverTs,
+        );
+      } catch (e) {
+        AppLogger.warn(
+          '[Sync] Detalles de movimiento $movimientoId fallaron. Revirtiendo padre a pending_update.',
+        );
+        await _db.transaction(() async {
+          await _db.customStatement(
+            "UPDATE movimientos SET sync_status = 'pending_update' WHERE id = ? AND sync_status = 'synced'",
+            [movimientoId],
+          );
+          await _markSyncError(
+            'detalle_movimientos',
+            detalles.map((d) => d.id).toList(),
+            e.toString(),
+          );
+        });
+      }
+    }
   }
 
   void subscribeToRealtimeChanges() {
@@ -268,124 +359,68 @@ class SyncRepository {
     ]);
   }
 
-  Future<void> pullRemoteChanges() async {
-    await _pull(
-      'empresas',
-      'empresa',
-      (j) => _db.into(_db.empresas).insertOnConflictUpdate(_empresaFromJson(j)),
-    );
-    await _pull(
-      'roles',
-      'rol',
-      (j) => _db.into(_db.roles).insertOnConflictUpdate(_rolFromJson(j)),
-    );
-    await _pull(
-      'accesos_rol',
-      'acceso_rol',
-      (j) => _db
-          .into(_db.accesosRol)
-          .insertOnConflictUpdate(_accesoRolFromJson(j)),
-    );
-    await _pull(
-      'usuarios',
-      'usuario',
-      (j) => _db.into(_db.usuarios).insertOnConflictUpdate(_usuarioFromJson(j)),
-    );
-    await _pull(
-      'bodegas',
-      'bodega',
-      (j) => _db.into(_db.bodegas).insertOnConflictUpdate(_bodegaFromJson(j)),
-    );
-    await _pull(
-      'bodegas_usuarios',
-      'bodega_usuario',
-      (j) => _db
-          .into(_db.bodegasUsuarios)
-          .insertOnConflictUpdate(_bodegaUsuarioFromJson(j)),
-    );
-    await _pull(
-      'cajas',
-      'caja',
-      (j) => _db.into(_db.cajas).insertOnConflictUpdate(_cajaFromJson(j)),
-    );
-    await _pull(
-      'caja_sesiones',
-      'caja_sesion',
-      (j) => _db
-          .into(_db.cajaSesiones)
-          .insertOnConflictUpdate(_cajaSesionFromJson(j)),
-    );
-    await _pull(
-      'caja_movimientos_extras',
-      'caja_movimiento_extra',
-      (j) => _db
-          .into(_db.cajaMovimientosExtras)
-          .insertOnConflictUpdate(_cajaMovimientoExtraFromJson(j)),
-    );
-    await _pull(
-      'categorias',
-      'categoria',
-      (j) => _db
-          .into(_db.categorias)
-          .insertOnConflictUpdate(_categoriaFromJson(j)),
-    );
-    await _pull(
-      'productos',
-      'producto',
-      (j) =>
-          _db.into(_db.productos).insertOnConflictUpdate(_productoFromJson(j)),
-    );
-    await _pull(
-      'producto_variantes',
-      'codigo_producto',
-      (j) => _db
-          .into(_db.productoVariantes)
-          .insertOnConflictUpdate(_productoVarianteFromJson(j)),
-    );
-    await _pull(
-      'inventarios',
-      'inventario_producto',
-      _upsertInventarioFromJson,
-    );
-    await _pull(
-      'clientes',
-      'cliente',
-      (j) => _db.into(_db.clientes).insertOnConflictUpdate(_clienteFromJson(j)),
-    );
-    await _pull(
-      'movimientos',
-      'movimiento_producto',
-      (j) => _db
-          .into(_db.movimientos)
-          .insertOnConflictUpdate(_movimientoFromJson(j)),
-    );
-    await _pull(
-      'detalle_movimientos',
-      'detalle_movimiento_producto',
-      (j) => _db
-          .into(_db.detalleMovimientos)
-          .insertOnConflictUpdate(_detalleMovimientoFromJson(j)),
-    );
-    await _pull(
-      'ventas',
-      'venta_producto',
-      (j) => _db.into(_db.ventas).insertOnConflictUpdate(_ventaFromJson(j)),
-    );
-    await _pull(
-      'detalle_ventas',
-      'detalle_venta',
-      (j) => _db
-          .into(_db.detalleVentas)
-          .insertOnConflictUpdate(_detalleVentaFromJson(j)),
-    );
-    await _pull(
-      'pagos_ventas',
-      'historial_pago',
-      (j) => _db
-          .into(_db.pagosVentas)
-          .insertOnConflictUpdate(_pagoVentaFromJson(j)),
-    );
+  Future<void> pullRemoteChanges({bool forceFull = false}) async {
+    await _pull('empresas', 'empresa',
+        (j) => _db.into(_db.empresas).insertOnConflictUpdate(_empresaFromJson(j)),
+        forceFull: forceFull);
+    await _pull('roles', 'rol',
+        (j) => _db.into(_db.roles).insertOnConflictUpdate(_rolFromJson(j)),
+        forceFull: forceFull);
+    await _pull('accesos_rol', 'acceso_rol',
+        (j) => _db.into(_db.accesosRol).insertOnConflictUpdate(_accesoRolFromJson(j)),
+        forceFull: forceFull);
+    await _pull('usuarios', 'usuario',
+        (j) => _db.into(_db.usuarios).insertOnConflictUpdate(_usuarioFromJson(j)),
+        forceFull: forceFull);
+    await _pull('bodegas', 'bodega',
+        (j) => _db.into(_db.bodegas).insertOnConflictUpdate(_bodegaFromJson(j)),
+        forceFull: forceFull);
+    await _pull('bodegas_usuarios', 'bodega_usuario',
+        (j) => _db.into(_db.bodegasUsuarios).insertOnConflictUpdate(_bodegaUsuarioFromJson(j)),
+        forceFull: forceFull);
+    await _pull('cajas', 'caja',
+        (j) => _db.into(_db.cajas).insertOnConflictUpdate(_cajaFromJson(j)),
+        forceFull: forceFull);
+    await _pull('caja_sesiones', 'caja_sesion',
+        (j) => _db.into(_db.cajaSesiones).insertOnConflictUpdate(_cajaSesionFromJson(j)),
+        forceFull: forceFull);
+    await _pull('caja_movimientos_extras', 'caja_movimiento_extra',
+        (j) => _db.into(_db.cajaMovimientosExtras).insertOnConflictUpdate(_cajaMovimientoExtraFromJson(j)),
+        forceFull: forceFull);
+    await _pull('categorias', 'categoria',
+        (j) => _db.into(_db.categorias).insertOnConflictUpdate(_categoriaFromJson(j)),
+        forceFull: forceFull);
+    await _pull('productos', 'producto',
+        (j) => _db.into(_db.productos).insertOnConflictUpdate(_productoFromJson(j)),
+        forceFull: forceFull);
+    await _pull('producto_variantes', 'codigo_producto',
+        (j) => _db.into(_db.productoVariantes).insertOnConflictUpdate(_productoVarianteFromJson(j)),
+        forceFull: forceFull);
+    await _pull('inventarios', 'inventario_producto',
+        _upsertInventarioFromJson,
+        forceFull: forceFull);
+    await _pull('clientes', 'cliente',
+        (j) => _db.into(_db.clientes).insertOnConflictUpdate(_clienteFromJson(j)),
+        forceFull: forceFull);
+    await _pull('movimientos', 'movimiento_producto',
+        (j) => _db.into(_db.movimientos).insertOnConflictUpdate(_movimientoFromJson(j)),
+        forceFull: forceFull);
+    await _pull('detalle_movimientos', 'detalle_movimiento_producto',
+        (j) => _db.into(_db.detalleMovimientos).insertOnConflictUpdate(_detalleMovimientoFromJson(j)),
+        forceFull: forceFull);
+    await _pull('ventas', 'venta_producto',
+        (j) => _db.into(_db.ventas).insertOnConflictUpdate(_ventaFromJson(j)),
+        forceFull: forceFull);
+    await _pull('detalle_ventas', 'detalle_venta',
+        (j) => _db.into(_db.detalleVentas).insertOnConflictUpdate(_detalleVentaFromJson(j)),
+        forceFull: forceFull);
+    await _pull('pagos_ventas', 'historial_pago',
+        (j) => _db.into(_db.pagosVentas).insertOnConflictUpdate(_pagoVentaFromJson(j)),
+        forceFull: forceFull);
   }
+
+  /// Expone reset de cursores para soporte/debug (próximo pull será completo).
+  Future<void> resetSyncCursors() => SyncCursorStore.resetAll();
 
   Future<void> _upsertInventarioFromJson(Map<String, dynamic> j) async {
     final productoId = _text(j['producto_id']);
@@ -421,10 +456,13 @@ class SyncRepository {
     if (res == null) return true;
 
     final syncStatus = res.read<String>('sync_status');
-    if (syncStatus == 'synced' || syncStatus == 'sync_error') {
+    if (syncStatus == 'synced') {
       return true;
     }
 
+    // pending_insert, pending_update y sync_error: comparar timestamps.
+    // sync_error tiene un cambio local que falló al subir; no se sobreescribe
+    // automáticamente con el dato remoto (que puede ser la versión anterior).
     final localUpdatedAtStr = res.read<String>('updated_at');
     final localUpdatedAt =
         DateTime.tryParse(localUpdatedAtStr) ??
@@ -441,9 +479,15 @@ class SyncRepository {
     if (localUpdatedAt.isAfter(remoteUpdatedAt) ||
         localUpdatedAt.isAtSameMomentAs(remoteUpdatedAt)) {
       AppLogger.debug(
-        '[Sync] Preservando edicion local offline para $tableName ($id)',
+        '[Sync] Preservando edicion local ($syncStatus) para $tableName ($id)',
       );
       return false;
+    }
+
+    if (syncStatus == 'sync_error') {
+      AppLogger.warn(
+        '[Sync] Sobrescribiendo sync_error con dato remoto más reciente en $tableName ($id)',
+      );
     }
 
     return true;
@@ -486,45 +530,47 @@ class SyncRepository {
       final remoteId = remoteSkuToId[variante.sku];
       if (remoteId == null || remoteId == variante.id) continue;
 
-      // Este SKU existe remotamente con un UUID distinto → necesita reconciliación
       final localId = variante.id;
       AppLogger.info(
         '[Sync][Reconcile] SKU ${variante.sku}: redirigiendo $localId → $remoteId',
       );
 
-      // 1. Redirigir FK en inventarios
-      await _db.customStatement(
-        "UPDATE inventarios SET producto_variante_id = ?, sync_status = 'pending_update' WHERE producto_variante_id = ?",
-        [remoteId, localId],
-      );
-      // 2. Redirigir FK en detalle_movimientos
-      await _db.customStatement(
-        "UPDATE detalle_movimientos SET producto_variante_id = ?, sync_status = 'pending_update' WHERE producto_variante_id = ?",
-        [remoteId, localId],
-      );
-      // 3. Redirigir FK en detalle_ventas
-      await _db.customStatement(
-        "UPDATE detalle_ventas SET producto_variante_id = ?, sync_status = 'pending_update' WHERE producto_variante_id = ?",
-        [remoteId, localId],
-      );
-      // 4. Insertar/actualizar la variante remota localmente con el UUID correcto
+      // Primero verificar que el remoto existe antes de modificar BD local.
+      // Si falla, saltamos este SKU sin tocar nada — evita FKs rotos.
+      Map<String, dynamic> remoteVarianteData;
       try {
-        final remoteVariante = await _supabase
+        remoteVarianteData = await _supabase
             .from('codigo_producto')
             .select()
             .eq('id', remoteId)
             .single();
+      } catch (e) {
+        AppLogger.warn('[Sync][Reconcile] No se pudo bajar variante $remoteId, saltando: $e');
+        continue;
+      }
+
+      // Todos los cambios locales en una transacción atómica
+      await _db.transaction(() async {
+        await _db.customStatement(
+          "UPDATE inventarios SET producto_variante_id = ?, sync_status = 'pending_update' WHERE producto_variante_id = ?",
+          [remoteId, localId],
+        );
+        await _db.customStatement(
+          "UPDATE detalle_movimientos SET producto_variante_id = ?, sync_status = 'pending_update' WHERE producto_variante_id = ?",
+          [remoteId, localId],
+        );
+        await _db.customStatement(
+          "UPDATE detalle_ventas SET producto_variante_id = ?, sync_status = 'pending_update' WHERE producto_variante_id = ?",
+          [remoteId, localId],
+        );
         await _db
             .into(_db.productoVariantes)
-            .insertOnConflictUpdate(_productoVarianteFromJson(Map<String, dynamic>.from(remoteVariante)));
-      } catch (e) {
-        AppLogger.warn('[Sync][Reconcile] No se pudo bajar variante remota $remoteId: $e');
-      }
-      // 5. Marcar la variante local duplicada como synced (apunta al remoto)
-      await _db.customStatement(
-        "UPDATE producto_variantes SET sync_status = 'synced' WHERE id = ?",
-        [localId],
-      );
+            .insertOnConflictUpdate(_productoVarianteFromJson(Map<String, dynamic>.from(remoteVarianteData)));
+        await _db.customStatement(
+          "UPDATE producto_variantes SET sync_status = 'synced' WHERE id = ?",
+          [localId],
+        );
+      });
     }
   }
 
@@ -628,10 +674,17 @@ class SyncRepository {
     if (validPayloads.isEmpty) return;
 
     try {
-      await _supabase
+      final response = await _supabase
           .from(remoteTable)
-          .upsert(validPayloads, onConflict: onConflict);
-      await _markSynced(localTable, validIds);
+          .upsert(validPayloads, onConflict: onConflict)
+          .select('id, ultima_actualizacion');
+      final serverTimestamps = <String, String>{};
+      for (final row in response) {
+        final rid = row['id']?.toString() ?? '';
+        final ts = row['ultima_actualizacion']?.toString() ?? '';
+        if (rid.isNotEmpty && ts.isNotEmpty) serverTimestamps[rid] = ts;
+      }
+      await _markSyncedWithTimestamps(localTable, validIds, serverTimestamps);
       AppLogger.info(
         '[Sync][Push] Lote exitoso para $remoteTable: ${validIds.length} registros guardados',
       );
@@ -643,10 +696,14 @@ class SyncRepository {
         final payload = validPayloads[i];
         final id = validIds[i];
         try {
-          await _supabase
+          final itemResponse = await _supabase
               .from(remoteTable)
-              .upsert(payload, onConflict: onConflict);
-          await _markSynced(localTable, [id]);
+              .upsert(payload, onConflict: onConflict)
+              .select('id, ultima_actualizacion');
+          final ts = itemResponse.isNotEmpty
+              ? itemResponse.first['ultima_actualizacion']?.toString() ?? ''
+              : '';
+          await _markSyncedWithTimestamps(localTable, [id], {if (ts.isNotEmpty) id: ts});
         } catch (itemError) {
           final errorStr = itemError.toString();
           // Si intentamos actualizar un usuario que ya fue borrado de auth.users (falla FK 23503)
@@ -724,47 +781,98 @@ class SyncRepository {
   Future<void> _pull(
     String localTableName,
     String remoteTableName,
-    Future<void> Function(Map<String, dynamic>) onUpsert,
-  ) async {
+    Future<void> Function(Map<String, dynamic>) onUpsert, {
+    bool forceFull = false,
+  }) async {
     AppLogger.info(
       '[Sync][Pull] Consultando $remoteTableName -> $localTableName',
     );
     try {
-      final rows = await _supabase.from(remoteTableName).select();
-      int successCount = 0;
-      for (final row in rows) {
-        try {
-          final map = Map<String, dynamic>.from(row);
-          if (await _shouldUpdateLocal(localTableName, map)) {
-            await onUpsert(map);
-            successCount++;
-          }
-        } catch (itemErr) {
-          final errorStr = itemErr.toString();
-          if (errorStr.contains('FOREIGN KEY constraint failed') ||
-              errorStr.contains('code 787')) {
+      final lastPullAt = forceFull
+          ? null
+          : await SyncCursorStore.getLastPullAt(localTableName);
+      final pullStartTime = DateTime.now().toUtc();
+
+      if (lastPullAt != null) {
+        AppLogger.info(
+          '[Sync][Pull] Incremental desde ${lastPullAt.toIso8601String()} en $localTableName',
+        );
+      } else {
+        AppLogger.info('[Sync][Pull] Pull completo para $localTableName');
+      }
+
+      const pageSize = 500;
+      int offset = 0;
+      int totalSynced = 0;
+      int failedRows = 0;
+      bool hasMore = true;
+
+      while (hasMore) {
+        var query = _supabase
+            .from(remoteTableName)
+            .select()
+            .order('ultima_actualizacion', ascending: true)
+            .range(offset, offset + pageSize - 1);
+
+        if (lastPullAt != null) {
+          query = _supabase
+              .from(remoteTableName)
+              .select()
+              .gte('ultima_actualizacion', lastPullAt.toIso8601String())
+              .order('ultima_actualizacion', ascending: true)
+              .range(offset, offset + pageSize - 1);
+        }
+
+        final page = await query;
+
+        for (final row in page) {
+          try {
             final map = Map<String, dynamic>.from(row);
-            await _createGhostEntitiesIfMissing(map);
-            try {
+            if (await _shouldUpdateLocal(localTableName, map)) {
               await onUpsert(map);
-              successCount++;
-              continue;
-            } catch (retryErr) {
+              totalSynced++;
+            }
+          } catch (itemErr) {
+            final errorStr = itemErr.toString();
+            if (errorStr.contains('FOREIGN KEY constraint failed') ||
+                errorStr.contains('code 787')) {
+              final map = Map<String, dynamic>.from(row);
+              await _createGhostEntitiesIfMissing(map);
+              try {
+                await onUpsert(map);
+                totalSynced++;
+                continue;
+              } catch (retryErr) {
+                AppLogger.error(
+                  '[Sync][Pull] Retry fallo al insertar fila en $localTableName: $row',
+                  retryErr,
+                );
+              }
+            } else {
               AppLogger.error(
-                '[Sync][Pull] Retry fallo al insertar fila en $localTableName: $row',
-                retryErr,
+                '[Sync][Pull] Fallo al insertar fila en $localTableName: $row',
+                itemErr,
               );
             }
-          } else {
-            AppLogger.error(
-              '[Sync][Pull] Fallo al insertar fila en $localTableName: $row',
-              itemErr,
-            );
+            failedRows++;
           }
         }
+
+        hasMore = page.length == pageSize;
+        offset += pageSize;
+      }
+
+      // Solo avanzar el cursor si no hubo filas fallidas individuales.
+      // Si hubo fallos, el próximo pull las reintentará desde lastPullAt.
+      if (failedRows == 0) {
+        await SyncCursorStore.setLastPullAt(localTableName, pullStartTime);
+      } else {
+        AppLogger.warn(
+          '[Sync][Pull] $failedRows filas fallaron en $localTableName. Cursor NO actualizado para reintentar.',
+        );
       }
       AppLogger.info(
-        '[Sync][Pull] $successCount filas sincronizadas en $localTableName',
+        '[Sync][Pull] $totalSynced filas sincronizadas en $localTableName',
       );
     } catch (e, st) {
       AppLogger.error(
@@ -772,6 +880,7 @@ class SyncRepository {
         e,
         st,
       );
+      // No actualizamos el cursor para que el próximo pull sea completo
     }
   }
 
@@ -782,6 +891,30 @@ class SyncRepository {
       "UPDATE $tableName SET sync_status = 'synced', updated_at = CURRENT_TIMESTAMP WHERE id IN ($questions)",
       ids,
     );
+  }
+
+  /// Marca registros como sincronizados usando el timestamp confirmado por el
+  /// servidor. Evita divergencia cuando el reloj del dispositivo está desfasado.
+  Future<void> _markSyncedWithTimestamps(
+    String tableName,
+    List<String> ids,
+    Map<String, String> serverTimestamps,
+  ) async {
+    if (ids.isEmpty) return;
+    for (final id in ids) {
+      final ts = serverTimestamps[id];
+      if (ts != null && ts.isNotEmpty) {
+        await _db.customStatement(
+          "UPDATE $tableName SET sync_status = 'synced', updated_at = ? WHERE id = ?",
+          [ts, id],
+        );
+      } else {
+        await _db.customStatement(
+          "UPDATE $tableName SET sync_status = 'synced' WHERE id = ?",
+          [id],
+        );
+      }
+    }
   }
 
   Future<void> _markSyncError(
@@ -820,24 +953,31 @@ class SyncRepository {
 
     for (final field in possibleUserFields) {
       final userId = map[field]?.toString();
-      if (userId != null && userId.isNotEmpty) {
-        final exists = await _db
-            .customSelect("SELECT 1 FROM usuarios WHERE id = '$userId' LIMIT 1")
-            .getSingleOrNull();
-        if (exists == null) {
-          AppLogger.info(
-            '[Sync] Creando usuario fantasma para resolver FK: $userId ($field)',
+      if (userId == null || userId.isEmpty) continue;
+      if (!UuidValidator.isValidUUID(userId)) {
+        AppLogger.warn('[Sync] Ghost: UUID inválido en campo $field: $userId');
+        continue;
+      }
+      final exists = await _db
+          .customSelect(
+            'SELECT 1 FROM usuarios WHERE id = ? LIMIT 1',
+            variables: [Variable.withString(userId)],
+          )
+          .getSingleOrNull();
+      if (exists == null) {
+        AppLogger.info(
+          '[Sync] Creando usuario fantasma para resolver FK: $userId ($field)',
+        );
+        try {
+          await _db.customStatement(
+            "INSERT INTO usuarios (id, created_at, updated_at, sync_status, empresa_id, nombre_completo, correo, rol_id, estado, fecha_eliminacion) "
+            "VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', ?, 'Usuario Eliminado', ?, NULL, 0, CURRENT_TIMESTAMP)",
+            [userId, empresaId, 'eliminado_$userId@sistema.local'],
           );
-          try {
-            await _db.customStatement(
-              "INSERT INTO usuarios (id, created_at, updated_at, sync_status, empresa_id, nombre_completo, correo, rol_id, estado, fecha_eliminacion) "
-              "VALUES ('$userId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', 'Usuario Eliminado', 'eliminado_$userId@sistema.local', NULL, 0, CURRENT_TIMESTAMP)",
-            );
-          } catch (e) {
-            AppLogger.warn(
-              '[Sync] Error al crear usuario fantasma $userId: $e',
-            );
-          }
+        } catch (e) {
+          AppLogger.warn(
+            '[Sync] Error al crear usuario fantasma $userId: $e',
+          );
         }
       }
     }
@@ -855,123 +995,172 @@ class SyncRepository {
 
     final ventaId = map['venta_id']?.toString();
     if (ventaId != null && ventaId.isNotEmpty) {
-      final exists = await _db
-          .customSelect("SELECT 1 FROM ventas WHERE id = '$ventaId' LIMIT 1")
-          .getSingleOrNull();
-      if (exists == null) {
-        AppLogger.info('[Sync] Creando venta fantasma para resolver FK: $ventaId');
-        final dummyId = '00000000-0000-0000-0000-000000000000';
-        try {
-          // Crear dependencias dummy NOT NULL
-          await _db.customStatement(
-            "INSERT OR IGNORE INTO roles (id, created_at, updated_at, sync_status, empresa_id, nombre, user_admin, usuario_registro_id, estado, fecha_eliminacion) "
-            "VALUES ('$dummyId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', 'Rol Eliminado', 0, NULL, 0, CURRENT_TIMESTAMP)"
-          );
-          await _db.customStatement(
-            "INSERT OR IGNORE INTO usuarios (id, created_at, updated_at, sync_status, empresa_id, rol_id, nombre_completo, correo, password_hash, pin_offline, usuario_registro_id, bodega_default_id, estado, fecha_eliminacion) "
-            "VALUES ('$dummyId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', '$dummyId', 'Usuario Eliminado', NULL, NULL, NULL, NULL, NULL, 0, CURRENT_TIMESTAMP)"
-          );
-          await _db.customStatement(
-            "INSERT OR IGNORE INTO bodegas (id, created_at, updated_at, sync_status, empresa_id, nombre, direccion, es_punto_venta, usuario_registro_id, estado, fecha_eliminacion) "
-            "VALUES ('$dummyId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', 'Bodega Eliminada', '', 0, NULL, 0, CURRENT_TIMESTAMP)"
-          );
-          await _db.customStatement(
-            "INSERT OR IGNORE INTO clientes (id, created_at, updated_at, sync_status, empresa_id, nombre, identificacion, celular, direccion, monto_credito_maximo, saldo_deudor_actual, usuario_registro_id, estado, fecha_eliminacion) "
-            "VALUES ('$dummyId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', 'Cliente Eliminado', NULL, NULL, NULL, 0, 0, NULL, 0, CURRENT_TIMESTAMP)"
-          );
-          await _db.customStatement(
-            "INSERT OR IGNORE INTO cajas (id, created_at, updated_at, sync_status, empresa_id, bodega_id, nombre, usuario_registro_id, estado, fecha_eliminacion) "
-            "VALUES ('$dummyId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', '$dummyId', 'Caja Eliminada', NULL, 0, CURRENT_TIMESTAMP)"
-          );
-          await _db.customStatement(
-            "INSERT OR IGNORE INTO caja_sesiones (id, created_at, updated_at, sync_status, caja_id, usuario_apertura_id, usuario_cierre_id, fecha_apertura, fecha_cierre, monto_inicial, total_ventas_sistema, total_efectivo_real, diferencia, estado_sesion, fecha_eliminacion) "
-            "VALUES ('$dummyId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$dummyId', '$dummyId', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0, 0, 0, 0, 'cerrada', CURRENT_TIMESTAMP)"
-          );
-          await _db.customStatement(
-            "INSERT OR IGNORE INTO ventas (id, created_at, updated_at, sync_status, empresa_id, cliente_id, usuario_id, caja_sesion_id, tipo_venta, estado_pago, total_venta, total_pagado, saldo_pendiente, fecha_venta, fecha_vencimiento, estado, fecha_eliminacion) "
-            "VALUES ('$ventaId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', '$dummyId', '$dummyId', '$dummyId', 'EFECTIVO', 'PAGADO', 0, 0, 0, CURRENT_TIMESTAMP, NULL, 0, CURRENT_TIMESTAMP)"
-          );
-        } catch (e) {
-          AppLogger.warn('[Sync] Error al crear venta fantasma $ventaId: $e');
+      if (!UuidValidator.isValidUUID(ventaId)) {
+        AppLogger.warn('[Sync] Ghost: UUID inválido en venta_id: $ventaId');
+      } else {
+        final exists = await _db
+            .customSelect(
+              'SELECT 1 FROM ventas WHERE id = ? LIMIT 1',
+              variables: [Variable.withString(ventaId)],
+            )
+            .getSingleOrNull();
+        if (exists == null) {
+          AppLogger.info('[Sync] Creando venta fantasma para resolver FK: $ventaId');
+          const dummyId = '00000000-0000-0000-0000-000000000000';
+          try {
+            await _db.customStatement(
+              "INSERT OR IGNORE INTO roles (id, created_at, updated_at, sync_status, empresa_id, nombre, user_admin, usuario_registro_id, estado, fecha_eliminacion) "
+              "VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', ?, 'Rol Eliminado', 0, NULL, 0, CURRENT_TIMESTAMP)",
+              [dummyId, empresaId],
+            );
+            await _db.customStatement(
+              "INSERT OR IGNORE INTO usuarios (id, created_at, updated_at, sync_status, empresa_id, rol_id, nombre_completo, correo, password_hash, pin_offline, usuario_registro_id, bodega_default_id, estado, fecha_eliminacion) "
+              "VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', ?, ?, 'Usuario Eliminado', NULL, NULL, NULL, NULL, NULL, 0, CURRENT_TIMESTAMP)",
+              [dummyId, empresaId, dummyId],
+            );
+            await _db.customStatement(
+              "INSERT OR IGNORE INTO bodegas (id, created_at, updated_at, sync_status, empresa_id, nombre, direccion, es_punto_venta, usuario_registro_id, estado, fecha_eliminacion) "
+              "VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', ?, 'Bodega Eliminada', '', 0, NULL, 0, CURRENT_TIMESTAMP)",
+              [dummyId, empresaId],
+            );
+            await _db.customStatement(
+              "INSERT OR IGNORE INTO clientes (id, created_at, updated_at, sync_status, empresa_id, nombre, identificacion, celular, direccion, monto_credito_maximo, saldo_deudor_actual, usuario_registro_id, estado, fecha_eliminacion) "
+              "VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', ?, 'Cliente Eliminado', NULL, NULL, NULL, 0, 0, NULL, 0, CURRENT_TIMESTAMP)",
+              [dummyId, empresaId],
+            );
+            await _db.customStatement(
+              "INSERT OR IGNORE INTO cajas (id, created_at, updated_at, sync_status, empresa_id, bodega_id, nombre, usuario_registro_id, estado, fecha_eliminacion) "
+              "VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', ?, ?, 'Caja Eliminada', NULL, 0, CURRENT_TIMESTAMP)",
+              [dummyId, empresaId, dummyId],
+            );
+            await _db.customStatement(
+              "INSERT OR IGNORE INTO caja_sesiones (id, created_at, updated_at, sync_status, caja_id, usuario_apertura_id, usuario_cierre_id, fecha_apertura, fecha_cierre, monto_inicial, total_ventas_sistema, total_efectivo_real, diferencia, estado_sesion, fecha_eliminacion) "
+              "VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', ?, ?, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0, 0, 0, 0, 'cerrada', CURRENT_TIMESTAMP)",
+              [dummyId, dummyId, dummyId],
+            );
+            await _db.customStatement(
+              "INSERT OR IGNORE INTO ventas (id, created_at, updated_at, sync_status, empresa_id, cliente_id, usuario_id, caja_sesion_id, tipo_venta, estado_pago, total_venta, total_pagado, saldo_pendiente, fecha_venta, fecha_vencimiento, estado, fecha_eliminacion) "
+              "VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', ?, ?, ?, ?, 'EFECTIVO', 'PAGADO', 0, 0, 0, CURRENT_TIMESTAMP, NULL, 0, CURRENT_TIMESTAMP)",
+              [ventaId, empresaId, dummyId, dummyId, dummyId],
+            );
+          } catch (e) {
+            AppLogger.warn('[Sync] Error al crear venta fantasma $ventaId: $e');
+          }
         }
       }
     }
 
     final categoriaId = map['categoria_id']?.toString();
     if (categoriaId != null && categoriaId.isNotEmpty) {
-      final exists = await _db
-          .customSelect("SELECT 1 FROM categorias WHERE id = '$categoriaId' LIMIT 1")
-          .getSingleOrNull();
-      if (exists == null) {
-        AppLogger.info('[Sync] Creando categoria fantasma para resolver FK: $categoriaId');
-        try {
-          await _db.customStatement(
-            "INSERT INTO categorias (id, created_at, updated_at, sync_status, empresa_id, nombre, categoria_padre_id, especificacion_json, usuario_registro_id, estado, fecha_eliminacion) "
-            "VALUES ('$categoriaId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', 'Categoria Eliminada', NULL, NULL, NULL, 0, CURRENT_TIMESTAMP)"
-          );
-        } catch (e) {
-          AppLogger.warn('[Sync] Error al crear categoria fantasma $categoriaId: $e');
+      if (!UuidValidator.isValidUUID(categoriaId)) {
+        AppLogger.warn('[Sync] Ghost: UUID inválido en categoria_id: $categoriaId');
+      } else {
+        final exists = await _db
+            .customSelect(
+              'SELECT 1 FROM categorias WHERE id = ? LIMIT 1',
+              variables: [Variable.withString(categoriaId)],
+            )
+            .getSingleOrNull();
+        if (exists == null) {
+          AppLogger.info('[Sync] Creando categoria fantasma para resolver FK: $categoriaId');
+          try {
+            await _db.customStatement(
+              "INSERT INTO categorias (id, created_at, updated_at, sync_status, empresa_id, nombre, categoria_padre_id, especificacion_json, usuario_registro_id, estado, fecha_eliminacion) "
+              "VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', ?, 'Categoria Eliminada', NULL, NULL, NULL, 0, CURRENT_TIMESTAMP)",
+              [categoriaId, empresaId],
+            );
+          } catch (e) {
+            AppLogger.warn('[Sync] Error al crear categoria fantasma $categoriaId: $e');
+          }
         }
       }
     }
 
     final bodegaId = map['bodega_id']?.toString();
     if (bodegaId != null && bodegaId.isNotEmpty) {
-      final exists = await _db
-          .customSelect("SELECT 1 FROM bodegas WHERE id = '$bodegaId' LIMIT 1")
-          .getSingleOrNull();
-      if (exists == null) {
-        AppLogger.info('[Sync] Creando bodega fantasma para resolver FK: $bodegaId');
-        try {
-          await _db.customStatement(
-            "INSERT INTO bodegas (id, created_at, updated_at, sync_status, empresa_id, nombre, direccion, es_punto_venta, usuario_registro_id, estado, fecha_eliminacion) "
-            "VALUES ('$bodegaId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', 'Bodega Eliminada', '', 0, NULL, 0, CURRENT_TIMESTAMP)"
-          );
-        } catch (e) {
-          AppLogger.warn('[Sync] Error al crear bodega fantasma $bodegaId: $e');
+      if (!UuidValidator.isValidUUID(bodegaId)) {
+        AppLogger.warn('[Sync] Ghost: UUID inválido en bodega_id: $bodegaId');
+      } else {
+        final exists = await _db
+            .customSelect(
+              'SELECT 1 FROM bodegas WHERE id = ? LIMIT 1',
+              variables: [Variable.withString(bodegaId)],
+            )
+            .getSingleOrNull();
+        if (exists == null) {
+          AppLogger.info('[Sync] Creando bodega fantasma para resolver FK: $bodegaId');
+          try {
+            await _db.customStatement(
+              "INSERT INTO bodegas (id, created_at, updated_at, sync_status, empresa_id, nombre, direccion, es_punto_venta, usuario_registro_id, estado, fecha_eliminacion) "
+              "VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', ?, 'Bodega Eliminada', '', 0, NULL, 0, CURRENT_TIMESTAMP)",
+              [bodegaId, empresaId],
+            );
+          } catch (e) {
+            AppLogger.warn('[Sync] Error al crear bodega fantasma $bodegaId: $e');
+          }
         }
       }
     }
 
     final productoId = map['producto_id']?.toString();
     if (productoId != null && productoId.isNotEmpty) {
-      final exists = await _db
-          .customSelect("SELECT 1 FROM productos WHERE id = '$productoId' LIMIT 1")
-          .getSingleOrNull();
-      if (exists == null) {
-        AppLogger.info('[Sync] Creando producto fantasma para resolver FK: $productoId');
-        try {
-          await _db.customStatement(
-            "INSERT INTO productos (id, created_at, updated_at, sync_status, empresa_id, categoria_id, nombre, precio_base, ultimo_costo, ultimo_precio_venta, usuario_registro_id, estado, fecha_eliminacion) "
-            "VALUES ('$productoId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', NULL, 'Producto Eliminado', 0, 0, 0, NULL, 0, CURRENT_TIMESTAMP)"
-          );
-        } catch (e) {
-          AppLogger.warn('[Sync] Error al crear producto fantasma $productoId: $e');
+      if (!UuidValidator.isValidUUID(productoId)) {
+        AppLogger.warn('[Sync] Ghost: UUID inválido en producto_id: $productoId');
+      } else {
+        final exists = await _db
+            .customSelect(
+              'SELECT 1 FROM productos WHERE id = ? LIMIT 1',
+              variables: [Variable.withString(productoId)],
+            )
+            .getSingleOrNull();
+        if (exists == null) {
+          AppLogger.info('[Sync] Creando producto fantasma para resolver FK: $productoId');
+          try {
+            await _db.customStatement(
+              "INSERT INTO productos (id, created_at, updated_at, sync_status, empresa_id, categoria_id, nombre, precio_base, ultimo_costo, ultimo_precio_venta, usuario_registro_id, estado, fecha_eliminacion) "
+              "VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', ?, NULL, 'Producto Eliminado', 0, 0, 0, NULL, 0, CURRENT_TIMESTAMP)",
+              [productoId, empresaId],
+            );
+          } catch (e) {
+            AppLogger.warn('[Sync] Error al crear producto fantasma $productoId: $e');
+          }
         }
       }
     }
 
     final varianteId = map['producto_variante_id']?.toString();
     if (varianteId != null && varianteId.isNotEmpty) {
-      final exists = await _db
-          .customSelect("SELECT 1 FROM producto_variantes WHERE id = '$varianteId' LIMIT 1")
-          .getSingleOrNull();
-      if (exists == null) {
-        AppLogger.info('[Sync] Creando variante fantasma para resolver FK: $varianteId');
-        try {
-          final pIdForVar = productoId ?? '00000000-0000-0000-0000-000000000000';
-          if (pIdForVar == '00000000-0000-0000-0000-000000000000') {
-             await _db.customStatement(
+      if (!UuidValidator.isValidUUID(varianteId)) {
+        AppLogger.warn('[Sync] Ghost: UUID inválido en producto_variante_id: $varianteId');
+      } else {
+        final exists = await _db
+            .customSelect(
+              'SELECT 1 FROM producto_variantes WHERE id = ? LIMIT 1',
+              variables: [Variable.withString(varianteId)],
+            )
+            .getSingleOrNull();
+        if (exists == null) {
+          AppLogger.info('[Sync] Creando variante fantasma para resolver FK: $varianteId');
+          try {
+            const dummyId = '00000000-0000-0000-0000-000000000000';
+            final pIdForVar = (productoId != null && UuidValidator.isValidUUID(productoId))
+                ? productoId
+                : dummyId;
+            if (pIdForVar == dummyId) {
+              await _db.customStatement(
                 "INSERT OR IGNORE INTO productos (id, created_at, updated_at, sync_status, empresa_id, categoria_id, nombre, precio_base, ultimo_costo, ultimo_precio_venta, usuario_registro_id, estado, fecha_eliminacion) "
-                "VALUES ('$pIdForVar', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$empresaId', NULL, 'Producto Eliminado', 0, 0, 0, NULL, 0, CURRENT_TIMESTAMP)"
-             );
+                "VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', ?, NULL, 'Producto Eliminado', 0, 0, 0, NULL, 0, CURRENT_TIMESTAMP)",
+                [dummyId, empresaId],
+              );
+            }
+            await _db.customStatement(
+              "INSERT INTO producto_variantes (id, created_at, updated_at, sync_status, producto_id, sku, talla, precio_especifico, costo_especifico, usuario_registro_id, estado, fecha_eliminacion) "
+              "VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', ?, 'VARI-ELIMINADA', 'Variante Eliminada', 0, 0, NULL, 0, CURRENT_TIMESTAMP)",
+              [varianteId, pIdForVar],
+            );
+          } catch (e) {
+            AppLogger.warn('[Sync] Error al crear variante fantasma $varianteId: $e');
           }
-          await _db.customStatement(
-            "INSERT INTO producto_variantes (id, created_at, updated_at, sync_status, producto_id, sku, talla, precio_especifico, costo_especifico, usuario_registro_id, estado, fecha_eliminacion) "
-            "VALUES ('$varianteId', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'synced', '$pIdForVar', 'VARI-ELIMINADA', 'Variante Eliminada', 0, 0, NULL, 0, CURRENT_TIMESTAMP)"
-          );
-        } catch (e) {
-          AppLogger.warn('[Sync] Error al crear variante fantasma $varianteId: $e');
         }
       }
     }
@@ -986,6 +1175,8 @@ class SyncRepository {
     final id = json['id']?.toString();
     if (!UuidValidator.isValidUUID(id)) return false;
     for (final entry in json.entries) {
+      // referencia_venta_id es opcional y puede contener referencias externas
+      // no-UUID (ej: número de transacción bancaria), por eso se excluye.
       if (!entry.key.endsWith('_id') || entry.key == 'referencia_venta_id') {
         continue;
       }
@@ -1062,8 +1253,9 @@ class SyncRepository {
     'rol_id': r.rolId,
     'nombre_completo': r.nombreCompleto,
     'correo': r.correo,
-    'password_hash': r.passwordHash,
+    // password_hash no se sincroniza: Supabase Auth maneja la autenticación principal
     'pin_offline': r.pinOffline,
+    'bodega_default_id': r.bodegaDefaultId,
     'usuario_registro_id': r.usuarioRegistroId,
     'estado': r.estado,
     'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
@@ -1073,6 +1265,7 @@ class SyncRepository {
     'empresa_id': r.empresaId,
     'nombre': r.nombre,
     'direccion': r.direccion,
+    'descripcion': r.descripcion,
     'es_punto_venta': r.esPuntoVenta,
     'usuario_registro_id': r.usuarioRegistroId,
     'estado': r.estado,
@@ -1210,14 +1403,14 @@ class SyncRepository {
     'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
   };
   Map<String, dynamic> _movimientoToJson(Movimiento r) {
-    final tipoMovimiento = _tipoMovimientoToRemote(r.tipoMovimiento);
-
     return {
       ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
       'empresa_id': r.empresaId,
       'bodega_origen_id': r.bodegaOrigenId,
       'bodega_destino_id': r.bodegaDestinoId,
-      'tipo_movimiento': tipoMovimiento,
+      'tipo_movimiento': _tipoMovimientoToRemote(r.tipoMovimiento),
+      // Preserva el valor local exacto para recuperarlo en el pull sin pérdida
+      'tipo_movimiento_local': r.tipoMovimiento,
       'estado_movimiento': r.estadoMovimiento,
       'descripcion': r.descripcion,
       'usuario_registro_id': r.usuarioRegistroId,
@@ -1230,16 +1423,26 @@ class SyncRepository {
     final normalized = value.trim().toLowerCase();
     return switch (normalized) {
       'entrada' => 'compra',
-      'salida' => 'ajuste',
+      'salida'  => 'ajuste',
       'traslado' => 'traslado',
-      'ajuste' => 'ajuste',
-      'compra' => 'compra',
-      _ => normalized,
+      'ajuste'  => 'ajuste',
+      'compra'  => 'compra',
+      _ => () {
+        // Valor no mapeado — puede fallar en Supabase si tiene CHECK constraint
+        AppLogger.warn(
+          '[Sync] tipo_movimiento desconocido en push: "$normalized". '
+          'Actualizar _tipoMovimientoToRemote si el servidor acepta este valor.',
+        );
+        return normalized;
+      }(),
     };
   }
 
-  String _tipoMovimientoFromRemote(String? value) {
-    final normalized = value?.trim().toLowerCase() ?? '';
+  /// Prioriza el campo [localValue] (tipo_movimiento_local) guardado en Supabase
+  /// para recuperar el valor original sin pérdida al hacer pull.
+  String _tipoMovimientoFromRemote(String? remoteValue, {String? localValue}) {
+    if (localValue != null && localValue.isNotEmpty) return localValue;
+    final normalized = remoteValue?.trim().toLowerCase() ?? '';
     return switch (normalized) {
       'compra' => 'entrada',
       _ => normalized,
@@ -1275,7 +1478,7 @@ class SyncRepository {
       ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
       'empresa_id': r.empresaId,
       'cliente_id': r.clienteId,
-      'usuario_id': r.usuarioId,
+      'usuario_registro_id': r.usuarioId,
       'caja_sesion_id': r.cajaSesionId,
       'tipo_venta': r.tipoVenta,
       'estado_pago': r.estadoPago,
@@ -1311,11 +1514,12 @@ class SyncRepository {
     'venta_id': r.ventaId,
     'caja_sesion_id': r.cajaSesionId,
     'monto_pagado': r.montoPagado,
-    'metodo_pago': r.metodoPago,
+    'metodo_de_pago': r.metodoPago,
     'referencia': r.referencia,
     'usuario_registro_id': r.usuarioRegistroId,
     'estado': r.estado,
     'fecha_eliminacion': r.fechaEliminacion?.toIso8601String(),
+    'fecha_registro_pago': r.fechaRegistro.toIso8601String(),
   };
 
   EmpresasCompanion _empresaFromJson(Map<String, dynamic> j) =>
@@ -1372,7 +1576,7 @@ class SyncRepository {
         passwordHash: Value(_text(j['password_hash'])),
         pinOffline: Value(_text(j['pin_offline'])),
         usuarioRegistroId: const Value(null),
-        bodegaDefaultId: const Value(null),
+        bodegaDefaultId: Value(_text(j['bodega_default_id'])),
         estado: Value(_bool(j['estado'])),
         createdAt: Value(_date(j['fecha_registro'])),
         updatedAt: Value(_date(j['ultima_actualizacion'])),
@@ -1573,7 +1777,10 @@ class SyncRepository {
       MovimientosCompanion.insert(
         id: _text(j['id']) ?? '',
         empresaId: _text(j['empresa_id']) ?? '',
-        tipoMovimiento: _tipoMovimientoFromRemote(_text(j['tipo_movimiento'])),
+        tipoMovimiento: _tipoMovimientoFromRemote(
+          _text(j['tipo_movimiento']),
+          localValue: _text(j['tipo_movimiento_local']),
+        ),
         estadoMovimiento: _text(j['estado_movimiento']) ?? 'aprobado',
         bodegaOrigenId: Value(_text(j['bodega_origen_id'])),
         bodegaDestinoId: Value(_text(j['bodega_destino_id'])),
@@ -1667,4 +1874,24 @@ class SyncRepository {
         ),
         syncStatus: const Value('synced'),
       );
+
+  /// Cuenta el total de registros pendientes o con error de sync en todas las tablas.
+  Future<int> countTotalPending() async {
+    const tables = [
+      'empresas', 'roles', 'accesos_rol', 'usuarios', 'bodegas',
+      'bodegas_usuarios', 'cajas', 'caja_sesiones', 'caja_movimientos_extras',
+      'categorias', 'productos', 'producto_variantes', 'inventarios',
+      'clientes', 'movimientos', 'detalle_movimientos',
+      'ventas', 'detalle_ventas', 'pagos_ventas',
+    ];
+    int total = 0;
+    for (final table in tables) {
+      final res = await _db.customSelect(
+        "SELECT COUNT(*) as cnt FROM $table "
+        "WHERE sync_status IN ('pending_insert','pending_update','sync_error')",
+      ).getSingleOrNull();
+      total += res?.read<int>('cnt') ?? 0;
+    }
+    return total;
+  }
 }

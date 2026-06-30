@@ -442,11 +442,11 @@ await _push(
 
 ## Checklist de cierre del Sprint 2
 
-- [ ] 2.1 — Mapeo `tipo_movimiento` corregido y reversible (opción A o B)
-- [ ] 2.2 — `_markSyncedWithTimestamps` implementado y usando timestamps del servidor
-- [ ] 2.3 — `_shouldUpdateLocal` trata `sync_error` con comparación de timestamps
-- [ ] 2.4 — `descripcion` de bodegas incluido en el push
-- [ ] 2.5 — `map.remove('fecha_registro')` eliminado de los tres métodos afectados
-- [ ] 2.6 — Doble consulta de variantes e inventarios unificada a snapshot único
+- [x] 2.1 — Mapeo `tipo_movimiento` Opción B implementado: campo `tipo_movimiento_local` en push, priorizado en fromRemote
+- [x] 2.2 — `_markSyncedWithTimestamps` implementado y usando timestamps del servidor
+- [x] 2.3 — `_shouldUpdateLocal` trata `sync_error` con comparación de timestamps
+- [x] 2.4 — `descripcion` de bodegas incluido en el push (migración 20260627000001 pendiente de aplicar)
+- [x] 2.5 — `map.remove('fecha_registro')` se mantiene: venta_producto/caja_sesion/caja_movimiento_extra NO tienen esa columna en Supabase
+- [x] 2.6 — Doble consulta de variantes e inventarios unificada a snapshot único
 - [ ] Prueba de regresión completa (crear, editar, eliminar, sync en modo offline/online)
 - [ ] Verificar que no hay registros en `sync_error` en la base de prueba después de un ciclo completo

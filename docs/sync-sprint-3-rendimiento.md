@@ -481,13 +481,13 @@ Future<List<Producto>> searchProductosListExpanded(
 
 ## Checklist de cierre del Sprint 3
 
-- [ ] 3.1 — `SyncCursorStore` implementado con paginación y pull incremental
-- [ ] 3.1 — Pull completo solo en primer sync o reset manual
-- [ ] 3.1 — Todas las 19 tablas en `pullRemoteChanges` usan el nuevo `_pull` con cursor
-- [ ] 3.2 — `_backoffDelay()` implementado con jitter y máximo de 5 minutos
-- [ ] 3.2 — Reconexión aplica pequeño jitter aleatorio en lugar de sync inmediato
-- [ ] 3.2 — `SyncState` expone `retryCount` para la UI
-- [ ] 3.3 — `searchCatalogItems` y `buscarProductosPorSimilitud` usan SQL pre-filtrado
-- [ ] 3.3 — Nuevo método `searchProductosListExpanded` en `InventoryDao`
+- [x] 3.1 — `SyncCursorStore` implementado con paginación y pull incremental
+- [x] 3.1 — Pull completo solo en primer sync o reset manual
+- [x] 3.1 — Todas las 19 tablas en `pullRemoteChanges` usan el nuevo `_pull` con cursor
+- [x] 3.2 — `_backoffDelay()` implementado con jitter y máximo de 5 minutos
+- [x] 3.2 — Reconexión aplica pequeño jitter aleatorio en lugar de sync inmediato
+- [x] 3.2 — `SyncState` expone `retryCount` para la UI
+- [x] 3.3 — `searchCatalogItems` y `buscarProductosPorSimilitud` usan SQL pre-filtrado
+- [x] 3.3 — Nuevo método `searchProductosListExpanded` en `InventoryDao`
 - [ ] Benchmark de búsqueda antes y después con 3.000 productos
 - [ ] Prueba de regresión de pull incremental: verificar que datos nuevos y editados llegan correctamente

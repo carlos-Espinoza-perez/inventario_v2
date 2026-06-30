@@ -529,14 +529,14 @@ String _tipoMovimientoToRemote(String value) {
 
 ## Checklist de cierre del Sprint 4
 
-- [ ] 4.1 — Auditoría RLS ejecutada y documentada en `docs/supabase_rls_audit.md`
-- [ ] 4.1 — Políticas faltantes o incorrectas corregidas con migraciones
-- [ ] 4.1 — Test cross-tenant: usuario Empresa A no puede leer datos de Empresa B
-- [ ] 4.2 — Decisión documentada sobre `password_hash` y `pin_offline` (sincronizar o no)
-- [ ] 4.2 — Si se mantiene `pin_offline`, verificar que esté hasheado con bcrypt
-- [ ] 4.3 — `SyncState` tiene `retryCount` y `pendingCount`
-- [ ] 4.3 — `SyncStatusBanner` implementado y visible en el layout principal
-- [ ] 4.3 — Banner desaparece cuando sync está OK, aparece con el estado correcto
-- [ ] 4.4 — `referencia_venta_id` documentado o validación corregida
-- [ ] 4.5 — `AppLogger.warn` en caso default de `_tipoMovimientoToRemote`
+- [x] 4.1 — Auditoría RLS ejecutada y documentada en `docs/supabase_rls_audit.md`
+- [x] 4.1 — Todas las tablas tienen RLS con policy ALL — no se requieren migraciones adicionales
+- [ ] 4.1 — Test cross-tenant: usuario Empresa A no puede leer datos de Empresa B (validación manual)
+- [x] 4.2 — `password_hash` eliminado del push; `pin_offline` se mantiene para operación offline
+- [ ] 4.2 — Verificar que `pin_offline` esté hasheado con bcrypt (revisión pendiente del flujo de auth)
+- [x] 4.3 — `SyncState` tiene `retryCount` y `pendingCount`
+- [x] 4.3 — `SyncStatusBanner` implementado y visible en `MainLayout`
+- [ ] 4.3 — Prueba visual: banner aparece/desaparece correctamente en dispositivo
+- [x] 4.4 — `referencia_venta_id` documentado con comentario en `_isValidPayload`
+- [x] 4.5 — `AppLogger.warn` en caso default de `_tipoMovimientoToRemote`
 - [ ] Review de seguridad final por otro miembro del equipo antes de merge
