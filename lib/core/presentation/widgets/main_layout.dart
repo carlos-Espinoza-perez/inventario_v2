@@ -3,23 +3,59 @@ import 'package:flutter_riverpod/flutter_riverpod.dart'; // 1. Importar Riverpod
 import 'package:go_router/go_router.dart';
 import 'package:inventario_v2/core/providers/auto_sync_provider.dart';
 import 'package:inventario_v2/core/presentation/widgets/sync_status_banner.dart';
+import 'package:inventario_v2/core/presentation/widgets/update_dialog.dart';
+import 'package:inventario_v2/core/providers/app_update_provider.dart';
+import 'package:inventario_v2/core/services/app_update_service.dart';
 import 'package:inventario_v2/features/dashboard/presentation/widgets/bottom_app_bar_dashboard.dart';
 import 'package:inventario_v2/features/dashboard/presentation/widgets/top_app_bar_dashboard.dart';
 
-class MainLayout extends ConsumerWidget {
+class MainLayout extends ConsumerStatefulWidget {
   final Widget child;
   final String location;
 
   const MainLayout({super.key, required this.child, required this.location});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MainLayout> createState() => _MainLayoutState();
+}
+
+class _MainLayoutState extends ConsumerState<MainLayout> {
+  bool _dialogShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(appUpdateProvider.notifier).checkForUpdate();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final syncState = ref.watch(autoSyncProvider);
     final bool isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
 
+    ref.listen<AppUpdateState>(appUpdateProvider, (_, next) {
+      if (!mounted || _dialogShown) return;
+      if (next.status != UpdateStatus.updateAvailable) return;
+
+      _dialogShown = true;
+      final isRequired = next.updateType == UpdateType.requiredUpdate;
+
+      showDialog<void>(
+        context: context,
+        barrierDismissible: !isRequired,
+        builder: (_) => const UpdateDialog(),
+      ).then((_) {
+        if (mounted && next.updateType == UpdateType.optionalUpdate) {
+          _dialogShown = false;
+        }
+      });
+    });
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      appBar: TopAppBarDashboard(location: location),
+      appBar: TopAppBarDashboard(location: widget.location),
 
       body: SafeArea(
         child: Column(
@@ -28,7 +64,7 @@ class MainLayout extends ConsumerWidget {
             Expanded(
               child: Stack(
                 children: [
-                  child,
+                  widget.child,
                   Positioned(
                     top: 16,
                     right: 16,
@@ -45,7 +81,7 @@ class MainLayout extends ConsumerWidget {
           ? null
           : const BottomAppBarDashboard(),
 
-      floatingActionButton: isKeyboardOpen || location.startsWith('/assistant')
+      floatingActionButton: isKeyboardOpen || widget.location.startsWith('/assistant')
           ? null
           : FloatingActionButton(
               onPressed: () {
@@ -58,7 +94,7 @@ class MainLayout extends ConsumerWidget {
               child: const Icon(Icons.home_rounded, color: Colors.black87),
             ),
 
-      floatingActionButtonLocation: location.startsWith('/assistant')
+      floatingActionButtonLocation: widget.location.startsWith('/assistant')
           ? FloatingActionButtonLocation.endFloat
           : FloatingActionButtonLocation.centerDocked,
     );

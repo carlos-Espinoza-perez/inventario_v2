@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/presentation/widgets/update_dialog.dart';
-import '../../../../core/providers/app_update_provider.dart';
-import '../../../../core/services/app_update_service.dart';
 import '../providers/auth_provider.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
@@ -14,39 +11,16 @@ class SplashScreen extends ConsumerStatefulWidget {
 }
 
 class _SplashScreenState extends ConsumerState<SplashScreen> {
-  bool _dialogShown = false;
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(authControllerProvider);
-      // Verificación de actualización en background — no bloquea el inicio
-      ref.read(appUpdateProvider.notifier).checkForUpdate();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<AppUpdateState>(appUpdateProvider, (_, next) {
-      if (!mounted || _dialogShown) return;
-      if (next.status != UpdateStatus.updateAvailable) return;
-
-      _dialogShown = true;
-      final isRequired = next.updateType == UpdateType.requiredUpdate;
-
-      showDialog<void>(
-        context: context,
-        barrierDismissible: !isRequired,
-        builder: (_) => const UpdateDialog(),
-      ).then((_) {
-        // Si el usuario cerró un diálogo opcional sin instalar, reiniciamos
-        // el flag para que no vuelva a aparecer automáticamente en este ciclo.
-        if (mounted && next.updateType == UpdateType.optionalUpdate) {
-          _dialogShown = false;
-        }
-      });
-    });
 
     return Scaffold(
       backgroundColor: Colors.white,

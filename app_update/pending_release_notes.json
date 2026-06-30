@@ -1,7 +1,5 @@
 {
   "releaseNotes": [
-    "Persistencia de productos al salir y volver de la vista de entrada.",
-    "Se agregó un botón para limpiar el borrador de entrada.",
-    "Botón rápido para agregar nuevos productos en la vista de entrada."
+    "Corrección: el aviso de nueva versión ahora aparece correctamente al abrir la app."
   ]
 }
