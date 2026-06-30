@@ -4,10 +4,10 @@
   "minRequiredVersionCode": 1,
   "apkUrl": "https://github.com/carlos-Espinoza-perez/inventario_v2/releases/download/v1.0.3/inventario-v1.0.3.apk",
   "releaseNotes": [
-    "Limpieza correcta del buscador en POS despues de escanear o buscar.",
-    "Calculo de total de costo y ganancias en Entradas.",
-    "Flujo rapido para costo/precio al agregar Nuevo producto desde Entradas."
+    "Persistencia de productos al salir y volver de la vista de entrada.",
+    "Se agregó un botón para limpiar el borrador de entrada.",
+    "Botón rápido para agregar nuevos productos en la vista de entrada."
   ],
   "forceUpdate": false,
-  "publishedAt": "2026-06-02T20:02:00Z"
+  "publishedAt": "2026-06-30T03:15:47Z"
 }
