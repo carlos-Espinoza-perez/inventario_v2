@@ -791,7 +791,6 @@ class SyncRepository {
       final lastPullAt = forceFull
           ? null
           : await SyncCursorStore.getLastPullAt(localTableName);
-      final pullStartTime = DateTime.now().toUtc();
 
       if (lastPullAt != null) {
         AppLogger.info(
@@ -806,26 +805,37 @@ class SyncRepository {
       int totalSynced = 0;
       int failedRows = 0;
       bool hasMore = true;
+      // Cursor en dominio del reloj del SERVIDOR (server_updated_at lo fija un
+      // trigger). Usar el máximo visto evita el desfase del reloj local: filas
+      // subidas por un dispositivo con reloj atrasado ya no quedan invisibles.
+      DateTime? maxServerTs;
 
       while (hasMore) {
         var query = _supabase
             .from(remoteTableName)
             .select()
-            .order('ultima_actualizacion', ascending: true)
+            .order('server_updated_at', ascending: true)
             .range(offset, offset + pageSize - 1);
 
         if (lastPullAt != null) {
           query = _supabase
               .from(remoteTableName)
               .select()
-              .gte('ultima_actualizacion', lastPullAt.toIso8601String())
-              .order('ultima_actualizacion', ascending: true)
+              .gte('server_updated_at', lastPullAt.toIso8601String())
+              .order('server_updated_at', ascending: true)
               .range(offset, offset + pageSize - 1);
         }
 
         final page = await query;
 
         for (final row in page) {
+          final serverTs = DateTime.tryParse(
+            row['server_updated_at']?.toString() ?? '',
+          );
+          if (serverTs != null &&
+              (maxServerTs == null || serverTs.isAfter(maxServerTs))) {
+            maxServerTs = serverTs;
+          }
           try {
             final map = Map<String, dynamic>.from(row);
             if (await _shouldUpdateLocal(localTableName, map)) {
@@ -864,9 +874,11 @@ class SyncRepository {
 
       // Solo avanzar el cursor si no hubo filas fallidas individuales.
       // Si hubo fallos, el próximo pull las reintentará desde lastPullAt.
-      if (failedRows == 0) {
-        await SyncCursorStore.setLastPullAt(localTableName, pullStartTime);
-      } else {
+      // El cursor avanza al máximo server_updated_at recibido (hora del
+      // servidor); si no llegaron filas, se mantiene donde estaba.
+      if (failedRows == 0 && maxServerTs != null) {
+        await SyncCursorStore.setLastPullAt(localTableName, maxServerTs);
+      } else if (failedRows > 0) {
         AppLogger.warn(
           '[Sync][Pull] $failedRows filas fallaron en $localTableName. Cursor NO actualizado para reintentar.',
         );
@@ -887,9 +899,11 @@ class SyncRepository {
   Future<void> _markSynced(String tableName, List<String> ids) async {
     if (ids.isEmpty) return;
     final questions = List.filled(ids.length, '?').join(',');
+    // Timestamp generado en Dart: CURRENT_TIMESTAMP de SQLite devuelve UTC sin
+    // zona y Dart lo parsea como hora local, desfasando el LWW.
     await _db.customStatement(
-      "UPDATE $tableName SET sync_status = 'synced', updated_at = CURRENT_TIMESTAMP WHERE id IN ($questions)",
-      ids,
+      "UPDATE $tableName SET sync_status = 'synced', updated_at = ? WHERE id IN ($questions)",
+      [DateTime.now().toIso8601String(), ...ids],
     );
   }
 
@@ -924,8 +938,10 @@ class SyncRepository {
   ) async {
     if (ids.isEmpty) return;
     final questions = List.filled(ids.length, '?').join(',');
+    // No se toca updated_at: la fila no cambió, solo falló su subida. Preservar
+    // el timestamp de la edición real mantiene coherente la resolución LWW.
     await _db.customStatement(
-      "UPDATE $tableName SET sync_status = 'sync_error', updated_at = CURRENT_TIMESTAMP WHERE id IN ($questions)",
+      "UPDATE $tableName SET sync_status = 'sync_error' WHERE id IN ($questions)",
       ids,
     );
   }

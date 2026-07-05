@@ -73,6 +73,19 @@ class AutoSync extends _$AutoSync {
   static const Duration _baseDelay = Duration(seconds: 2);
   static const Duration _maxDelay = Duration(minutes: 5);
 
+  // Cooldown para pushes automáticos disparados por el watcher de tablas.
+  // Sin esto, una fila que falla permanentemente (ej: rechazo de RLS) genera
+  // un ciclo infinito cada 2s: push falla → _markSyncError actualiza la fila
+  // → el watcher detecta el cambio → nuevo push.
+  DateTime? _lastAutoPushAt;
+  int _noProgressStreak = 0;
+
+  Duration _autoPushCooldown() {
+    if (_noProgressStreak == 0) return Duration.zero;
+    final exp = _baseDelay * (1 << _noProgressStreak.clamp(0, 8));
+    return exp > _maxDelay ? _maxDelay : exp;
+  }
+
   /// Calcula delay exponencial con jitter para evitar thundering herd.
   Duration _backoffDelay() {
     if (_syncRetryCount == 0) return Duration.zero;
@@ -241,6 +254,7 @@ class AutoSync extends _$AutoSync {
 
     if (hasConnection && wasOffline) {
       _syncRetryCount = 0;
+      _noProgressStreak = 0;
       // Jitter para desincronizar múltiples dispositivos que reconectan a la vez
       final jitter = Duration(milliseconds: DateTime.now().millisecondsSinceEpoch % 3000);
       _retryTimer?.cancel();
@@ -264,7 +278,17 @@ class AutoSync extends _$AutoSync {
   Future<void> triggerSyncNow() async {
     // Check sincrónico primero — cierra la ventana de race condition
     if (_isSyncing) return;
+
+    final cooldown = _autoPushCooldown();
+    if (_lastAutoPushAt != null &&
+        DateTime.now().difference(_lastAutoPushAt!) < cooldown) {
+      AppLogger.debug(
+        '[AutoSync] Push omitido: cooldown activo tras $_noProgressStreak intentos sin progreso.',
+      );
+      return;
+    }
     _isSyncing = true;
+    _lastAutoPushAt = DateTime.now();
 
     final currentState = state.value;
     if (currentState == null) {
@@ -293,6 +317,13 @@ class AutoSync extends _$AutoSync {
       final repo = await ref.read(syncRepositoryProvider.future);
       await repo.pushCambiosLocales();
       final pendingCount = await repo.countTotalPending();
+      // Progreso = la cola bajó o quedó vacía. Si quedan las mismas filas
+      // atascadas (sync_error persistente), aumentar el cooldown exponencial.
+      if (pendingCount == 0 || pendingCount < currentState.pendingCount) {
+        _noProgressStreak = 0;
+      } else {
+        _noProgressStreak = (_noProgressStreak + 1).clamp(0, 10);
+      }
       AppLogger.info('[AutoSync] === Push Inmediato Finalizado con Éxito ===');
       _isSyncing = false;
       state = AsyncData(
