@@ -12,8 +12,9 @@ class AppConstants {
       dotenv.env['SUPABASE_ANON_KEY'] ?? _throwMissingEnvVar('SUPABASE_ANON_KEY');
 
   // OpenAI — Secretario IA
-  static String get openAiApiKey =>
-      dotenv.env['OPENAI_API_KEY'] ?? _throwMissingEnvVar('OPENAI_API_KEY');
+  // La API key ya no viaja en la app: las llamadas pasan por la Edge Function
+  // openai-proxy, que guarda la key como secreto del servidor.
+  static String get openAiProxyUrl => '$supabaseUrl/functions/v1/openai-proxy';
 
   static String get openAiModel =>
       dotenv.env['OPENAI_MODEL'] ?? 'gpt-4o-mini';

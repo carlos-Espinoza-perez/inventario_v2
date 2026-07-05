@@ -42,8 +42,11 @@ jobs:
           cat android/key.properties
 
       - name: Crear .env
+        # SOLO valores publicables: el .env se empaqueta como asset dentro del
+        # APK. Nunca incluir service_role ni la key de OpenAI (viven como
+        # secretos del servidor / Edge Functions).
         run: |
-          printf "SUPABASE_URL=${{ secrets.SUPABASE_URL }}\nSUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}\nSUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}\nOPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}\nOPENAI_MODEL=${{ secrets.OPENAI_MODEL }}\nOPENAI_TEMPERATURE=${{ secrets.OPENAI_TEMPERATURE }}\nOPENAI_MAX_TOKENS=${{ secrets.OPENAI_MAX_TOKENS }}\nASSISTANT_MAX_REACT_ITERATIONS=${{ secrets.ASSISTANT_MAX_REACT_ITERATIONS }}\nASSISTANT_HISTORY_TURNS=${{ secrets.ASSISTANT_HISTORY_TURNS }}\n" > .env
+          printf "SUPABASE_URL=${{ secrets.SUPABASE_URL }}\nSUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}\nOPENAI_MODEL=${{ secrets.OPENAI_MODEL }}\nOPENAI_TEMPERATURE=${{ secrets.OPENAI_TEMPERATURE }}\nOPENAI_MAX_TOKENS=${{ secrets.OPENAI_MAX_TOKENS }}\nASSISTANT_MAX_REACT_ITERATIONS=${{ secrets.ASSISTANT_MAX_REACT_ITERATIONS }}\nASSISTANT_HISTORY_TURNS=${{ secrets.ASSISTANT_HISTORY_TURNS }}\n" > .env
 
       - name: Instalar dependencias Flutter
         run: flutter pub get

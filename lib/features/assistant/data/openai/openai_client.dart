@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:inventario_v2/core/constants/app_constants.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../logging/assistant_chat_logger.dart';
 import 'openai_models.dart';
 
@@ -11,15 +12,23 @@ abstract class LLMClient {
 }
 
 class OpenAIClient implements LLMClient {
-  static const _baseUrl = 'https://api.openai.com/v1/chat/completions';
+  // Las llamadas van a la Edge Function openai-proxy: la key de OpenAI vive
+  // como secreto del servidor y la función exige un JWT válido de la app.
+  static String get _baseUrl => AppConstants.openAiProxyUrl;
   final AssistantChatLogger? _logger;
 
   OpenAIClient({AssistantChatLogger? logger}) : _logger = logger;
 
-  Map<String, String> get _headers => {
-        'Authorization': 'Bearer ${AppConstants.openAiApiKey}',
-        'Content-Type': 'application/json',
-      };
+  Map<String, String> get _headers {
+    final accessToken =
+        Supabase.instance.client.auth.currentSession?.accessToken ??
+            AppConstants.supabaseAnonKey;
+    return {
+      'Authorization': 'Bearer $accessToken',
+      'apikey': AppConstants.supabaseAnonKey,
+      'Content-Type': 'application/json',
+    };
+  }
 
   @override
   Stream<OpenAIStreamChunk> streamChat(OpenAIRequest request) async* {
