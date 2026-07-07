@@ -121,7 +121,10 @@ class SecLlmRequest {
         'messages': messages.map((m) => m.toJson()).toList(),
         if (tools.isNotEmpty) 'tools': tools.map((t) => t.toJson()).toList(),
         'temperature': temperature,
-        'max_tokens': maxTokens,
+        if (model.startsWith('gpt-5.5') || model.startsWith('o'))
+          'max_completion_tokens': maxTokens
+        else
+          'max_tokens': maxTokens,
         'stream': true,
         'stream_options': {'include_usage': true},
       };

@@ -19,7 +19,7 @@ class VoiceHud extends ConsumerWidget {
     final (icon, label, color) = switch (voice.phase) {
       VoicePhase.listening => (
           Icons.mic,
-          'Escuchando…',
+          'Escuchando… tocá el círculo para enviar ya',
           scheme.primary,
         ),
       VoicePhase.thinking => (

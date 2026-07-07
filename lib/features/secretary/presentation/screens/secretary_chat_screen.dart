@@ -11,6 +11,7 @@ import '../../voice/voice_session_controller.dart';
 import '../providers/secretary_chat_provider.dart';
 import '../widgets/dictation_view.dart';
 import '../widgets/draft_table_card.dart';
+import '../widgets/markdown_lite.dart';
 import '../widgets/voice_hud.dart';
 
 class SecretaryChatScreen extends ConsumerStatefulWidget {
@@ -305,10 +306,19 @@ class _MessageBubble extends StatelessWidget {
           color: isUser ? scheme.primary : scheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(14),
         ),
-        child: SelectableText(
-          content,
-          style: TextStyle(color: isUser ? scheme.onPrimary : scheme.onSurface),
-        ),
+        // Los mensajes del asistente llegan con markdown básico
+        // (**negrita**, viñetas): se renderiza en vez de mostrar los `*`.
+        child: isUser
+            ? SelectableText(
+                content,
+                style: TextStyle(color: scheme.onPrimary),
+              )
+            : SelectableText.rich(
+                markdownLite(
+                  content,
+                  style: TextStyle(color: scheme.onSurface),
+                ),
+              ),
       ),
     );
   }

@@ -1,9 +1,27 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/services/app_logger.dart';
 
 import '../presentation/providers/secretary_chat_provider.dart';
 import 'secretary_transcriber.dart';
 import 'secretary_tts.dart';
+
+/// Pausa de voz configurada en Preferencias (extraJson.voicePauseMs),
+/// acotada entre 1.5 y 6 s. Compartida por el controlador y la pantalla
+/// de preferencias.
+int voicePauseMsFromPrefs(AiPreference prefs) {
+  try {
+    final extra = prefs.extraJson != null
+        ? jsonDecode(prefs.extraJson!) as Map<String, dynamic>
+        : const <String, dynamic>{};
+    final ms = (extra['voicePauseMs'] as num?)?.toInt() ?? 3000;
+    return ms.clamp(1500, 6000);
+  } catch (_) {
+    return 3000;
+  }
+}
 
 enum VoicePhase { idle, listening, thinking, speaking }
 
@@ -59,6 +77,11 @@ class VoiceSessionController extends StateNotifier<VoiceSessionState> {
   final SecretaryTranscriber _transcriber = SecretaryTranscriber();
   final SecretaryTts _tts = SecretaryTts();
 
+  /// Pausa de silencio que cierra la frase y envía. Configurable en
+  /// Preferencias (extraJson.voicePauseMs); default 3 s para poder pensar
+  /// a mitad de frase sin que se dispare el envío.
+  Duration _pauseFor = const Duration(milliseconds: 3000);
+
   /// Identifica la sesión de voz vigente: al cerrar/reiniciar se invalida
   /// para que los loops pendientes no sigan corriendo.
   int _generation = 0;
@@ -106,6 +129,7 @@ class VoiceSessionController extends StateNotifier<VoiceSessionState> {
         return;
       }
       await _tts.setRate(prefs.ttsRate);
+      _pauseFor = Duration(milliseconds: voicePauseMsFromPrefs(prefs));
     } catch (_) {
       // Sin sesión activa: velocidad por defecto.
     }
@@ -152,7 +176,7 @@ class VoiceSessionController extends StateNotifier<VoiceSessionState> {
         clearError: true,
       );
 
-      final text = await _transcriber.listen();
+      final text = await _transcriber.listen(pauseFor: _pauseFor);
       if (!mounted || gen != _generation || !state.active) return;
 
       if (text == null || text.trim().isEmpty) {

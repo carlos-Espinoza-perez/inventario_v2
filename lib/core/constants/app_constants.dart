@@ -17,7 +17,7 @@ class AppConstants {
   static String get openAiProxyUrl => '$supabaseUrl/functions/v1/openai-proxy';
 
   static String get openAiModel =>
-      dotenv.env['OPENAI_MODEL'] ?? 'gpt-4o-mini';
+      dotenv.env['OPENAI_MODEL'] ?? 'gpt-5.5';
 
   static double get openAiTemperature =>
       double.tryParse(dotenv.env['OPENAI_TEMPERATURE'] ?? '') ?? 0.2;

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +8,8 @@ import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart';
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
+
+import '../../voice/voice_session_controller.dart' show voicePauseMsFromPrefs;
 
 /// Preferencias del secretario + curación de memorias. Los cambios se
 /// guardan al instante y sincronizan (ai_preferences / ai_memories).
@@ -65,6 +69,22 @@ class _SecretaryPrefsScreenState extends ConsumerState<SecretaryPrefsScreen>
       usuarioId: prefs.usuarioId,
     );
     if (mounted && updated != null) setState(() => _prefs = updated);
+  }
+
+  /// Guarda una clave dentro de extraJson preservando las demás.
+  Future<void> _saveExtra(String key, Object value) async {
+    final prefs = _prefs;
+    if (prefs == null) return;
+    Map<String, dynamic> extra;
+    try {
+      extra = prefs.extraJson != null
+          ? Map<String, dynamic>.from(jsonDecode(prefs.extraJson!))
+          : <String, dynamic>{};
+    } catch (_) {
+      extra = <String, dynamic>{};
+    }
+    extra[key] = value;
+    await _save(AiPreferencesCompanion(extraJson: Value(jsonEncode(extra))));
   }
 
   @override
@@ -162,6 +182,30 @@ class _SecretaryPrefsScreenState extends ConsumerState<SecretaryPrefsScreen>
                     label: '${prefs.ttsRate.toStringAsFixed(2)}x',
                     onChanged: (v) =>
                         _save(AiPreferencesCompanion(ttsRate: Value(v))),
+                  ),
+                ),
+                ListTile(
+                  title: const Text('Pausa antes de enviar (hablando)'),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Cuánto silencio espera el micrófono antes de mandar '
+                        'lo dicho. Subilo si te corta cuando pensás.',
+                      ),
+                      Slider(
+                        value: voicePauseMsFromPrefs(prefs) / 1000,
+                        min: 1.5,
+                        max: 6.0,
+                        divisions: 9,
+                        label:
+                            '${(voicePauseMsFromPrefs(prefs) / 1000).toStringAsFixed(1)} s',
+                        onChanged: (v) => _saveExtra(
+                          'voicePauseMs',
+                          (v * 1000).round(),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const Divider(),

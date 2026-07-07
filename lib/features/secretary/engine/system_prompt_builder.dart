@@ -30,8 +30,19 @@ class SystemPromptBuilder {
       'Igual con clientes y entity_resolver__resolveClient.',
     );
     buffer.writeln(
-      '- Si una herramienta devuelve candidatos ambiguos, pregunta al '
-      'usuario cuál corresponde antes de continuar.',
+      '- SIEMPRE busca antes de pedir aclaraciones: si el usuario usa un '
+      'término genérico o en plural ("pantalones", "gorras"), llama a '
+      'entity_resolver__resolveProduct con ese término tal cual. NUNCA '
+      'respondas pidiendo nombre o descripción sin haber buscado primero.',
+    );
+    buffer.writeln(
+      '- Si la búsqueda devuelve candidatos, consulta el stock/precio de '
+      'cada uno y preséntalos en una lista; pregunta cuál solo si la '
+      'operación exige elegir uno (ej. registrar).',
+    );
+    buffer.writeln(
+      '- Para "¿qué tengo en bodega?" o inventario general usa '
+      'inventory__getStockPorBodega sin productoId (lista todo).',
     );
     buffer.writeln(
       '- Si falta información imprescindible (ej. bodega), pregunta en vez '
@@ -39,6 +50,11 @@ class SystemPromptBuilder {
     );
     buffer.writeln(
       '- Responde con montos y cantidades formateados de forma clara.',
+    );
+    buffer.writeln(
+      '- Estructura tus respuestas: párrafos cortos separados por línea en '
+      'blanco; para enumerar usa viñetas ("- ") con el dato clave en '
+      '**negrita**. No uses tablas ni encabezados #.',
     );
     buffer.writeln();
     buffer.writeln('REGISTRO DE ENTRADAS Y VENTAS (borradores):');

@@ -56,6 +56,10 @@ part 'app_database.g.dart';
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
+  /// Para tests de integración: permite inyectar un ejecutor en memoria
+  /// (NativeDatabase.memory()) en lugar del archivo real del dispositivo.
+  AppDatabase.forTesting(super.e);
+
   @override
   int get schemaVersion => 10;
 

@@ -16,6 +16,8 @@ import 'package:inventario_v2/core/services/app_logger.dart';
 import 'package:inventario_v2/core/services/image_storage_service.dart';
 import 'package:inventario_v2/features/inventory/data/providers/categoria_provider.dart';
 import 'package:inventario_v2/features/inventory/presentation/widgets/autocomplete_field_product_create.dart';
+import 'package:inventario_v2/features/inventory/utils/magic_text_parser.dart';
+import 'package:inventario_v2/features/inventory/presentation/providers/product_creation_memory_provider.dart';
 
 class ProductCreateScreen extends ConsumerStatefulWidget {
   final Producto? productToEdit;
@@ -36,6 +38,9 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
     with AppBarConfigMixin {
   final Color _primaryColor = Colors.cyan.shade800;
   final TextEditingController _nameController = TextEditingController();
+  final FocusNode _nameFocusNode = FocusNode();
+  
+  // Ocultos / Avanzados
   final TextEditingController _categoryCtrl = TextEditingController();
   final TextEditingController _subCategoryCtrl = TextEditingController();
   final TextEditingController _brandCtrl = TextEditingController();
@@ -43,47 +48,16 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
 
   String? _selectedImagePath;
   bool _isSaving = false;
+  bool _showAdvancedOptions = false;
   final Set<String> _selectedTallas = {};
 
   final List<String> _brands = const [
-    'Anabell',
-    'Apolo',
-    'Aurora',
-    'Azucena',
-    'Azura',
-    'Crocs',
-    'Differ',
-    'Elena',
-    'Emeli Engreida',
-    'GQ',
-    'Gotica',
-    'Happy',
-    'Hot',
-    'Isabella',
-    'Jingo',
-    'Kallua',
-    "Levi's",
-    'Liverpool',
-    'Lovable',
-    'Lucatonica',
-    'Mobex',
-    'NY',
-    'Nike',
-    'Original',
-    'Penguin',
-    'Piecitos',
-    'Probox',
-    'Rasi',
-    'Roca',
-    'Senador',
-    'SF',
-    'Tommy Hilfiger',
-    'Toxica',
-    'Triyons',
-    'Vicio',
-    'Wearwold',
-    'Wrangler',
-    'Yumbo',
+    'Anabell', 'Apolo', 'Aurora', 'Azucena', 'Azura', 'Crocs', 'Differ',
+    'Elena', 'Emeli Engreida', 'GQ', 'Gotica', 'Happy', 'Hot', 'Isabella',
+    'Jingo', 'Kallua', "Levi's", 'Liverpool', 'Lovable', 'Lucatonica', 'Mobex',
+    'NY', 'Nike', 'Original', 'Penguin', 'Piecitos', 'Probox', 'Rasi', 'Roca',
+    'Senador', 'SF', 'Tommy Hilfiger', 'Toxica', 'Triyons', 'Vicio', 'Wearwold',
+    'Wrangler', 'Yumbo',
   ];
 
   @override
@@ -100,36 +74,83 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
     super.initState();
     Future.microtask(() {
       configureAppBar();
-      _populateFieldsForEdit();
+      _populateFieldsForEditOrMemory();
+      if (widget.productToEdit == null) {
+        _nameFocusNode.requestFocus();
+      }
     });
-    _categoryCtrl.addListener(() {
-      if (mounted) setState(() {});
-      _updateSmartName();
+
+    _nameController.addListener(() {
+      if (!_showAdvancedOptions) {
+        _runMagicParsing();
+      }
     });
-    _subCategoryCtrl.addListener(_updateSmartName);
-    _brandCtrl.addListener(_updateSmartName);
-    _detailCtrl.addListener(_updateSmartName);
   }
 
-  void _populateFieldsForEdit() {
-    final product = widget.productToEdit;
-    if (product == null) return;
-    _nameController.text = product.nombre;
-    _selectedImagePath = product.imagenLocal;
-    if (product.especificacionJson != null &&
-        product.especificacionJson!.isNotEmpty) {
-      try {
-        final specs = jsonDecode(product.especificacionJson!);
-        if (specs is Map<String, dynamic>) {
-          _brandCtrl.text = specs['brand']?.toString() ?? '';
-          _detailCtrl.text = specs['detail']?.toString() ?? '';
-          _categoryCtrl.text = specs['parent_category']?.toString() ?? specs['category']?.toString() ?? '';
-          if (specs['parent_category'] != null) {
-            _subCategoryCtrl.text = specs['category']?.toString() ?? '';
+  void _runMagicParsing() {
+    final text = _nameController.text;
+    if (text.trim().isEmpty) {
+      _categoryCtrl.clear();
+      _subCategoryCtrl.clear();
+      _brandCtrl.clear();
+      _populateFieldsForEditOrMemory();
+      if (mounted) setState(() {});
+      return;
+    }
+    if (text.trim().length < 3) return;
+
+    final categoriasAll = ref.read(listCategoriasAllProvider).value ?? [];
+    
+    // Parse Category
+    final parsedCat = MagicTextParser.extractCategory(text: text, allCategories: categoriasAll);
+    if (parsedCat['child'] != null) {
+      _subCategoryCtrl.text = parsedCat['child']!.nombre;
+      if (parsedCat['parent'] != null) {
+        _categoryCtrl.text = parsedCat['parent']!.nombre;
+      }
+    } else if (parsedCat['parent'] != null) {
+      _categoryCtrl.text = parsedCat['parent']!.nombre;
+      _subCategoryCtrl.text = '';
+    }
+
+    // Parse Brand
+    final parsedBrand = MagicTextParser.extractBrand(text: text, knownBrands: _brands);
+    if (parsedBrand != null) {
+      _brandCtrl.text = parsedBrand;
+    }
+    
+    if (mounted) setState(() {});
+  }
+
+  void _populateFieldsForEditOrMemory() {
+    if (widget.productToEdit != null) {
+      final product = widget.productToEdit!;
+      _nameController.text = product.nombre;
+      _selectedImagePath = product.imagenLocal;
+      if (product.especificacionJson != null &&
+          product.especificacionJson!.isNotEmpty) {
+        try {
+          final specs = jsonDecode(product.especificacionJson!);
+          if (specs is Map<String, dynamic>) {
+            _brandCtrl.text = specs['brand']?.toString() ?? '';
+            _detailCtrl.text = specs['detail']?.toString() ?? '';
+            _categoryCtrl.text = specs['parent_category']?.toString() ?? specs['category']?.toString() ?? '';
+            if (specs['parent_category'] != null) {
+              _subCategoryCtrl.text = specs['category']?.toString() ?? '';
+            }
           }
+        } catch (e, st) {
+          AppLogger.error('Error decodificando specs en product_create', e, st);
         }
-      } catch (e, st) {
-        AppLogger.error('Error decodificando specs en product_create', e, st);
+      }
+    } else {
+      // Cargar de memoria "Sticky" para lote
+      final memory = ref.read(productCreationMemoryProvider);
+      if (memory.categoryName.isNotEmpty) {
+        _categoryCtrl.text = memory.categoryName;
+        _subCategoryCtrl.text = memory.subCategoryName;
+        _brandCtrl.text = memory.brandName;
+        if (mounted) setState(() {});
       }
     }
   }
@@ -141,27 +162,8 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
     _subCategoryCtrl.dispose();
     _brandCtrl.dispose();
     _detailCtrl.dispose();
+    _nameFocusNode.dispose();
     super.dispose();
-  }
-
-  void _updateSmartName() {
-    if (widget.productToEdit != null) return;
-    final parts = <String>[];
-    
-    if (_subCategoryCtrl.text.isNotEmpty) {
-      parts.add(_subCategoryCtrl.text.trim());
-    } else if (_categoryCtrl.text.isNotEmpty) {
-      parts.add(_categoryCtrl.text.trim());
-    }
-
-    if (_brandCtrl.text.isNotEmpty &&
-        _brandCtrl.text.trim().toLowerCase() != 'generico') {
-      parts.add(_brandCtrl.text.trim());
-    }
-    if (_detailCtrl.text.isNotEmpty) parts.add(_detailCtrl.text.trim());
-    if (parts.isNotEmpty) {
-      _nameController.text = parts.join(' ');
-    }
   }
 
   Future<void> _openMagicCamera() async {
@@ -171,33 +173,30 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
       if (result['imagePath'] != null) {
         _selectedImagePath = result['imagePath'] as String?;
       }
-      _categoryCtrl.text = (result['categoria'] ?? '').toString();
-      _brandCtrl.text = (result['marca'] ?? '').toString();
-      _detailCtrl.text = (result['detalle'] ?? '').toString();
+      if (result['categoria'] != null && result['categoria'].toString().isNotEmpty) {
+         _categoryCtrl.text = result['categoria'].toString();
+      }
+      if (result['marca'] != null && result['marca'].toString().isNotEmpty) {
+         _brandCtrl.text = result['marca'].toString();
+      }
+      if (result['detalle'] != null && result['detalle'].toString().isNotEmpty) {
+         _detailCtrl.text = result['detalle'].toString();
+      }
+      
+      // Armar nombre sugerido si está vacío
+      if (_nameController.text.isEmpty) {
+        final parts = <String>[];
+        if (_categoryCtrl.text.isNotEmpty) parts.add(_categoryCtrl.text);
+        if (_brandCtrl.text.isNotEmpty) parts.add(_brandCtrl.text);
+        if (_detailCtrl.text.isNotEmpty) parts.add(_detailCtrl.text);
+        _nameController.text = parts.join(' ');
+      }
     });
-    _updateSmartName();
   }
 
   @override
   Widget build(BuildContext context) {
     final categorias = ref.watch(listCategoriasAllProvider).value ?? [];
-
-    if (_categoryCtrl.text.isEmpty && _subCategoryCtrl.text.isEmpty && widget.productToEdit != null) {
-      final current = categorias
-          .where((c) => c.id == widget.productToEdit!.categoriaId)
-          .firstOrNull;
-      if (current != null) {
-        if (current.categoriaPadreId != null) {
-          final parent = categorias.where((c) => c.id == current.categoriaPadreId).firstOrNull;
-          if (parent != null) {
-            _categoryCtrl.text = parent.nombre;
-          }
-          _subCategoryCtrl.text = current.nombre;
-        } else {
-          _categoryCtrl.text = current.nombre;
-        }
-      }
-    }
 
     Categoria? currentSelectedCategory;
     final catName = _subCategoryCtrl.text.isNotEmpty ? _subCategoryCtrl.text.trim() : _categoryCtrl.text.trim();
@@ -248,24 +247,14 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
             ? Row(
                 children: const [
                   SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                   ),
                   SizedBox(width: 10),
                   Text('Guardando...', style: TextStyle(color: Colors.white)),
                 ],
               )
-            : const Text(
-                'Guardar Producto',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+            : const Text('Guardar Rápido', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
@@ -274,178 +263,233 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: GestureDetector(
-                  onTap: _isSaving ? null : _openMagicCamera,
-                  child: Stack(
-                    children: [
-                      Container(
-                        width: 160,
-                        height: 160,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.12),
-                              blurRadius: 15,
-                              offset: const Offset(0, 5),
-                            ),
-                          ],
-                          image: _selectedImagePath != null
-                              ? DecorationImage(
-                                  image: FileImage(File(_selectedImagePath!)),
-                                  fit: BoxFit.cover,
-                                )
-                              : null,
-                        ),
-                        child: _selectedImagePath == null
-                            ? Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.camera_alt_rounded,
-                                    size: 40,
-                                    color: _primaryColor,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Escanear + Foto',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: _primaryColor,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              )
-                            : null,
-                      ),
-                      if (_selectedImagePath != null && !_isSaving)
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: CircleAvatar(
-                            radius: 20,
-                            backgroundColor: Colors.white,
-                            child: Icon(Icons.refresh, color: _primaryColor),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 30),
-              const Text(
-                'Ficha del Producto',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.03),
-                      blurRadius: 10,
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    OpenAutocompleteField(
-                      controller: _categoryCtrl,
-                      label: 'Categoría',
-                      options: parentCategories,
-                      icon: Icons.category_outlined,
-                    ),
-                    if (hasChildren) ...[
-                      const SizedBox(height: 20),
-                      OpenAutocompleteField(
-                        controller: _subCategoryCtrl,
-                        label: 'Subcategoría',
-                        options: childCategories,
-                        icon: Icons.account_tree_outlined,
-                      ),
-                    ],
-                    const SizedBox(height: 20),
-                    OpenAutocompleteField(
-                      controller: _brandCtrl,
-                      label: 'Marca',
-                      options: _brands,
-                      icon: Icons.branding_watermark_outlined,
-                    ),
-                    const SizedBox(height: 20),
-                    TextField(
-                      controller: _detailCtrl,
-                      textInputAction: TextInputAction.next,
-                      decoration: InputDecoration(
-                        labelText: 'Modelo / Rasgos (Opcional)',
-                        hintText: 'Ej: Air Max, Rayado...',
-                        filled: true,
-                        fillColor: Colors.grey[50],
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        prefixIcon: Icon(
-                          Icons.edit_note,
-                          color: Colors.grey[400],
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 14,
-                          horizontal: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 25),
+              // HEADER INPUT (Smart Input)
               Container(
                 padding: const EdgeInsets.all(5),
                 decoration: BoxDecoration(
-                  color: Colors.cyan.shade50.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.cyan.shade100),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.cyan.withValues(alpha: 0.1),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                  border: Border.all(color: Colors.cyan.shade100, width: 2),
                 ),
                 child: TextField(
                   controller: _nameController,
+                  focusNode: _nameFocusNode,
                   textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _submitProductBase(),
                   style: const TextStyle(
-                    fontSize: 18,
+                    fontSize: 22,
                     fontWeight: FontWeight.bold,
                     color: Colors.black87,
                   ),
                   maxLines: 2,
                   minLines: 1,
                   decoration: InputDecoration(
-                    labelText: 'Nombre del Producto (Editable)',
+                    labelText: 'Describe el producto',
+                    hintText: 'Ej: Pantalón Levi\'s negro',
                     labelStyle: TextStyle(
                       color: Colors.cyan.shade900,
-                      fontSize: 12,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
-                      vertical: 10,
+                      vertical: 12,
                     ),
-                    suffixIcon: Icon(
-                      Icons.edit,
-                      size: 18,
-                      color: _primaryColor,
-                    ),
+                    prefixIcon: Icon(Icons.search, color: Colors.cyan.shade700),
+                    suffixIcon: _nameController.text.isNotEmpty ? IconButton(
+                      icon: const Icon(Icons.clear, size: 20),
+                      onPressed: () {
+                        _nameController.clear();
+                        if (mounted) setState(() {});
+                      },
+                    ) : null,
                   ),
                 ),
               ),
+              const SizedBox(height: 12),
+              
+              // CHIPS DE ESTADO
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const Text('Detección: ', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+                  if (_categoryCtrl.text.isEmpty && _brandCtrl.text.isEmpty)
+                    const Chip(
+                      label: Text('Escribe para autodetectar', style: TextStyle(fontSize: 12)),
+                      backgroundColor: Colors.transparent,
+                    ),
+                  if (_categoryCtrl.text.isNotEmpty)
+                    InputChip(
+                      avatar: const Icon(Icons.category, size: 16, color: Colors.white),
+                      label: Text(
+                        _subCategoryCtrl.text.isNotEmpty ? '${_categoryCtrl.text} ❯ ${_subCategoryCtrl.text}' : _categoryCtrl.text,
+                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                      backgroundColor: Colors.cyan.shade700,
+                      onPressed: () => setState(() => _showAdvancedOptions = true),
+                      onDeleted: () {
+                        setState(() {
+                          _categoryCtrl.clear();
+                          _subCategoryCtrl.clear();
+                          // Clear memory too so it doesn't come back on empty
+                          ref.read(productCreationMemoryProvider.notifier).clearMemory();
+                        });
+                      },
+                      deleteIconColor: Colors.white70,
+                    ),
+                  if (_brandCtrl.text.isNotEmpty)
+                    InputChip(
+                      avatar: const Icon(Icons.branding_watermark, size: 16, color: Colors.white),
+                      label: Text(
+                        _brandCtrl.text,
+                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                      backgroundColor: Colors.indigo.shade400,
+                      onPressed: () => setState(() => _showAdvancedOptions = true),
+                      onDeleted: () {
+                        setState(() {
+                          _brandCtrl.clear();
+                          ref.read(productCreationMemoryProvider.notifier).clearMemory();
+                        });
+                      },
+                      deleteIconColor: Colors.white70,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              
+              // CAMERA BUTTON
+              Center(
+                child: GestureDetector(
+                  onTap: _isSaving ? null : _openMagicCamera,
+                  child: Container(
+                    width: _selectedImagePath != null ? 120 : double.infinity,
+                    height: _selectedImagePath != null ? 120 : 60,
+                    decoration: BoxDecoration(
+                      color: _selectedImagePath != null ? Colors.white : Colors.cyan.shade50,
+                      borderRadius: BorderRadius.circular(_selectedImagePath != null ? 24 : 12),
+                      border: _selectedImagePath != null ? null : Border.all(color: Colors.cyan.shade200),
+                      boxShadow: _selectedImagePath != null ? [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ] : null,
+                      image: _selectedImagePath != null
+                          ? DecorationImage(
+                              image: FileImage(File(_selectedImagePath!)),
+                              fit: BoxFit.cover,
+                            )
+                          : null,
+                    ),
+                    child: _selectedImagePath == null
+                        ? Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.camera_alt, color: _primaryColor),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Añadir Foto (Opcional)',
+                                style: TextStyle(
+                                  color: _primaryColor,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          )
+                        : null,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 25),
+
+              // ADVANCED TOGGLE
+              if (!_showAdvancedOptions)
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () => setState(() => _showAdvancedOptions = true),
+                    icon: const Icon(Icons.tune),
+                    label: const Text('Opciones Avanzadas / Manuales'),
+                    style: TextButton.styleFrom(foregroundColor: Colors.grey.shade700),
+                  ),
+                ),
+
+              if (_showAdvancedOptions) ...[
+                const Text(
+                  'Detalles Manuales',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.grey),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Column(
+                    children: [
+                      OpenAutocompleteField(
+                        controller: _categoryCtrl,
+                        label: 'Categoría',
+                        options: parentCategories,
+                        icon: Icons.category_outlined,
+                      ),
+                      if (hasChildren) ...[
+                        const SizedBox(height: 20),
+                        OpenAutocompleteField(
+                          controller: _subCategoryCtrl,
+                          label: 'Subcategoría',
+                          options: childCategories,
+                          icon: Icons.account_tree_outlined,
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      OpenAutocompleteField(
+                        controller: _brandCtrl,
+                        label: 'Marca',
+                        options: _brands,
+                        icon: Icons.branding_watermark_outlined,
+                      ),
+                      const SizedBox(height: 20),
+                      TextField(
+                        controller: _detailCtrl,
+                        textInputAction: TextInputAction.next,
+                        decoration: InputDecoration(
+                          labelText: 'Modelo / Rasgos (Opcional)',
+                          hintText: 'Ej: Air Max, Rayado...',
+                          filled: true,
+                          fillColor: Colors.grey[50],
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          prefixIcon: Icon(Icons.edit_note, color: Colors.grey[400]),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
               if (widget.productToEdit == null && suggestedTallas.isNotEmpty) ...[
                 const SizedBox(height: 25),
                 const Text(
-                  'Selecciona las tallas a crear:',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  'Tallas detectadas (Opcional):',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.grey),
                 ),
                 const SizedBox(height: 10),
                 Wrap(
@@ -471,7 +515,7 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
                   }).toList(),
                 ),
               ],
-              const SizedBox(height: 80),
+              const SizedBox(height: 100),
             ],
           ),
         ),
@@ -482,8 +526,9 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
   Future<void> _submitProductBase() async {
     if (_nameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Falta el nombre del producto')),
+        const SnackBar(content: Text('Por favor describe el producto')),
       );
+      _nameFocusNode.requestFocus();
       return;
     }
 
@@ -497,7 +542,15 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
 
       final categoriaNombre = _categoryCtrl.text.trim();
       final subCategoriaNombre = _subCategoryCtrl.text.trim();
+      final marcaNombre = _brandCtrl.text.trim();
       
+      // Guardar en memoria Sticky para el siguiente producto en lote
+      ref.read(productCreationMemoryProvider.notifier).saveMemory(
+        categoryName: categoriaNombre,
+        subCategoryName: subCategoriaNombre,
+        brandName: marcaNombre,
+      );
+
       final categoriasAll = ref.read(listCategoriasAllProvider).value ?? [];
       final parentCatEntity = categoriasAll.where((c) => c.nombre == categoriaNombre && c.categoriaPadreId == null).firstOrNull;
       final checkHasChildren = parentCatEntity != null && categoriasAll.any((c) => c.categoriaPadreId == parentCatEntity.id);
@@ -505,9 +558,12 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
       if (checkHasChildren && subCategoriaNombre.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Por favor, selecciona una Subcategoría')),
+          const SnackBar(content: Text('Por favor, selecciona la subcategoría específica')),
         );
-        setState(() => _isSaving = false);
+        setState(() {
+          _isSaving = false;
+          _showAdvancedOptions = true;
+        });
         return;
       }
 
@@ -544,11 +600,13 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
         categoriaSeleccionada = parentCategoria;
       }
 
+      // NO SUBIR A SUPABASE AQUI. Solo copiar archivo localmente.
       String? localPathFinal = widget.productToEdit?.imagenLocal;
       String? webUrlFinal = widget.productToEdit?.imagenUrl;
+      bool needsBackgroundUpload = false;
+
       if (_selectedImagePath != null) {
-        final changedImage =
-            widget.productToEdit?.imagenLocal != _selectedImagePath;
+        final changedImage = widget.productToEdit?.imagenLocal != _selectedImagePath;
         if (changedImage) {
           final tempFile = File(_selectedImagePath!);
           if (await tempFile.exists()) {
@@ -557,21 +615,14 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
             final permanentPath = '${appDir.path}/$fileName';
             final savedImage = await tempFile.copy(permanentPath);
             localPathFinal = savedImage.path;
-            try {
-              final storageService = ImageStorageService(
-                ref.read(supabaseClientProvider),
-              );
-              webUrlFinal = await storageService.uploadProductImage(savedImage);
-            } catch (e, st) {
-              AppLogger.error('Error subiendo imagen en product_create', e, st);
-            }
+            needsBackgroundUpload = true;
           }
         }
       }
 
       final bodegaIds = await db.authDao.getValidBodegasIds();
       final specs = jsonEncode({
-        'brand': _brandCtrl.text.trim(),
+        'brand': marcaNombre,
         'category': categoriaSeleccionada.nombre,
         'parent_category': parentCategoria.nombre,
         'detail': _detailCtrl.text.trim(),
@@ -585,13 +636,21 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
         categoriaId: categoriaSeleccionada.id,
         especificacionJson: specs,
         imagenLocal: localPathFinal,
-        imagenUrl: webUrlFinal,
+        imagenUrl: webUrlFinal, // Mantenemos la antigua o null
         ultimoCosto: widget.productToEdit?.ultimoCosto ?? 0,
         precioBase: widget.productToEdit?.precioBase ?? 0,
         defaultSku: widget.initialBarcode,
         bodegaIds: bodegaIds,
         tallasSeleccionadas: widget.productToEdit == null && _selectedTallas.isNotEmpty ? _selectedTallas.toList() : null,
       );
+
+      // Lanzar subida en background (Fire and Forget)
+      if (needsBackgroundUpload && localPathFinal != null) {
+        _uploadImageInBackground(
+          productId: savedProduct.id,
+          localPath: localPathFinal,
+        );
+      }
 
       if (!mounted) return;
       Navigator.pop(context, {
@@ -600,11 +659,7 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            webUrlFinal != null
-                ? 'Guardado y sincronizado'
-                : 'Guardado localmente',
-          ),
+          content: const Text('Guardado localmente (Instantáneo)'),
           backgroundColor: _primaryColor,
         ),
       );
@@ -615,6 +670,25 @@ class _ProductCreateScreenState extends ConsumerState<ProductCreateScreen>
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _uploadImageInBackground({
+    required String productId,
+    required String localPath,
+  }) async {
+    try {
+      final file = File(localPath);
+      if (!await file.exists()) return;
+      
+      final storageService = ImageStorageService(ref.read(supabaseClientProvider));
+      final webUrl = await storageService.uploadProductImage(file);
+      
+      final db = ref.read(driftDatabaseProvider);
+      await db.inventoryDao.updateProductImage(productId, localPath, webUrl);
+      AppLogger.info('Foto subida en background exitosamente para producto: $productId');
+    } catch (e, st) {
+      AppLogger.error('Error subiendo imagen en background', e, st);
     }
   }
 }

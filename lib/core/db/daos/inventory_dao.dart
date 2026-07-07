@@ -640,6 +640,17 @@ class InventoryDao extends BaseDao with _$InventoryDaoMixin {
     )..where((tbl) => tbl.id.equals(productoId))).getSingleOrNull();
   }
 
+  Future<void> updateProductImage(String productoId, String? localPath, String? url) async {
+    await (update(productos)..where((tbl) => tbl.id.equals(productoId))).write(
+      ProductosCompanion(
+        imagenLocal: Value(localPath),
+        imagenUrl: Value(url),
+        syncStatus: const Value('pending_update'),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
   Future<Categoria?> getCategoriaById(String categoriaId) {
     return (select(
       categorias,

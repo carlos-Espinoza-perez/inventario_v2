@@ -15,9 +15,16 @@ class SecretaryLlmClient {
   static String get _baseUrl => AppConstants.openAiProxyUrl;
 
   Map<String, String> get _headers {
-    final accessToken =
-        Supabase.instance.client.auth.currentSession?.accessToken ??
-            AppConstants.supabaseAnonKey;
+    String accessToken;
+    try {
+      accessToken =
+          Supabase.instance.client.auth.currentSession?.accessToken ??
+              AppConstants.supabaseAnonKey;
+    } catch (_) {
+      // Supabase sin inicializar (tests de integración): el anon key
+      // igualmente pasa el verify_jwt del proxy.
+      accessToken = AppConstants.supabaseAnonKey;
+    }
     return {
       'Authorization': 'Bearer $accessToken',
       'apikey': AppConstants.supabaseAnonKey,

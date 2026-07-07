@@ -153,7 +153,35 @@ class DraftEngine {
     double? precioUnitario,
     String? productoId,
     String? resolvedName,
-  }) {
+  }) async {
+    var nombreResuelto = resolvedName;
+
+    // Al resolver una ambigüedad eligiendo producto, la fila hereda los
+    // defaults de costo/precio del producto (igual que en addItems); si no,
+    // quedaría sin precio y el borrador no validaría.
+    if (productoId != null) {
+      final producto = await (_db.select(_db.productos)
+            ..where((t) => t.id.equals(productoId))
+            ..limit(1))
+          .getSingleOrNull();
+      if (producto != null) {
+        nombreResuelto ??= producto.nombre;
+        final item = await (_db.select(_db.secretaryDraftItems)
+              ..where((t) => t.id.equals(itemId))
+              ..limit(1))
+            .getSingleOrNull();
+        final draft = item != null
+            ? await _db.secretaryDao.getDraftById(item.draftId)
+            : null;
+        if (item != null && draft != null) {
+          final adapter = _adapterFor(draft.draftType);
+          costoUnitario ??= item.unitCost ?? adapter.defaultUnitCost(producto);
+          precioUnitario ??=
+              item.unitPrice ?? adapter.defaultUnitPrice(producto);
+        }
+      }
+    }
+
     return _db.secretaryDao.updateDraftItem(
       itemId,
       SecretaryDraftItemsCompanion(
@@ -164,8 +192,9 @@ class DraftEngine {
             ? Value(precioUnitario)
             : const Value.absent(),
         productId: productoId != null ? Value(productoId) : const Value.absent(),
-        resolvedName:
-            resolvedName != null ? Value(resolvedName) : const Value.absent(),
+        resolvedName: nombreResuelto != null
+            ? Value(nombreResuelto)
+            : const Value.absent(),
         // Si se asigna producto, la fila queda lista.
         status: productoId != null ? const Value('ready') : const Value.absent(),
         candidatesJson:

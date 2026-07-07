@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
 import 'package:inventario_v2/core/db/models/product_catalog_models.dart';
 
@@ -39,20 +40,42 @@ class EntityResolver {
 
     final normalizedQuery = _normalize(query);
 
-    // Buscar por codigo exacto primero.
-    final byCode = await _db.inventoryDao.searchProductoByCodeOrName(
-      normalizedQuery,
-    );
+    // Solo CÓDIGO exacto resuelve directo. El atajo anterior
+    // (searchProductoByCodeOrName) hacía LIKE por nombre con LIMIT 1 y
+    // elegía un producto silenciosamente aunque hubiera varios parecidos
+    // ("gorra" → Gorra Roja sin preguntar); el nombre debe pasar por la
+    // lógica de catálogo, que sí detecta ambigüedad.
+    final byCode = await (_db.select(_db.productos)
+          ..where(
+            (t) =>
+                t.empresaId.equals(empresaId) &
+                t.estado.equals(true) &
+                (t.codigoPersonalizado.equals(query.trim()) |
+                    t.codigoPersonalizado.equals(normalizedQuery)),
+          )
+          ..limit(1))
+        .getSingleOrNull();
     if (byCode != null) return EntityResolverResult.resolved(byCode);
 
     // Buscar por nombre parcial y por nombres parecidos en el catalogo.
     final catalog = await _db.inventoryDao.getCatalogItems(
       empresaId: empresaId,
     );
+    final queryTokens = _singularTokens(normalizedQuery);
     final containsMatches = catalog.where((item) {
       final normalizedName = _normalize(item.nombre);
-      return normalizedName.contains(normalizedQuery) ||
-          normalizedQuery.contains(normalizedName);
+      if (normalizedName.contains(normalizedQuery) ||
+          normalizedQuery.contains(normalizedName)) {
+        return true;
+      }
+      // Match por tokens singularizados: "pantalones" ≈ "Pantalon Jeans",
+      // "gorras rojas" ≈ "Gorra Roja". Cada palabra de la consulta debe
+      // aparecer (como prefijo) en el nombre del producto.
+      final nameTokens = _singularTokens(normalizedName);
+      return queryTokens.isNotEmpty &&
+          queryTokens.every(
+            (q) => nameTokens.any((n) => n == q || n.startsWith(q)),
+          );
     }).toList();
 
     final matches = containsMatches.isNotEmpty
@@ -196,6 +219,27 @@ class EntityResolver {
         .map(_singularize)
         .where((token) => token.length >= 3 && !stopWords.contains(token))
         .toList();
+  }
+
+  /// Tokens en singular aproximado: "pantalones" → "pantalon",
+  /// "gorras" → "gorra". Suficiente para emparejar consultas coloquiales
+  /// en plural con los nombres del catálogo.
+  List<String> _singularTokens(String normalized) {
+    return normalized
+        .split(RegExp(r'\s+'))
+        .where((t) => t.isNotEmpty)
+        .map(_singular)
+        .toList();
+  }
+
+  String _singular(String token) {
+    if (token.length > 4 && token.endsWith('es')) {
+      return token.substring(0, token.length - 2);
+    }
+    if (token.length > 3 && token.endsWith('s')) {
+      return token.substring(0, token.length - 1);
+    }
+    return token;
   }
 
   String _normalize(String value) {
