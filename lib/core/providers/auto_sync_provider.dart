@@ -105,6 +105,16 @@ class AutoSync extends _$AutoSync {
 
     await RemoteLogger.init(db, supabase);
 
+    // Mantenimiento local del secretario IA: trazas > 14 días y archivado de
+    // sesiones de chat > 90 días. No bloquea el arranque del sync.
+    Future.microtask(() async {
+      try {
+        await db.secretaryDao.runMaintenance();
+      } catch (e) {
+        AppLogger.warn('[AutoSync] Mantenimiento del secretario falló: $e');
+      }
+    });
+
     repo.subscribeToRealtimeChanges();
     _initConnectivity();
     _initDriftWatchers(db);

@@ -1,0 +1,13 @@
+{
+  "tasks": [
+    {
+      "id": "SEC-IA-001",
+      "titulo": "Secretario con IA: chat + voz con historial, memoria y personalización",
+      "descripcion": "Rediseño total del asistente IA como 'Secretario': chat y modo voz de baja latencia, dictado acumulativo con tablas temporales (entradas, ventas, extensible), consultas de inventario, historial persistente de conversaciones (Drift + sync Supabase), memoria de largo plazo y preferencias por usuario. Reemplaza lib/features/assistant/ reutilizando infraestructura (proxy OpenAI, STT/TTS, DAOs, tools).",
+      "status": "pending",
+      "sdd": true,
+      "spec": "docs/specs/secretario-ia/",
+      "creado": "2026-07-05"
+    }
+  ]
+}

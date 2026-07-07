@@ -107,7 +107,7 @@ class BottomAppBarDashboard extends ConsumerWidget {
             _MenuButton(
               icon: Icons.auto_awesome_rounded,
               text: 'IA',
-              onTap: () => context.go('/assistant'),
+              onTap: () => context.go('/secretary'),
             ),
             const Spacer(),
           ],

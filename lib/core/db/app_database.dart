@@ -11,12 +11,13 @@ import 'tables/cash_tables.dart';
 import 'tables/inventory_tables.dart';
 import 'tables/sales_tables.dart';
 import 'tables/logistics_tables.dart';
-import 'tables/assistant_tables.dart';
 import 'tables/log_tables.dart';
+import 'tables/secretary_tables.dart';
 import 'daos/auth_dao.dart';
 import 'daos/inventory_dao.dart';
 import 'daos/sales_dao.dart';
 import 'daos/logistics_dao.dart';
+import 'daos/secretary_dao.dart';
 
 part 'app_database.g.dart';
 
@@ -41,17 +42,22 @@ part 'app_database.g.dart';
     PagosVentas,
     Movimientos,
     DetalleMovimientos,
-    AssistantEntrySessions,
-    AssistantEntrySessionItems,
     AppLogs,
+    ChatSessions,
+    ChatMessages,
+    AiMemories,
+    AiPreferences,
+    ChatTurnTraces,
+    SecretaryDrafts,
+    SecretaryDraftItems,
   ],
-  daos: [AuthDao, InventoryDao, SalesDao, LogisticsDao],
+  daos: [AuthDao, InventoryDao, SalesDao, LogisticsDao, SecretaryDao],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration {
@@ -61,11 +67,8 @@ class AppDatabase extends _$AppDatabase {
         await _createIndexes();
       },
       onUpgrade: (Migrator m, int from, int to) async {
-        if (from < 5) {
-          await m.createTable(assistantEntrySessions);
-          await m.createTable(assistantEntrySessionItems);
-          await _createIndexes();
-        }
+        // from < 5 creaba las tablas del assistant viejo; ya no es necesario
+        // porque v10 las elimina (quien salta de v4 a v10 nunca las usa).
         if (from < 6) {
           await m.addColumn(
             detalleMovimientos,
@@ -76,6 +79,32 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 7) {
           await m.createTable(appLogs);
+        }
+        if (from < 8) {
+          await m.createTable(chatSessions);
+          await m.createTable(chatMessages);
+          await m.createTable(aiMemories);
+          await m.createTable(aiPreferences);
+          await m.createTable(chatTurnTraces);
+          await m.createTable(secretaryDrafts);
+          await m.createTable(secretaryDraftItems);
+          await _createIndexes();
+        }
+        if (from >= 8 && from < 9) {
+          // v8 ya tenía chat_turn_traces sin estas columnas de diagnóstico;
+          // quien venía de <8 las creó completas con createTable.
+          await m.addColumn(chatTurnTraces, chatTurnTraces.requestJson);
+          await m.addColumn(chatTurnTraces, chatTurnTraces.errorText);
+        }
+        if (from < 10) {
+          // Retirada del assistant viejo (SEC-IA-001 F7.4): sus borradores
+          // eran temporales y locales, no hay datos que migrar.
+          await customStatement(
+            'DROP TABLE IF EXISTS assistant_entry_session_items',
+          );
+          await customStatement(
+            'DROP TABLE IF EXISTS assistant_entry_sessions',
+          );
         }
       },
       beforeOpen: (details) async {
@@ -132,13 +161,25 @@ class AppDatabase extends _$AppDatabase {
       'CREATE INDEX IF NOT EXISTS idx_sync_status_caja_movimientos_extras ON caja_movimientos_extras (sync_status)',
     );
     await customStatement(
-      'CREATE INDEX IF NOT EXISTS idx_assistant_entry_sessions_active ON assistant_entry_sessions (empresa_id, usuario_id, bodega_id, status)',
-    );
-    await customStatement(
-      'CREATE INDEX IF NOT EXISTS idx_assistant_entry_items_session ON assistant_entry_session_items (session_id)',
-    );
-    await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_detalle_movimientos_producto_variante_id ON detalle_movimientos (producto_variante_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_chat_sessions_usuario_actividad ON chat_sessions (usuario_id, last_message_at)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_chat_messages_session_seq ON chat_messages (session_id, seq)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_ai_memories_usuario_activas ON ai_memories (usuario_id, is_active)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_secretary_draft_items_draft ON secretary_draft_items (draft_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_sync_status_chat_sessions ON chat_sessions (sync_status)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_sync_status_chat_messages ON chat_messages (sync_status)',
     );
   }
 

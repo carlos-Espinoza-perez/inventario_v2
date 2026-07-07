@@ -17,7 +17,10 @@ import 'package:inventario_v2/features/inventory/presentation/screens/warehouse_
 import 'package:inventario_v2/features/inventory/presentation/screens/warehouse_transfer_screen.dart';
 import 'package:inventario_v2/features/inventory/presentation/screens/category_manage_screen.dart';
 import 'package:inventario_v2/features/inventory/presentation/screens/category_tree_screen.dart';
-import 'package:inventario_v2/features/assistant/presentation/screens/assistant_screen.dart';
+import 'package:inventario_v2/features/secretary/presentation/screens/chat_sessions_screen.dart';
+import 'package:inventario_v2/features/secretary/presentation/screens/secretary_chat_screen.dart';
+import 'package:inventario_v2/features/secretary/presentation/screens/secretary_diagnostics_screen.dart';
+import 'package:inventario_v2/features/secretary/presentation/screens/secretary_prefs_screen.dart';
 import 'package:inventario_v2/features/report/presentation/reports_dashboard_screen.dart';
 import 'package:inventario_v2/features/report/presentation/sales_report_screen.dart';
 import 'package:inventario_v2/features/report/presentation/inventory_report_screen.dart';
@@ -371,12 +374,40 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ),
           ),
 
-          // Modulo de Asistente IA
+          // Ruta del assistant viejo: redirige al Secretario IA (SEC-IA-001,
+          // F7.3). El código de features/assistant se elimina en F7.4.
           GoRoute(
             path: '/assistant',
+            redirect: (context, state) => '/secretary',
+          ),
+
+          // Secretario IA
+          GoRoute(
+            path: '/secretary',
             builder: (context, state) => const PermissionGuard(
               requiredPermission: PermissionCode.dashboardRead,
-              child: AssistantScreen(),
+              child: SecretaryChatScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/secretary/history',
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.dashboardRead,
+              child: ChatSessionsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/secretary/prefs',
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.dashboardRead,
+              child: SecretaryPrefsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/secretary/diagnostics',
+            builder: (context, state) => const PermissionGuard(
+              requiredPermission: PermissionCode.dashboardRead,
+              child: SecretaryDiagnosticsScreen(),
             ),
           ),
 

@@ -122,6 +122,33 @@ class SyncRepository {
             .where((p) => !idsVentasError.contains(p.ventaId))
             .toList();
     await _push('historial_pago', 'pagos_ventas', pagosValidos, _pagoVentaToJson);
+
+    // Secretario IA: sesiones antes que mensajes (FK session_id).
+    await _push(
+      'chat_sessions',
+      'chat_sessions',
+      await _db.secretaryDao.getPendingChatSessions(),
+      _chatSessionToJson,
+    );
+    await _push(
+      'chat_messages',
+      'chat_messages',
+      await _db.secretaryDao.getPendingChatMessages(),
+      _chatMessageToJson,
+    );
+    await _push(
+      'ai_memories',
+      'ai_memories',
+      await _db.secretaryDao.getPendingAiMemories(),
+      _aiMemoryToJson,
+    );
+    await _push(
+      'ai_preferences',
+      'ai_preferences',
+      await _db.secretaryDao.getPendingAiPreferences(),
+      _aiPreferenceToJson,
+      onConflict: 'empresa_id, usuario_id',
+    );
   }
 
   Future<void> _pushVentasCoordinado() async {
@@ -417,6 +444,94 @@ class SyncRepository {
     await _pull('pagos_ventas', 'historial_pago',
         (j) => _db.into(_db.pagosVentas).insertOnConflictUpdate(_pagoVentaFromJson(j)),
         forceFull: forceFull);
+    await _pullSecretary(forceFull: forceFull);
+  }
+
+  /// Pull de las tablas del secretario IA. El chat usa un pull inicial
+  /// limitado (últimas 20 sesiones + sus mensajes); con cursor ya establecido
+  /// sigue el flujo incremental estándar.
+  Future<void> _pullSecretary({bool forceFull = false}) async {
+    final chatCursor = forceFull
+        ? null
+        : await SyncCursorStore.getLastPullAt('chat_sessions');
+
+    if (chatCursor == null) {
+      await _pullChatInicial();
+    } else {
+      await _pull('chat_sessions', 'chat_sessions',
+          (j) => _db.into(_db.chatSessions).insertOnConflictUpdate(_chatSessionFromJson(j)));
+      await _pull('chat_messages', 'chat_messages',
+          (j) => _db.into(_db.chatMessages).insertOnConflictUpdate(_chatMessageFromJson(j)));
+    }
+
+    await _pull('ai_memories', 'ai_memories',
+        (j) => _db.into(_db.aiMemories).insertOnConflictUpdate(_aiMemoryFromJson(j)),
+        forceFull: forceFull);
+    await _pull('ai_preferences', 'ai_preferences',
+        (j) => _db.into(_db.aiPreferences).insertOnConflictUpdate(_aiPreferenceFromJson(j)),
+        forceFull: forceFull);
+  }
+
+  /// Primer pull de chat en un dispositivo: solo las últimas 20 sesiones del
+  /// usuario (RLS filtra por auth.uid()) y sus mensajes. Las sesiones más
+  /// antiguas quedan fuera por diseño (Req-20); el cursor arranca en el máximo
+  /// server_updated_at recibido para continuar incremental.
+  Future<void> _pullChatInicial() async {
+    try {
+      AppLogger.info('[Sync][Pull] Pull inicial de chat (últimas 20 sesiones)');
+      final sesiones = await _supabase
+          .from('chat_sessions')
+          .select()
+          .order('last_message_at', ascending: false)
+          .limit(20);
+
+      DateTime? maxSesionTs;
+      for (final row in sesiones) {
+        final map = Map<String, dynamic>.from(row);
+        final ts = DateTime.tryParse(map['server_updated_at']?.toString() ?? '');
+        if (ts != null && (maxSesionTs == null || ts.isAfter(maxSesionTs))) {
+          maxSesionTs = ts;
+        }
+        if (await _shouldUpdateLocal('chat_sessions', map)) {
+          await _db
+              .into(_db.chatSessions)
+              .insertOnConflictUpdate(_chatSessionFromJson(map));
+        }
+      }
+
+      DateTime? maxMensajeTs;
+      final sessionIds =
+          sesiones.map((r) => r['id']?.toString() ?? '').where((s) => s.isNotEmpty).toList();
+      if (sessionIds.isNotEmpty) {
+        final mensajes = await _supabase
+            .from('chat_messages')
+            .select()
+            .inFilter('session_id', sessionIds);
+        for (final row in mensajes) {
+          final map = Map<String, dynamic>.from(row);
+          final ts = DateTime.tryParse(map['server_updated_at']?.toString() ?? '');
+          if (ts != null && (maxMensajeTs == null || ts.isAfter(maxMensajeTs))) {
+            maxMensajeTs = ts;
+          }
+          if (await _shouldUpdateLocal('chat_messages', map)) {
+            await _db
+                .into(_db.chatMessages)
+                .insertOnConflictUpdate(_chatMessageFromJson(map));
+          }
+        }
+      }
+
+      if (maxSesionTs != null) {
+        await SyncCursorStore.setLastPullAt('chat_sessions', maxSesionTs);
+        await SyncCursorStore.setLastPullAt(
+          'chat_messages',
+          maxMensajeTs ?? maxSesionTs,
+        );
+      }
+    } catch (e, st) {
+      AppLogger.error('[Sync][Pull] Fallo en pull inicial de chat', e, st);
+      // Cursor sin tocar: el próximo pull reintenta el inicial.
+    }
   }
 
   /// Expone reset de cursores para soporte/debug (próximo pull será completo).
@@ -1891,6 +2006,126 @@ class SyncRepository {
         syncStatus: const Value('synced'),
       );
 
+  Map<String, dynamic> _chatSessionToJson(ChatSession r) => {
+    ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
+    'empresa_id': r.empresaId,
+    'usuario_id': r.usuarioId,
+    'title': r.title,
+    'summary': r.summary,
+    'status': r.status,
+    'last_message_at': r.lastMessageAt.toIso8601String(),
+    'message_count': r.messageCount,
+    'metadata': r.metadataJson,
+  };
+
+  Map<String, dynamic> _chatMessageToJson(ChatMessage r) => {
+    ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
+    'session_id': r.sessionId,
+    'empresa_id': r.empresaId,
+    'usuario_id': r.usuarioId,
+    'role': r.role,
+    'content': r.content,
+    'content_type': r.contentType,
+    'draft_id': r.draftId,
+    'seq': r.seq,
+  };
+
+  Map<String, dynamic> _aiMemoryToJson(AiMemory r) => {
+    ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
+    'empresa_id': r.empresaId,
+    'usuario_id': r.usuarioId,
+    'scope': r.scope,
+    'category': r.category,
+    'content': r.content,
+    'source_session_id': r.sourceSessionId,
+    'confidence': r.confidence,
+    'is_active': r.isActive,
+    'last_used_at': r.lastUsedAt?.toIso8601String(),
+  };
+
+  Map<String, dynamic> _aiPreferenceToJson(AiPreference r) => {
+    ..._syncMap(r.id, r.createdAt, r.updatedAt, r.syncStatus),
+    'empresa_id': r.empresaId,
+    'usuario_id': r.usuarioId,
+    'tone': r.tone,
+    'verbosity': r.verbosity,
+    'default_bodega_id': r.defaultBodegaId,
+    'voice_enabled': r.voiceEnabled,
+    'auto_read_responses': r.autoReadResponses,
+    'tts_rate': r.ttsRate,
+    'confirm_before_execute': r.confirmBeforeExecute,
+    'extra': r.extraJson,
+  };
+
+  ChatSessionsCompanion _chatSessionFromJson(Map<String, dynamic> j) =>
+      ChatSessionsCompanion.insert(
+        id: _text(j['id']) ?? '',
+        empresaId: _text(j['empresa_id']) ?? '',
+        usuarioId: _text(j['usuario_id']) ?? '',
+        title: _text(j['title']) ?? '',
+        summary: Value(_text(j['summary'])),
+        status: Value(_text(j['status']) ?? 'active'),
+        lastMessageAt: Value(_date(j['last_message_at'])),
+        messageCount: Value((j['message_count'] as num?)?.toInt() ?? 0),
+        metadataJson: Value(_json(j['metadata'])),
+        createdAt: Value(_date(j['fecha_registro'])),
+        updatedAt: Value(_date(j['ultima_actualizacion'])),
+        syncStatus: const Value('synced'),
+      );
+
+  ChatMessagesCompanion _chatMessageFromJson(Map<String, dynamic> j) =>
+      ChatMessagesCompanion.insert(
+        id: _text(j['id']) ?? '',
+        sessionId: _text(j['session_id']) ?? '',
+        empresaId: _text(j['empresa_id']) ?? '',
+        usuarioId: _text(j['usuario_id']) ?? '',
+        role: _text(j['role']) ?? 'user',
+        content: _text(j['content']) ?? '',
+        contentType: Value(_text(j['content_type']) ?? 'text'),
+        draftId: Value(_text(j['draft_id'])),
+        seq: (j['seq'] as num?)?.toInt() ?? 0,
+        createdAt: Value(_date(j['fecha_registro'])),
+        updatedAt: Value(_date(j['ultima_actualizacion'])),
+        syncStatus: const Value('synced'),
+      );
+
+  AiMemoriesCompanion _aiMemoryFromJson(Map<String, dynamic> j) =>
+      AiMemoriesCompanion.insert(
+        id: _text(j['id']) ?? '',
+        empresaId: _text(j['empresa_id']) ?? '',
+        usuarioId: _text(j['usuario_id']) ?? '',
+        scope: Value(_text(j['scope']) ?? 'user'),
+        category: _text(j['category']) ?? 'fact',
+        content: _text(j['content']) ?? '',
+        sourceSessionId: Value(_text(j['source_session_id'])),
+        confidence: Value(_double(j['confidence'], 1.0)),
+        isActive: Value(_bool(j['is_active'])),
+        lastUsedAt: Value(
+          j['last_used_at'] == null ? null : _date(j['last_used_at']),
+        ),
+        createdAt: Value(_date(j['fecha_registro'])),
+        updatedAt: Value(_date(j['ultima_actualizacion'])),
+        syncStatus: const Value('synced'),
+      );
+
+  AiPreferencesCompanion _aiPreferenceFromJson(Map<String, dynamic> j) =>
+      AiPreferencesCompanion.insert(
+        id: _text(j['id']) ?? '',
+        empresaId: _text(j['empresa_id']) ?? '',
+        usuarioId: _text(j['usuario_id']) ?? '',
+        tone: Value(_text(j['tone']) ?? 'neutral'),
+        verbosity: Value(_text(j['verbosity']) ?? 'concise'),
+        defaultBodegaId: Value(_text(j['default_bodega_id'])),
+        voiceEnabled: Value(_bool(j['voice_enabled'])),
+        autoReadResponses: Value(_bool(j['auto_read_responses'], false)),
+        ttsRate: Value(_double(j['tts_rate'], 1.0)),
+        confirmBeforeExecute: Value(_bool(j['confirm_before_execute'])),
+        extraJson: Value(_json(j['extra'])),
+        createdAt: Value(_date(j['fecha_registro'])),
+        updatedAt: Value(_date(j['ultima_actualizacion'])),
+        syncStatus: const Value('synced'),
+      );
+
   /// Cuenta el total de registros pendientes o con error de sync en todas las tablas.
   Future<int> countTotalPending() async {
     const tables = [
@@ -1899,6 +2134,7 @@ class SyncRepository {
       'categorias', 'productos', 'producto_variantes', 'inventarios',
       'clientes', 'movimientos', 'detalle_movimientos',
       'ventas', 'detalle_ventas', 'pagos_ventas',
+      'chat_sessions', 'chat_messages', 'ai_memories', 'ai_preferences',
     ];
     int total = 0;
     for (final table in tables) {

@@ -81,7 +81,8 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
           ? null
           : const BottomAppBarDashboard(),
 
-      floatingActionButton: isKeyboardOpen || widget.location.startsWith('/assistant')
+      floatingActionButton: isKeyboardOpen ||
+              widget.location.startsWith('/secretary')
           ? null
           : FloatingActionButton(
               onPressed: () {
@@ -94,7 +95,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
               child: const Icon(Icons.home_rounded, color: Colors.black87),
             ),
 
-      floatingActionButtonLocation: widget.location.startsWith('/assistant')
+      floatingActionButtonLocation: widget.location.startsWith('/secretary')
           ? FloatingActionButtonLocation.endFloat
           : FloatingActionButtonLocation.centerDocked,
     );
