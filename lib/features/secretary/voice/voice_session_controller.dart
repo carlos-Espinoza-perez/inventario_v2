@@ -3,12 +3,15 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inventario_v2/core/db/app_database.dart';
+import 'package:inventario_v2/core/providers/drift_provider.dart';
 import 'package:inventario_v2/core/services/app_logger.dart';
 
+import '../presentation/providers/draft_provider.dart';
 import '../presentation/providers/secretary_chat_provider.dart';
 import 'secretary_transcriber.dart';
 import 'secretary_tts.dart';
 import 'tool_announcements.dart';
+import 'voice_confirmation.dart';
 
 /// Pausa de voz configurada en Preferencias (extraJson.voicePauseMs),
 /// acotada entre 1.5 y 6 s. Compartida por el controlador y la pantalla
@@ -36,6 +39,21 @@ bool toolAnnounceFromPrefs(AiPreference prefs) {
     return (extra['toolAnnounce'] as bool?) ?? true;
   } catch (_) {
     return true;
+  }
+}
+
+/// Preferencia "Confirmar por voz" (extraJson.voiceConfirm, default false):
+/// habilita decir "confirmar"/"sí" tras el resumen hablado de un borrador
+/// para ejecutarlo, y elegir candidatos ambiguos por número/ordinal
+/// (SEC-IA-002 punto 4).
+bool voiceConfirmFromPrefs(AiPreference prefs) {
+  try {
+    final extra = prefs.extraJson != null
+        ? jsonDecode(prefs.extraJson!) as Map<String, dynamic>
+        : const <String, dynamic>{};
+    return (extra['voiceConfirm'] as bool?) ?? false;
+  } catch (_) {
+    return false;
   }
 }
 
@@ -119,6 +137,17 @@ class VoiceSessionController extends StateNotifier<VoiceSessionState> {
   /// "Aviso al consultar"). Se lee al abrir el modo voz.
   bool _announceTools = true;
 
+  /// "Confirmar por voz" (Preferencias, default desactivada). Se lee al
+  /// abrir el modo voz.
+  bool _voiceConfirmEnabled = false;
+
+  /// Borrador que quedó activo tras el último turno y la ventana en la que
+  /// "confirmar"/"sí"/un ordinal se interpretan como respuesta a SU
+  /// resumen (no como un mensaje libre nuevo). Se arma recién después de
+  /// que el TTS termina de leer el resumen.
+  String? _pendingConfirmDraftId;
+  DateTime? _pendingConfirmExpiresAt;
+
   /// Identifica la sesión de voz vigente: al cerrar/reiniciar se invalida
   /// para que los loops pendientes no sigan corriendo.
   int _generation = 0;
@@ -168,9 +197,12 @@ class VoiceSessionController extends StateNotifier<VoiceSessionState> {
       await _tts.setRate(prefs.ttsRate);
       _pauseFor = Duration(milliseconds: voicePauseMsFromPrefs(prefs));
       _announceTools = toolAnnounceFromPrefs(prefs);
+      _voiceConfirmEnabled = voiceConfirmFromPrefs(prefs);
     } catch (_) {
       // Sin sesión activa: velocidad y avisos por defecto.
     }
+    _pendingConfirmDraftId = null;
+    _pendingConfirmExpiresAt = null;
     await _listenLoop(gen);
   }
 
@@ -224,6 +256,22 @@ class VoiceSessionController extends StateNotifier<VoiceSessionState> {
         return;
       }
 
+      // Ventana de "confirmar por voz" abierta: intercepta antes de
+      // mandarlo como turno normal al LLM. Cualquier enunciado que no sea
+      // EXACTAMENTE una confirmación/rechazo/elección conocida no confirma
+      // nada — sigue como mensaje libre (Req-15: nunca ejecutar en
+      // silencio).
+      if (_voiceConfirmEnabled &&
+          _pendingConfirmDraftId != null &&
+          _pendingConfirmExpiresAt != null &&
+          DateTime.now().isBefore(_pendingConfirmExpiresAt!)) {
+        final handled = await _handleVoiceConfirmationInput(text);
+        if (!mounted || gen != _generation || !state.active) return;
+        if (handled) continue;
+        _pendingConfirmDraftId = null;
+        _pendingConfirmExpiresAt = null;
+      }
+
       state = state.copyWith(phase: VoicePhase.thinking, partialText: text);
 
       String? reply;
@@ -250,6 +298,20 @@ class VoiceSessionController extends StateNotifier<VoiceSessionState> {
       await _speakAndWait(reply);
       if (!mounted || gen != _generation || !state.active) return;
 
+      // Recién ahora, con el resumen ya leído completo, se abre la ventana
+      // de 15 s para "confirmar"/"sí"/un candidato por voz.
+      if (_voiceConfirmEnabled) {
+        final pendingDraftId = _ref.read(secretaryChatProvider).pendingDraftId;
+        if (pendingDraftId != null) {
+          _pendingConfirmDraftId = pendingDraftId;
+          _pendingConfirmExpiresAt =
+              DateTime.now().add(const Duration(seconds: 15));
+        } else {
+          _pendingConfirmDraftId = null;
+          _pendingConfirmExpiresAt = null;
+        }
+      }
+
       if (!state.handsFree) {
         state = state.copyWith(phase: VoicePhase.idle);
         return;
@@ -258,6 +320,83 @@ class VoiceSessionController extends StateNotifier<VoiceSessionState> {
       // final del TTS se cuele como entrada.
       await Future.delayed(const Duration(milliseconds: 350));
     }
+  }
+
+  /// Interpreta el enunciado dentro de la ventana de confirmación por voz.
+  /// true = lo manejó (confirmó, rechazó o eligió candidato) y el loop debe
+  /// seguir escuchando sin mandarlo como mensaje libre; false = no matcheó
+  /// nada conocido, así que se manda como turno normal.
+  Future<bool> _handleVoiceConfirmationInput(String text) async {
+    if (VoiceConfirmationMatcher.isConfirmation(text)) {
+      await _confirmPendingDraft();
+      return true;
+    }
+    if (VoiceConfirmationMatcher.isRejection(text)) {
+      await _discardPendingDraft();
+      return true;
+    }
+    final choice = VoiceConfirmationMatcher.parseChoice(text);
+    if (choice != null) {
+      await _resolveAmbiguityByVoice(choice);
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> _confirmPendingDraft() async {
+    final draftId = _pendingConfirmDraftId;
+    _pendingConfirmDraftId = null;
+    _pendingConfirmExpiresAt = null;
+    if (draftId == null) return;
+    state = state.copyWith(phase: VoicePhase.speaking);
+    await _speakAndWait('Registrando.');
+    // Mismo camino que el botón Confirmar de la tarjeta: DraftEngine.execute
+    // vía SecretaryChatNotifier.confirmDraft, nunca una tool del LLM.
+    await _ref.read(secretaryChatProvider.notifier).confirmDraft(draftId);
+  }
+
+  Future<void> _discardPendingDraft() async {
+    final draftId = _pendingConfirmDraftId;
+    _pendingConfirmDraftId = null;
+    _pendingConfirmExpiresAt = null;
+    if (draftId == null) return;
+    await _ref.read(secretaryChatProvider.notifier).discardDraft(draftId);
+    state = state.copyWith(phase: VoicePhase.speaking);
+    await _speakAndWait('Borrador descartado.');
+  }
+
+  /// Elige el candidato [choice] (1-based) para la primera fila ambigua del
+  /// borrador pendiente. Renueva la ventana: puede quedar otra fila
+  /// ambigua o faltar confirmar.
+  Future<void> _resolveAmbiguityByVoice(int choice) async {
+    final draftId = _pendingConfirmDraftId;
+    if (draftId == null) return;
+    final items =
+        await _ref.read(driftDatabaseProvider).secretaryDao.getDraftItems(draftId);
+    SecretaryDraftItem? pending;
+    for (final item in items) {
+      if (item.status == 'needs_review' && item.candidatesJson != null) {
+        pending = item;
+        break;
+      }
+    }
+    state = state.copyWith(phase: VoicePhase.speaking);
+    if (pending == null) {
+      await _speakAndWait('No hay nada pendiente de elegir.');
+      return;
+    }
+    final candidates = jsonDecode(pending.candidatesJson!) as List;
+    if (choice < 1 || choice > candidates.length) {
+      await _speakAndWait('No tengo esa opción. Decime el número de la lista.');
+      return;
+    }
+    final chosen = Map<String, dynamic>.from(candidates[choice - 1] as Map);
+    await _ref.read(draftEngineProvider).updateItem(
+          pending.id,
+          productoId: chosen['id'] as String,
+        );
+    await _speakAndWait('Listo, elegí ${chosen['nombre']}.');
+    _pendingConfirmExpiresAt = DateTime.now().add(const Duration(seconds: 15));
   }
 
   /// Acuse hablado corto (local, sin LLM) al detectar una tool call. No

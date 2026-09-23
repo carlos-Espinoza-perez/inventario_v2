@@ -10,7 +10,12 @@ import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 
 import '../../voice/voice_session_controller.dart'
-    show voicePauseMsFromPrefs, toolAnnounceFromPrefs;
+    show
+        voicePauseMsFromPrefs,
+        toolAnnounceFromPrefs,
+        voiceConfirmFromPrefs,
+        listenModeFromPrefs,
+        ListenMode;
 
 /// Preferencias del secretario + curación de memorias. Los cambios se
 /// guardan al instante y sincronizan (ai_preferences / ai_memories).
@@ -166,6 +171,30 @@ class _SecretaryPrefsScreenState extends ConsumerState<SecretaryPrefsScreen>
                   onChanged: (v) =>
                       _save(AiPreferencesCompanion(voiceEnabled: Value(v))),
                 ),
+                ListTile(
+                  title: const Text('Modo de escucha'),
+                  subtitle: const Text(
+                    'Mantener para hablar: el micrófono escucha solo '
+                    'mientras mantenés presionado el círculo.',
+                  ),
+                  trailing: DropdownButton<ListenMode>(
+                    value: listenModeFromPrefs(prefs),
+                    items: const [
+                      DropdownMenuItem(
+                        value: ListenMode.handsFree,
+                        child: Text('Manos libres'),
+                      ),
+                      DropdownMenuItem(
+                        value: ListenMode.pushToTalk,
+                        child: Text('Mantener para hablar'),
+                      ),
+                    ],
+                    onChanged: (v) => _saveExtra(
+                      'listenMode',
+                      v == ListenMode.pushToTalk ? 'pushToTalk' : 'handsFree',
+                    ),
+                  ),
+                ),
                 SwitchListTile(
                   title: const Text('Leer respuestas en el chat de texto'),
                   value: prefs.autoReadResponses,
@@ -217,6 +246,16 @@ class _SecretaryPrefsScreenState extends ConsumerState<SecretaryPrefsScreen>
                   ),
                   value: toolAnnounceFromPrefs(prefs),
                   onChanged: (v) => _saveExtra('toolAnnounce', v),
+                ),
+                SwitchListTile(
+                  title: const Text('Confirmar por voz'),
+                  subtitle: const Text(
+                    'Tras leer el resumen de un borrador, decir '
+                    '"confirmar" o "sí" lo registra; "no" lo descarta. '
+                    'Cualquier otra frase no ejecuta nada.',
+                  ),
+                  value: voiceConfirmFromPrefs(prefs),
+                  onChanged: (v) => _saveExtra('voiceConfirm', v),
                 ),
                 const Divider(),
                 _sectionTitle(context, 'Seguridad'),
