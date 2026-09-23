@@ -72,3 +72,8 @@ supabase/.temp/
 *.keystore
 key.properties
 android/key.properties
+
+# Harness del Secretario IA (SEC-IA-003): env local (Supabase local +
+# OPENAI_API_KEY) y las corridas con transcripciones/reportes.
+test/harness/.env.harness
+test/harness/out/

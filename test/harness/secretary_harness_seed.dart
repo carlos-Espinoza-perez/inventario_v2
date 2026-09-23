@@ -800,6 +800,15 @@ class SecretaryHarnessSeed {
         for (final r in stockTotalPorProducto)
           r.read<String>('producto_id'): r.read<double>('total'),
       },
+      // Clave compuesta "productoId|talla|bodegaId" -> cantidad, para que
+      // los escenarios YAML puedan referenciar una fila exacta sin tener
+      // que recorrer la lista completa (ver test/harness/ground_truth_template.dart).
+      'stockPorVarianteIndex': {
+        for (final r in stockPorVariante)
+          '${r.read<String>('producto_id')}|${r.read<String?>('talla') ?? ''}|'
+                  '${r.read<String>('bodega_id')}':
+              r.read<double>('cantidad'),
+      },
       'ventasHoy': {
         'cantidad': ventasHoyRow.read<int>('cantidad'),
         'total': ventasHoyRow.read<double>('total'),
