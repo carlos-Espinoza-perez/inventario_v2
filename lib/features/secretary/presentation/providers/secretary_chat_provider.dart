@@ -49,12 +49,18 @@ class SecretaryChatState {
   final String? runningTool;
   final String? error;
 
+  /// Id del borrador que dejó ACTIVO el último turno (null si el turno no
+  /// tocó un borrador o si ya se confirmó/descartó). El modo voz lo usa
+  /// para abrir la ventana de "confirmar por voz" (SEC-IA-002 punto 4).
+  final String? pendingDraftId;
+
   const SecretaryChatState({
     this.sessionId,
     this.isSending = false,
     this.streamingText = '',
     this.runningTool,
     this.error,
+    this.pendingDraftId,
   });
 
   SecretaryChatState copyWith({
@@ -63,8 +69,10 @@ class SecretaryChatState {
     String? streamingText,
     String? runningTool,
     String? error,
+    String? pendingDraftId,
     bool clearRunningTool = false,
     bool clearError = false,
+    bool clearPendingDraftId = false,
   }) {
     return SecretaryChatState(
       sessionId: sessionId ?? this.sessionId,
@@ -72,6 +80,9 @@ class SecretaryChatState {
       streamingText: streamingText ?? this.streamingText,
       runningTool: clearRunningTool ? null : (runningTool ?? this.runningTool),
       error: clearError ? null : (error ?? this.error),
+      pendingDraftId: clearPendingDraftId
+          ? null
+          : (pendingDraftId ?? this.pendingDraftId),
     );
   }
 }
@@ -93,12 +104,22 @@ class SecretaryChatNotifier extends StateNotifier<SecretaryChatState> {
 
   /// Envía un mensaje y devuelve el texto final del asistente (null si
   /// falló) para que el modo voz pueda leerlo en voz alta.
-  Future<String?> sendMessage(String text, {bool voiceMode = false}) async {
+  ///
+  /// [onToolAnnounce] se dispara una sola vez, en la PRIMERA tool call del
+  /// turno (si hay), para que el modo voz reproduzca un acuse corto local
+  /// mientras el motor sigue trabajando (SEC-IA-002 punto 5).
+  Future<String?> sendMessage(
+    String text, {
+    bool voiceMode = false,
+    void Function(String toolId)? onToolAnnounce,
+  }) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || state.isSending) return null;
 
     final repo = _ref.read(chatRepositoryProvider);
     final startedAt = DateTime.now();
+    int? firstAudioMs;
+    var announced = false;
 
     try {
       state = state.copyWith(
@@ -175,6 +196,11 @@ class SecretaryChatNotifier extends StateNotifier<SecretaryChatState> {
             );
           case TurnToolRunning(:final toolId):
             state = state.copyWith(runningTool: toolId);
+            if (!announced) {
+              announced = true;
+              firstAudioMs = DateTime.now().difference(startedAt).inMilliseconds;
+              onToolAnnounce?.call(toolId);
+            }
           case TurnCompleted():
             completed = event;
         }
@@ -204,6 +230,7 @@ class SecretaryChatNotifier extends StateNotifier<SecretaryChatState> {
             jsonEncode([for (final m in messages) m.toJson()]),
             16000,
           ),
+          firstAudioMs: firstAudioMs,
           latencyMs: DateTime.now().difference(startedAt).inMilliseconds,
           tokensIn: completed.totalPromptTokens,
           tokensOut: completed.totalCompletionTokens,
@@ -211,10 +238,23 @@ class SecretaryChatNotifier extends StateNotifier<SecretaryChatState> {
         );
       }
 
+      // El borrador queda "pendiente de confirmar por voz" solo si sigue
+      // activo (no se auto-ejecutó, ej. por confirmBeforeExecute=false).
+      String? stillActiveDraftId;
+      if (draftId != null) {
+        final draft = await _ref
+            .read(driftDatabaseProvider)
+            .secretaryDao
+            .getDraftById(draftId);
+        if (draft?.status == 'active') stillActiveDraftId = draftId;
+      }
+
       state = state.copyWith(
         isSending: false,
         streamingText: '',
         clearRunningTool: true,
+        pendingDraftId: stillActiveDraftId,
+        clearPendingDraftId: stillActiveDraftId == null,
       );
       unawaited(_maybeExtractMemories(sessionId));
       unawaited(_maybeSummarize(sessionId));
@@ -292,7 +332,7 @@ class SecretaryChatNotifier extends StateNotifier<SecretaryChatState> {
         sessionId,
         'Listo, registré la operación correctamente.',
       );
-      state = state.copyWith(isSending: false);
+      state = state.copyWith(isSending: false, clearPendingDraftId: true);
     } catch (e, st) {
       AppLogger.error('[Secretary] Error al ejecutar borrador', e, st);
       await repo.appendAssistantMessage(
@@ -310,6 +350,9 @@ class SecretaryChatNotifier extends StateNotifier<SecretaryChatState> {
     await _ref
         .read(chatRepositoryProvider)
         .appendAssistantMessage(sessionId, 'Borrador descartado.');
+    if (state.pendingDraftId == draftId) {
+      state = state.copyWith(clearPendingDraftId: true);
+    }
   }
 
   /// Rolling summary cada 12 mensajes nuevos (asíncrono, best-effort).

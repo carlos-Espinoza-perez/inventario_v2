@@ -36,6 +36,17 @@ class SecretaryTestEnv {
   static const varCamisaId = 'var-camisa';
   static const prodZapatoId = 'prd-zapato';
   static const varZapatoId = 'var-zapato';
+  // Nombres parecidos a propósito (SEC-IA-002 punto 3: normalizeSpokenQuery)
+  // para validar que "eme seis"/"eme ocho" y "talla ese"/"equis ele" no se
+  // confundan entre sí.
+  static const prodPantalonM6Id = 'prd-pantalon-m6';
+  static const varPantalonM6Id = 'var-pantalon-m6';
+  static const prodPantalonM8Id = 'prd-pantalon-m8';
+  static const varPantalonM8Id = 'var-pantalon-m8';
+  static const prodCamisaTallaSId = 'prd-camisa-talla-s';
+  static const varCamisaTallaSId = 'var-camisa-talla-s';
+  static const prodCamisaTallaXsId = 'prd-camisa-talla-xs';
+  static const varCamisaTallaXsId = 'var-camisa-talla-xs';
 
   static const clienteJuanId = 'cli-juan';
   static const clienteMariaId = 'cli-maria';
@@ -233,6 +244,38 @@ class SecretaryTestEnv {
       categoriaId: catCalzadoId,
       costo: 20,
       precio: 40,
+    );
+    await producto(
+      id: prodPantalonM6Id,
+      varId: varPantalonM6Id,
+      nombre: 'Jean Recto M6',
+      categoriaId: catRopaId,
+      costo: 10,
+      precio: 22,
+    );
+    await producto(
+      id: prodPantalonM8Id,
+      varId: varPantalonM8Id,
+      nombre: 'Jean Recto M8',
+      categoriaId: catRopaId,
+      costo: 10,
+      precio: 22,
+    );
+    await producto(
+      id: prodCamisaTallaSId,
+      varId: varCamisaTallaSId,
+      nombre: 'Camisa Polo Talla S',
+      categoriaId: catRopaId,
+      costo: 7,
+      precio: 16,
+    );
+    await producto(
+      id: prodCamisaTallaXsId,
+      varId: varCamisaTallaXsId,
+      nombre: 'Camisa Polo Talla XS',
+      categoriaId: catRopaId,
+      costo: 7,
+      precio: 16,
     );
 
     // ── Stock: central tiene gorras/pantalón; camisa en 0; zapato solo sur ──

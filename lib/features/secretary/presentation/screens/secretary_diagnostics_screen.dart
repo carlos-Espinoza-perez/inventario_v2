@@ -79,6 +79,14 @@ class _SecretaryDiagnosticsScreenState
           final avgLatency = latencies.isEmpty
               ? 0
               : latencies.reduce((a, b) => a + b) ~/ latencies.length;
+          final firstAudioLatencies = [
+            for (final t in turns)
+              if (t.firstAudioMs != null) t.firstAudioMs!,
+          ];
+          final avgFirstAudio = firstAudioLatencies.isEmpty
+              ? null
+              : firstAudioLatencies.reduce((a, b) => a + b) ~/
+                  firstAudioLatencies.length;
           final errors = turns.where((t) => t.errorText != null).length;
           final fallbacks = todayTraces
               .where((t) => t.model == 'dictation_fallback')
@@ -103,7 +111,12 @@ class _SecretaryDiagnosticsScreenState
                         'Tokens: $tokensIn entrada / $tokensOut salida '
                         '(~\$${cost.toStringAsFixed(4)})',
                       ),
-                      Text('Latencia promedio: $avgLatency ms'),
+                      Text('Latencia promedio (respuesta final): $avgLatency ms'),
+                      if (avgFirstAudio != null)
+                        Text(
+                          'Latencia promedio (primer aviso hablado): '
+                          '$avgFirstAudio ms',
+                        ),
                       Text('Dictado → fallback LLM: $fallbacks segmentos'),
                     ],
                   ),
@@ -177,6 +190,8 @@ class _TraceTile extends StatelessWidget {
                 'Fecha: ${trace.createdAt}',
                 'Modelo: ${trace.model ?? '-'}',
                 'Latencia: ${trace.latencyMs ?? '-'} ms',
+                if (trace.firstAudioMs != null)
+                  'Primer aviso hablado: ${trace.firstAudioMs} ms',
                 'Tokens: ${trace.tokensIn ?? 0} in / ${trace.tokensOut ?? 0} out',
                 if (trace.errorText != null) '\nERROR:\n${trace.errorText}',
                 if (trace.toolCallsJson != null)

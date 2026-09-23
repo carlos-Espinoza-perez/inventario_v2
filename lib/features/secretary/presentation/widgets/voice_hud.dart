@@ -15,8 +15,19 @@ class VoiceHud extends ConsumerWidget {
     final voice = ref.watch(voiceSessionProvider);
     final chat = ref.watch(secretaryChatProvider);
     final scheme = Theme.of(context).colorScheme;
+    final pushToTalk = voice.isPushToTalk;
 
     final (icon, label, color) = switch (voice.phase) {
+      VoicePhase.listening when pushToTalk && voice.holdCancelling => (
+          Icons.mic_off,
+          'Soltá para cancelar',
+          scheme.error,
+        ),
+      VoicePhase.listening when pushToTalk => (
+          Icons.mic,
+          'Escuchando… soltá para enviar',
+          scheme.primary,
+        ),
       VoicePhase.listening => (
           Icons.mic,
           'Escuchando… tocá el círculo para enviar ya',
@@ -29,12 +40,16 @@ class VoiceHud extends ConsumerWidget {
         ),
       VoicePhase.speaking => (
           Icons.volume_up,
-          'Hablando (tocá para interrumpir)',
+          pushToTalk
+              ? 'Hablando (mantené presionado para interrumpir)'
+              : 'Hablando (tocá para interrumpir)',
           scheme.secondary,
         ),
       VoicePhase.idle => (
           Icons.mic_off,
-          'En pausa. Tocá el micrófono para hablar.',
+          pushToTalk
+              ? 'Mantené presionado el círculo para hablar'
+              : 'En pausa. Tocá el micrófono para hablar.',
           scheme.outline,
         ),
     };
@@ -75,7 +90,35 @@ class VoiceHud extends ConsumerWidget {
             ),
             const Spacer(),
             GestureDetector(
-              onTap: () => ref.read(voiceSessionProvider.notifier).tapMic(),
+              // Manos libres: tap. Mantener para hablar: press-and-hold,
+              // con deslizar fuera del círculo para cancelar sin enviar.
+              onTap: pushToTalk
+                  ? null
+                  : () => ref.read(voiceSessionProvider.notifier).tapMic(),
+              onPanDown: pushToTalk
+                  ? (_) => ref.read(voiceSessionProvider.notifier).beginHold()
+                  : null,
+              onPanUpdate: pushToTalk
+                  ? (details) {
+                      // GestureDetector reporta localPosition relativo a su
+                      // propio tamaño (el del círculo, 132x132): sin
+                      // necesidad de RenderBox/GlobalKey.
+                      const center = Offset(66, 66);
+                      final outside =
+                          (details.localPosition - center).distance > 66;
+                      ref
+                          .read(voiceSessionProvider.notifier)
+                          .updateHoldCancelling(outside);
+                    }
+                  : null,
+              onPanEnd: pushToTalk
+                  ? (_) => ref.read(voiceSessionProvider.notifier).endHold()
+                  : null,
+              onPanCancel: pushToTalk
+                  ? () => ref
+                        .read(voiceSessionProvider.notifier)
+                        .endHold(forceCancel: true)
+                  : null,
               child: _PulsingCircle(
                 color: color,
                 level: voice.phase == VoicePhase.listening

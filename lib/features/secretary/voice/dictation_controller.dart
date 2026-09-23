@@ -276,6 +276,14 @@ class DictationController extends StateNotifier<DictationState> {
         continue;
       }
 
+      final correction =
+          DictationParser.parseCorrectLastCommand(segment, esVenta: _esVenta);
+      if (correction != null) {
+        await _handleLastCorrection(correction);
+        if (!mounted || gen != _generation || !state.active) return;
+        continue;
+      }
+
       await _handleSegment(segment, gen);
       if (!mounted || gen != _generation || !state.active) return;
     }
@@ -306,6 +314,40 @@ class DictationController extends StateNotifier<DictationState> {
         }
         return true;
     }
+  }
+
+  /// "Corrige/cambia lo último a …": ajusta cantidad, costo o precio de la
+  /// última fila sin borrarla ni pedir que se repita todo el ítem.
+  Future<void> _handleLastCorrection(DictationLastCorrection correction) async {
+    final draftId = state.draftId;
+    if (draftId == null) return;
+    final items =
+        await _ref.read(driftDatabaseProvider).secretaryDao.getDraftItems(draftId);
+    if (items.isEmpty) {
+      await _speak('No hay ítems para corregir.');
+      return;
+    }
+    final last = items.last;
+    await _ref.read(draftEngineProvider).updateItem(
+          last.id,
+          cantidad: correction.field == DictationCorrectionField.cantidad
+              ? correction.value
+              : null,
+          costoUnitario: correction.field == DictationCorrectionField.costo
+              ? correction.value
+              : null,
+          precioUnitario: correction.field == DictationCorrectionField.precio
+              ? correction.value
+              : null,
+        );
+    final label = switch (correction.field) {
+      DictationCorrectionField.cantidad => 'Cantidad',
+      DictationCorrectionField.costo => 'Costo',
+      DictationCorrectionField.precio => 'Precio',
+    };
+    final ack = '$label corregido a ${_qty(correction.value)}';
+    state = state.copyWith(lastAck: ack);
+    await _speak(ack);
   }
 
   Future<void> _handleSegment(String segment, int gen) async {

@@ -61,7 +61,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration {
@@ -109,6 +109,11 @@ class AppDatabase extends _$AppDatabase {
           await customStatement(
             'DROP TABLE IF EXISTS assistant_entry_sessions',
           );
+        }
+        if (from < 11) {
+          // SEC-IA-002 punto 5: métrica de tiempo hasta el primer acuse
+          // hablado, separada de la latencia total del turno. Solo local.
+          await m.addColumn(chatTurnTraces, chatTurnTraces.firstAudioMs);
         }
       },
       beforeOpen: (details) async {
