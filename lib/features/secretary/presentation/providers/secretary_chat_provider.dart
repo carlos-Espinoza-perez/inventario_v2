@@ -93,12 +93,22 @@ class SecretaryChatNotifier extends StateNotifier<SecretaryChatState> {
 
   /// Envía un mensaje y devuelve el texto final del asistente (null si
   /// falló) para que el modo voz pueda leerlo en voz alta.
-  Future<String?> sendMessage(String text, {bool voiceMode = false}) async {
+  ///
+  /// [onToolAnnounce] se dispara una sola vez, en la PRIMERA tool call del
+  /// turno (si hay), para que el modo voz reproduzca un acuse corto local
+  /// mientras el motor sigue trabajando (SEC-IA-002 punto 5).
+  Future<String?> sendMessage(
+    String text, {
+    bool voiceMode = false,
+    void Function(String toolId)? onToolAnnounce,
+  }) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || state.isSending) return null;
 
     final repo = _ref.read(chatRepositoryProvider);
     final startedAt = DateTime.now();
+    int? firstAudioMs;
+    var announced = false;
 
     try {
       state = state.copyWith(
@@ -175,6 +185,11 @@ class SecretaryChatNotifier extends StateNotifier<SecretaryChatState> {
             );
           case TurnToolRunning(:final toolId):
             state = state.copyWith(runningTool: toolId);
+            if (!announced) {
+              announced = true;
+              firstAudioMs = DateTime.now().difference(startedAt).inMilliseconds;
+              onToolAnnounce?.call(toolId);
+            }
           case TurnCompleted():
             completed = event;
         }
@@ -204,6 +219,7 @@ class SecretaryChatNotifier extends StateNotifier<SecretaryChatState> {
             jsonEncode([for (final m in messages) m.toJson()]),
             16000,
           ),
+          firstAudioMs: firstAudioMs,
           latencyMs: DateTime.now().difference(startedAt).inMilliseconds,
           tokensIn: completed.totalPromptTokens,
           tokensOut: completed.totalCompletionTokens,

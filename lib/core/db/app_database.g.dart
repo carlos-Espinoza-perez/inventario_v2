@@ -19088,6 +19088,17 @@ class $ChatTurnTracesTable extends ChatTurnTraces
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _firstAudioMsMeta = const VerificationMeta(
+    'firstAudioMs',
+  );
+  @override
+  late final GeneratedColumn<int> firstAudioMs = GeneratedColumn<int>(
+    'first_audio_ms',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _latencyMsMeta = const VerificationMeta(
     'latencyMs',
   );
@@ -19151,6 +19162,7 @@ class $ChatTurnTracesTable extends ChatTurnTraces
     toolResultsJson,
     requestJson,
     errorText,
+    firstAudioMs,
     latencyMs,
     tokensIn,
     tokensOut,
@@ -19217,6 +19229,15 @@ class $ChatTurnTracesTable extends ChatTurnTraces
       context.handle(
         _errorTextMeta,
         errorText.isAcceptableOrUnknown(data['error_text']!, _errorTextMeta),
+      );
+    }
+    if (data.containsKey('first_audio_ms')) {
+      context.handle(
+        _firstAudioMsMeta,
+        firstAudioMs.isAcceptableOrUnknown(
+          data['first_audio_ms']!,
+          _firstAudioMsMeta,
+        ),
       );
     }
     if (data.containsKey('latency_ms')) {
@@ -19286,6 +19307,10 @@ class $ChatTurnTracesTable extends ChatTurnTraces
         DriftSqlType.string,
         data['${effectivePrefix}error_text'],
       ),
+      firstAudioMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}first_audio_ms'],
+      ),
       latencyMs: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}latency_ms'],
@@ -19328,6 +19353,12 @@ class ChatTurnTrace extends DataClass implements Insertable<ChatTurnTrace> {
 
   /// Error del turno si falló (F8.3); null en turnos exitosos.
   final String? errorText;
+
+  /// Tiempo hasta el primer audio del acuse local al detectar una tool call
+  /// en modo voz (SEC-IA-002 punto 5); null si el turno no usó tools o no
+  /// fue en modo voz. [latencyMs] sigue siendo el tiempo hasta la
+  /// respuesta final completa.
+  final int? firstAudioMs;
   final int? latencyMs;
   final int? tokensIn;
   final int? tokensOut;
@@ -19341,6 +19372,7 @@ class ChatTurnTrace extends DataClass implements Insertable<ChatTurnTrace> {
     this.toolResultsJson,
     this.requestJson,
     this.errorText,
+    this.firstAudioMs,
     this.latencyMs,
     this.tokensIn,
     this.tokensOut,
@@ -19368,6 +19400,9 @@ class ChatTurnTrace extends DataClass implements Insertable<ChatTurnTrace> {
     }
     if (!nullToAbsent || errorText != null) {
       map['error_text'] = Variable<String>(errorText);
+    }
+    if (!nullToAbsent || firstAudioMs != null) {
+      map['first_audio_ms'] = Variable<int>(firstAudioMs);
     }
     if (!nullToAbsent || latencyMs != null) {
       map['latency_ms'] = Variable<int>(latencyMs);
@@ -19406,6 +19441,9 @@ class ChatTurnTrace extends DataClass implements Insertable<ChatTurnTrace> {
       errorText: errorText == null && nullToAbsent
           ? const Value.absent()
           : Value(errorText),
+      firstAudioMs: firstAudioMs == null && nullToAbsent
+          ? const Value.absent()
+          : Value(firstAudioMs),
       latencyMs: latencyMs == null && nullToAbsent
           ? const Value.absent()
           : Value(latencyMs),
@@ -19435,6 +19473,7 @@ class ChatTurnTrace extends DataClass implements Insertable<ChatTurnTrace> {
       toolResultsJson: serializer.fromJson<String?>(json['toolResultsJson']),
       requestJson: serializer.fromJson<String?>(json['requestJson']),
       errorText: serializer.fromJson<String?>(json['errorText']),
+      firstAudioMs: serializer.fromJson<int?>(json['firstAudioMs']),
       latencyMs: serializer.fromJson<int?>(json['latencyMs']),
       tokensIn: serializer.fromJson<int?>(json['tokensIn']),
       tokensOut: serializer.fromJson<int?>(json['tokensOut']),
@@ -19453,6 +19492,7 @@ class ChatTurnTrace extends DataClass implements Insertable<ChatTurnTrace> {
       'toolResultsJson': serializer.toJson<String?>(toolResultsJson),
       'requestJson': serializer.toJson<String?>(requestJson),
       'errorText': serializer.toJson<String?>(errorText),
+      'firstAudioMs': serializer.toJson<int?>(firstAudioMs),
       'latencyMs': serializer.toJson<int?>(latencyMs),
       'tokensIn': serializer.toJson<int?>(tokensIn),
       'tokensOut': serializer.toJson<int?>(tokensOut),
@@ -19469,6 +19509,7 @@ class ChatTurnTrace extends DataClass implements Insertable<ChatTurnTrace> {
     Value<String?> toolResultsJson = const Value.absent(),
     Value<String?> requestJson = const Value.absent(),
     Value<String?> errorText = const Value.absent(),
+    Value<int?> firstAudioMs = const Value.absent(),
     Value<int?> latencyMs = const Value.absent(),
     Value<int?> tokensIn = const Value.absent(),
     Value<int?> tokensOut = const Value.absent(),
@@ -19486,6 +19527,7 @@ class ChatTurnTrace extends DataClass implements Insertable<ChatTurnTrace> {
         : this.toolResultsJson,
     requestJson: requestJson.present ? requestJson.value : this.requestJson,
     errorText: errorText.present ? errorText.value : this.errorText,
+    firstAudioMs: firstAudioMs.present ? firstAudioMs.value : this.firstAudioMs,
     latencyMs: latencyMs.present ? latencyMs.value : this.latencyMs,
     tokensIn: tokensIn.present ? tokensIn.value : this.tokensIn,
     tokensOut: tokensOut.present ? tokensOut.value : this.tokensOut,
@@ -19507,6 +19549,9 @@ class ChatTurnTrace extends DataClass implements Insertable<ChatTurnTrace> {
           ? data.requestJson.value
           : this.requestJson,
       errorText: data.errorText.present ? data.errorText.value : this.errorText,
+      firstAudioMs: data.firstAudioMs.present
+          ? data.firstAudioMs.value
+          : this.firstAudioMs,
       latencyMs: data.latencyMs.present ? data.latencyMs.value : this.latencyMs,
       tokensIn: data.tokensIn.present ? data.tokensIn.value : this.tokensIn,
       tokensOut: data.tokensOut.present ? data.tokensOut.value : this.tokensOut,
@@ -19525,6 +19570,7 @@ class ChatTurnTrace extends DataClass implements Insertable<ChatTurnTrace> {
           ..write('toolResultsJson: $toolResultsJson, ')
           ..write('requestJson: $requestJson, ')
           ..write('errorText: $errorText, ')
+          ..write('firstAudioMs: $firstAudioMs, ')
           ..write('latencyMs: $latencyMs, ')
           ..write('tokensIn: $tokensIn, ')
           ..write('tokensOut: $tokensOut, ')
@@ -19543,6 +19589,7 @@ class ChatTurnTrace extends DataClass implements Insertable<ChatTurnTrace> {
     toolResultsJson,
     requestJson,
     errorText,
+    firstAudioMs,
     latencyMs,
     tokensIn,
     tokensOut,
@@ -19560,6 +19607,7 @@ class ChatTurnTrace extends DataClass implements Insertable<ChatTurnTrace> {
           other.toolResultsJson == this.toolResultsJson &&
           other.requestJson == this.requestJson &&
           other.errorText == this.errorText &&
+          other.firstAudioMs == this.firstAudioMs &&
           other.latencyMs == this.latencyMs &&
           other.tokensIn == this.tokensIn &&
           other.tokensOut == this.tokensOut &&
@@ -19575,6 +19623,7 @@ class ChatTurnTracesCompanion extends UpdateCompanion<ChatTurnTrace> {
   final Value<String?> toolResultsJson;
   final Value<String?> requestJson;
   final Value<String?> errorText;
+  final Value<int?> firstAudioMs;
   final Value<int?> latencyMs;
   final Value<int?> tokensIn;
   final Value<int?> tokensOut;
@@ -19589,6 +19638,7 @@ class ChatTurnTracesCompanion extends UpdateCompanion<ChatTurnTrace> {
     this.toolResultsJson = const Value.absent(),
     this.requestJson = const Value.absent(),
     this.errorText = const Value.absent(),
+    this.firstAudioMs = const Value.absent(),
     this.latencyMs = const Value.absent(),
     this.tokensIn = const Value.absent(),
     this.tokensOut = const Value.absent(),
@@ -19604,6 +19654,7 @@ class ChatTurnTracesCompanion extends UpdateCompanion<ChatTurnTrace> {
     this.toolResultsJson = const Value.absent(),
     this.requestJson = const Value.absent(),
     this.errorText = const Value.absent(),
+    this.firstAudioMs = const Value.absent(),
     this.latencyMs = const Value.absent(),
     this.tokensIn = const Value.absent(),
     this.tokensOut = const Value.absent(),
@@ -19619,6 +19670,7 @@ class ChatTurnTracesCompanion extends UpdateCompanion<ChatTurnTrace> {
     Expression<String>? toolResultsJson,
     Expression<String>? requestJson,
     Expression<String>? errorText,
+    Expression<int>? firstAudioMs,
     Expression<int>? latencyMs,
     Expression<int>? tokensIn,
     Expression<int>? tokensOut,
@@ -19634,6 +19686,7 @@ class ChatTurnTracesCompanion extends UpdateCompanion<ChatTurnTrace> {
       if (toolResultsJson != null) 'tool_results_json': toolResultsJson,
       if (requestJson != null) 'request_json': requestJson,
       if (errorText != null) 'error_text': errorText,
+      if (firstAudioMs != null) 'first_audio_ms': firstAudioMs,
       if (latencyMs != null) 'latency_ms': latencyMs,
       if (tokensIn != null) 'tokens_in': tokensIn,
       if (tokensOut != null) 'tokens_out': tokensOut,
@@ -19651,6 +19704,7 @@ class ChatTurnTracesCompanion extends UpdateCompanion<ChatTurnTrace> {
     Value<String?>? toolResultsJson,
     Value<String?>? requestJson,
     Value<String?>? errorText,
+    Value<int?>? firstAudioMs,
     Value<int?>? latencyMs,
     Value<int?>? tokensIn,
     Value<int?>? tokensOut,
@@ -19666,6 +19720,7 @@ class ChatTurnTracesCompanion extends UpdateCompanion<ChatTurnTrace> {
       toolResultsJson: toolResultsJson ?? this.toolResultsJson,
       requestJson: requestJson ?? this.requestJson,
       errorText: errorText ?? this.errorText,
+      firstAudioMs: firstAudioMs ?? this.firstAudioMs,
       latencyMs: latencyMs ?? this.latencyMs,
       tokensIn: tokensIn ?? this.tokensIn,
       tokensOut: tokensOut ?? this.tokensOut,
@@ -19699,6 +19754,9 @@ class ChatTurnTracesCompanion extends UpdateCompanion<ChatTurnTrace> {
     if (errorText.present) {
       map['error_text'] = Variable<String>(errorText.value);
     }
+    if (firstAudioMs.present) {
+      map['first_audio_ms'] = Variable<int>(firstAudioMs.value);
+    }
     if (latencyMs.present) {
       map['latency_ms'] = Variable<int>(latencyMs.value);
     }
@@ -19730,6 +19788,7 @@ class ChatTurnTracesCompanion extends UpdateCompanion<ChatTurnTrace> {
           ..write('toolResultsJson: $toolResultsJson, ')
           ..write('requestJson: $requestJson, ')
           ..write('errorText: $errorText, ')
+          ..write('firstAudioMs: $firstAudioMs, ')
           ..write('latencyMs: $latencyMs, ')
           ..write('tokensIn: $tokensIn, ')
           ..write('tokensOut: $tokensOut, ')
@@ -41335,6 +41394,7 @@ typedef $$ChatTurnTracesTableCreateCompanionBuilder =
       Value<String?> toolResultsJson,
       Value<String?> requestJson,
       Value<String?> errorText,
+      Value<int?> firstAudioMs,
       Value<int?> latencyMs,
       Value<int?> tokensIn,
       Value<int?> tokensOut,
@@ -41351,6 +41411,7 @@ typedef $$ChatTurnTracesTableUpdateCompanionBuilder =
       Value<String?> toolResultsJson,
       Value<String?> requestJson,
       Value<String?> errorText,
+      Value<int?> firstAudioMs,
       Value<int?> latencyMs,
       Value<int?> tokensIn,
       Value<int?> tokensOut,
@@ -41400,6 +41461,11 @@ class $$ChatTurnTracesTableFilterComposer
 
   ColumnFilters<String> get errorText => $composableBuilder(
     column: $table.errorText,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get firstAudioMs => $composableBuilder(
+    column: $table.firstAudioMs,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -41473,6 +41539,11 @@ class $$ChatTurnTracesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get firstAudioMs => $composableBuilder(
+    column: $table.firstAudioMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get latencyMs => $composableBuilder(
     column: $table.latencyMs,
     builder: (column) => ColumnOrderings(column),
@@ -41535,6 +41606,11 @@ class $$ChatTurnTracesTableAnnotationComposer
   GeneratedColumn<String> get errorText =>
       $composableBuilder(column: $table.errorText, builder: (column) => column);
 
+  GeneratedColumn<int> get firstAudioMs => $composableBuilder(
+    column: $table.firstAudioMs,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get latencyMs =>
       $composableBuilder(column: $table.latencyMs, builder: (column) => column);
 
@@ -41591,6 +41667,7 @@ class $$ChatTurnTracesTableTableManager
                 Value<String?> toolResultsJson = const Value.absent(),
                 Value<String?> requestJson = const Value.absent(),
                 Value<String?> errorText = const Value.absent(),
+                Value<int?> firstAudioMs = const Value.absent(),
                 Value<int?> latencyMs = const Value.absent(),
                 Value<int?> tokensIn = const Value.absent(),
                 Value<int?> tokensOut = const Value.absent(),
@@ -41605,6 +41682,7 @@ class $$ChatTurnTracesTableTableManager
                 toolResultsJson: toolResultsJson,
                 requestJson: requestJson,
                 errorText: errorText,
+                firstAudioMs: firstAudioMs,
                 latencyMs: latencyMs,
                 tokensIn: tokensIn,
                 tokensOut: tokensOut,
@@ -41621,6 +41699,7 @@ class $$ChatTurnTracesTableTableManager
                 Value<String?> toolResultsJson = const Value.absent(),
                 Value<String?> requestJson = const Value.absent(),
                 Value<String?> errorText = const Value.absent(),
+                Value<int?> firstAudioMs = const Value.absent(),
                 Value<int?> latencyMs = const Value.absent(),
                 Value<int?> tokensIn = const Value.absent(),
                 Value<int?> tokensOut = const Value.absent(),
@@ -41635,6 +41714,7 @@ class $$ChatTurnTracesTableTableManager
                 toolResultsJson: toolResultsJson,
                 requestJson: requestJson,
                 errorText: errorText,
+                firstAudioMs: firstAudioMs,
                 latencyMs: latencyMs,
                 tokensIn: tokensIn,
                 tokensOut: tokensOut,

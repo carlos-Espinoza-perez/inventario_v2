@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +8,7 @@ import 'package:inventario_v2/core/services/app_logger.dart';
 import '../presentation/providers/secretary_chat_provider.dart';
 import 'secretary_transcriber.dart';
 import 'secretary_tts.dart';
+import 'tool_announcements.dart';
 
 /// Pausa de voz configurada en Preferencias (extraJson.voicePauseMs),
 /// acotada entre 1.5 y 6 s. Compartida por el controlador y la pantalla
@@ -20,6 +22,37 @@ int voicePauseMsFromPrefs(AiPreference prefs) {
     return ms.clamp(1500, 6000);
   } catch (_) {
     return 3000;
+  }
+}
+
+/// Preferencia "Aviso al consultar" (extraJson.toolAnnounce, default true):
+/// acuse hablado corto y local cuando el motor llama una herramienta en
+/// modo voz (SEC-IA-002 punto 5).
+bool toolAnnounceFromPrefs(AiPreference prefs) {
+  try {
+    final extra = prefs.extraJson != null
+        ? jsonDecode(prefs.extraJson!) as Map<String, dynamic>
+        : const <String, dynamic>{};
+    return (extra['toolAnnounce'] as bool?) ?? true;
+  } catch (_) {
+    return true;
+  }
+}
+
+/// Preferencia "Modo de escucha" (extraJson.listenMode: 'handsFree' |
+/// 'pushToTalk', default 'handsFree'). SEC-IA-002 punto 1.
+enum ListenMode { handsFree, pushToTalk }
+
+ListenMode listenModeFromPrefs(AiPreference prefs) {
+  try {
+    final extra = prefs.extraJson != null
+        ? jsonDecode(prefs.extraJson!) as Map<String, dynamic>
+        : const <String, dynamic>{};
+    return extra['listenMode'] == 'pushToTalk'
+        ? ListenMode.pushToTalk
+        : ListenMode.handsFree;
+  } catch (_) {
+    return ListenMode.handsFree;
   }
 }
 
@@ -82,6 +115,10 @@ class VoiceSessionController extends StateNotifier<VoiceSessionState> {
   /// a mitad de frase sin que se dispare el envío.
   Duration _pauseFor = const Duration(milliseconds: 3000);
 
+  /// Aviso hablado corto al detectar una tool call (Preferencias →
+  /// "Aviso al consultar"). Se lee al abrir el modo voz.
+  bool _announceTools = true;
+
   /// Identifica la sesión de voz vigente: al cerrar/reiniciar se invalida
   /// para que los loops pendientes no sigan corriendo.
   int _generation = 0;
@@ -130,8 +167,9 @@ class VoiceSessionController extends StateNotifier<VoiceSessionState> {
       }
       await _tts.setRate(prefs.ttsRate);
       _pauseFor = Duration(milliseconds: voicePauseMsFromPrefs(prefs));
+      _announceTools = toolAnnounceFromPrefs(prefs);
     } catch (_) {
-      // Sin sesión activa: velocidad por defecto.
+      // Sin sesión activa: velocidad y avisos por defecto.
     }
     await _listenLoop(gen);
   }
@@ -190,9 +228,11 @@ class VoiceSessionController extends StateNotifier<VoiceSessionState> {
 
       String? reply;
       try {
-        reply = await _ref
-            .read(secretaryChatProvider.notifier)
-            .sendMessage(text, voiceMode: true);
+        reply = await _ref.read(secretaryChatProvider.notifier).sendMessage(
+              text,
+              voiceMode: true,
+              onToolAnnounce: _announceTool,
+            );
       } catch (e, st) {
         AppLogger.error('[Secretary][Voz] Error en turno de voz', e, st);
       }
@@ -218,6 +258,15 @@ class VoiceSessionController extends StateNotifier<VoiceSessionState> {
       // final del TTS se cuele como entrada.
       await Future.delayed(const Duration(milliseconds: 350));
     }
+  }
+
+  /// Acuse hablado corto (local, sin LLM) al detectar una tool call. No
+  /// bloquea el loop: se reproduce mientras el motor sigue trabajando y la
+  /// respuesta final la interrumpe naturalmente (`_tts.speak` hace stop
+  /// antes de hablar).
+  void _announceTool(String toolId) {
+    if (!_announceTools) return;
+    unawaited(_tts.speak(toolAnnouncementFor(toolId)));
   }
 
   /// Habla y espera a que termine (o a que un barge-in lo corte).

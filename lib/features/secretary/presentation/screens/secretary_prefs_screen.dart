@@ -9,7 +9,8 @@ import 'package:inventario_v2/core/presentation/mixins/app_bar_config_mixin.dart
 import 'package:inventario_v2/core/providers/app_bar_provider.dart';
 import 'package:inventario_v2/core/providers/drift_provider.dart';
 
-import '../../voice/voice_session_controller.dart' show voicePauseMsFromPrefs;
+import '../../voice/voice_session_controller.dart'
+    show voicePauseMsFromPrefs, toolAnnounceFromPrefs;
 
 /// Preferencias del secretario + curación de memorias. Los cambios se
 /// guardan al instante y sincronizan (ai_preferences / ai_memories).
@@ -207,6 +208,15 @@ class _SecretaryPrefsScreenState extends ConsumerState<SecretaryPrefsScreen>
                       ),
                     ],
                   ),
+                ),
+                SwitchListTile(
+                  title: const Text('Aviso al consultar'),
+                  subtitle: const Text(
+                    'En modo voz, avisa hablado ("Revisando el stock…") '
+                    'apenas empieza a consultar datos, antes de responder.',
+                  ),
+                  value: toolAnnounceFromPrefs(prefs),
+                  onChanged: (v) => _saveExtra('toolAnnounce', v),
                 ),
                 const Divider(),
                 _sectionTitle(context, 'Seguridad'),

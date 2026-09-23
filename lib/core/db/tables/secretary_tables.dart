@@ -90,6 +90,12 @@ class ChatTurnTraces extends Table {
 
   /// Error del turno si falló (F8.3); null en turnos exitosos.
   TextColumn get errorText => text().nullable()();
+
+  /// Tiempo hasta el primer audio del acuse local al detectar una tool call
+  /// en modo voz (SEC-IA-002 punto 5); null si el turno no usó tools o no
+  /// fue en modo voz. [latencyMs] sigue siendo el tiempo hasta la
+  /// respuesta final completa.
+  IntColumn get firstAudioMs => integer().nullable()();
   IntColumn get latencyMs => integer().nullable()();
   IntColumn get tokensIn => integer().nullable()();
   IntColumn get tokensOut => integer().nullable()();
