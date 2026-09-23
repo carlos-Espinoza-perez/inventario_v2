@@ -49,9 +49,6 @@ void main() {
       dotenv.testLoad(
         fileInput: File('test/harness/.env.harness').readAsStringSync(),
       );
-      // flutter_test intercepta HttpClient por defecto (devuelve 400
-      // vacío); el harness necesita red real hacia el proxy local.
-      HttpOverrides.global = null;
 
       final scenarioArg = const String.fromEnvironment(
         'HARNESS_SCENARIO',
@@ -64,6 +61,12 @@ void main() {
 
       final seed = SecretaryHarnessSeed();
       await seed.setUp();
+      // TestWidgetsFlutterBinding.ensureInitialized() (dentro de
+      // seed.setUp()) instala su propio interceptor de HttpClient — hay que
+      // anularlo DESPUÉS de esa llamada, no antes, o queda pisado (mismo
+      // orden que test/integration/secretary_llm_e2e_test.dart). El
+      // harness necesita red real hacia el proxy local.
+      HttpOverrides.global = null;
       try {
         final groundTruth = await seed.computeGroundTruth();
         final scenarioDir = Directory('test/harness/scenarios');

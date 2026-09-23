@@ -134,15 +134,11 @@ class SecretaryHarnessRunner {
       history.add(SecMessage.user(turn.user!));
       final startedAt = DateTime.now();
 
-      TurnCompleted? completed;
-      await for (final event in engine.runTurn(
-        messages: history,
-        tools: [...secretaryReadOnlyTools, ...secretaryDraftTools],
-        context: seed.context,
-        localToolHandler: draftHandler.handle,
-      )) {
-        if (event is TurnCompleted) completed = event;
-      }
+      final completed = await _runTurnWithRetry(
+        engine: engine,
+        history: history,
+        draftHandler: draftHandler,
+      );
       final latencyMs = DateTime.now().difference(startedAt).inMilliseconds;
 
       if (completed == null) {
@@ -214,6 +210,45 @@ class SecretaryHarnessRunner {
     }
 
     return ScenarioRunResult(scenario: scenario, turns: turnResults);
+  }
+
+  /// El edge-runtime LOCAL de `supabase functions serve` es intermitentemente
+  /// inestable (confirmado a mano vía curl durante SEC-IA-003: ~30-40% de
+  /// las llamadas fallan con un "400: There was an error parsing the body"
+  /// genérico que no viene de OpenAI — desaparece solo al reintentar, sin
+  /// cambiar nada de la petición). No es un bug del Secretario ni de
+  /// producción (que no tiene cold/warm cycles por request); es un
+  /// artefacto de correr el proxy en Docker local. Sin este reintento, la
+  /// mitad de los escenarios "fallarían" por ruido de infraestructura, no
+  /// por el motor. NO se reintenta ante errores reales de OpenAI (4xx que sí
+  /// traen `type`/`code`, ej. quota o modelo inválido) — esos deben fallar
+  /// y quedar reportados tal cual.
+  Future<TurnCompleted?> _runTurnWithRetry({
+    required SecretaryEngine engine,
+    required List<SecMessage> history,
+    required DraftToolHandler draftHandler,
+    int maxAttempts = 3,
+  }) async {
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        TurnCompleted? completed;
+        await for (final event in engine.runTurn(
+          messages: history,
+          tools: [...secretaryReadOnlyTools, ...secretaryDraftTools],
+          context: seed.context,
+          localToolHandler: draftHandler.handle,
+        )) {
+          if (event is TurnCompleted) completed = event;
+        }
+        return completed;
+      } on SecretaryLlmException catch (e) {
+        final isLocalRuntimeFlake = e.statusCode == 400 &&
+            e.message.contains('error parsing the body');
+        if (!isLocalRuntimeFlake || attempt == maxAttempts) rethrow;
+        await Future.delayed(Duration(milliseconds: 300 * attempt));
+      }
+    }
+    return null; // inalcanzable (el loop siempre retorna o relanza)
   }
 
   /// Simula tocar el botón "Confirmar" de la tarjeta del borrador:
