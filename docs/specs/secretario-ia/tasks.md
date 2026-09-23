@@ -86,3 +86,43 @@ Base actual: `chat_turn_traces` (tools, resultados, tokens, latencia; 14 días, 
 - [ ] F8.5 Resumen por turno a `app_logs` remoto (sin contenido del usuario) — **decisión: pospuesto**; primero validar en un solo dispositivo, el diagnóstico local cubre la necesidad actual.
 - [x] F8.6 **Suite de integración con DB sembrada** (`test/integration/`): `secretary_test_env.dart` (AppDatabase en memoria + negocio completo sembrado + mock de secure storage), `secretary_engine_integration_test.dart` (24 casos offline: resolver, tools de consulta, borradores entrada/venta con transacciones reales, tools draft.*, persistencia de chat) y `secretary_llm_e2e_test.dart` (4 casos con **LLM real vía proxy**, tras compuerta `SECRETARY_LLM_TESTS=1`: consulta de stock, ventas del día, ambigüedad, ingreso dictado por chat). Hallazgos corregidos por la suite: (a) el resolver elegía un producto por LIKE LIMIT 1 en vez de marcar ambigüedad — ahora el atajo directo es solo por código exacto; (b) al resolver una ambigüedad con `updateItem(productoId)` la fila quedaba sin costo/precio — ahora hereda los defaults del producto elegido.
 - [ ] **Validar F8:** ante un fallo simulado (key inválida), el chat muestra la categoría + ref y el diagnóstico muestra la traza con su error. *(Pendiente: prueba en dispositivo.)*
+
+## SEC-IA-002 — Mejoras de captura por voz (2026-09-22)
+
+Ver `docs/specs/secretario-ia/sec-ia-002-report.md` para el detalle completo
+(decisiones, archivos tocados, tests). Rama `feat/sec-ia-002-voz`.
+
+- [x] **Punto 1 — Push-to-talk**: preferencia "Modo de escucha"
+  (`extraJson.listenMode`, default `handsFree`); `VoiceSessionController.beginHold()`/`endHold()`
+  en `voice_session_controller.dart`; gesto press-and-hold con cancelar por
+  deslizar en `voice_hud.dart`; decisión de descarte extraída a función pura
+  (`voice/push_to_talk.dart::shouldDiscardHold`, 5 tests). *Pendiente:
+  prueba manual en dispositivo (checklist en el reporte).*
+- [x] **Punto 2 — Autocorrecciones en el dictado**: `DictationParser` detecta
+  marcadores de corrección ("no", "perdón", "digo", "corrijo", "mejor
+  dicho") seguidos de un valor numérico y se queda con el último; comando
+  nuevo "corrige/cambia lo último a X"; misma regla en el prompt del
+  fallback LLM. 18 tests nuevos, incluidos 3 de falsos positivos. *Pendiente:
+  prueba manual en dispositivo.*
+- [x] **Punto 3 — normalizeSpokenQuery**: `EntityResolver.normalizeSpokenQuery`
+  convierte letras deletreadas ("eme seis" → "m6") y números en palabras
+  antes de resolver, conservador con letras sueltas ambiguas. 11 tests
+  unitarios + 5 de integración con productos sembrados de nombres parecidos
+  (M6/M8, talla S/XS). *Pendiente: prueba manual en dispositivo.*
+- [x] **Punto 4 — Confirmación y ambigüedad por voz**: preferencia "Confirmar
+  por voz" (default desactivada); `VoiceConfirmationMatcher` determinista
+  (sin LLM) en `voice/voice_confirmation.dart`; reutiliza
+  `SecretaryChatNotifier.confirmDraft`/`discardDraft` y `DraftEngine.updateItem`
+  — no se agregó ninguna tool `draft.confirm`. 12 tests del matcher.
+  *Pendiente: prueba manual en dispositivo.*
+- [x] **Punto 5 — Acuse inmediato en turnos con tools**: preferencia "Aviso al
+  consultar" (default activada); `tool_announcements.dart` mapea el grupo
+  de la tool a una frase local; Drift v10→v11 agrega `firstAudioMs` a
+  `chat_turn_traces` (solo local, no sincroniza) para medir esa latencia
+  por separado de la respuesta final; diagnóstico la muestra. 5 tests.
+  *Pendiente: prueba manual en dispositivo.*
+
+**Validaciones ejecutadas en cada punto:** `flutter analyze` (0 hallazgos) y
+`flutter test` (99 tests, 5 E2E con LLM real se saltan por el gate
+`SECRETARY_LLM_TESTS=1`) tras cada commit. `flutter build apk --debug`
+documentado en el reporte.
