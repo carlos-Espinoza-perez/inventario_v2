@@ -16,6 +16,17 @@ class DictatedLine {
 /// Comandos reservados del modo dictado (se interceptan antes del parser).
 enum DictationCommand { finish, undoLast, cancelAll }
 
+/// Campo que corrige el comando "corrige/cambia lo último a …".
+enum DictationCorrectionField { cantidad, costo, precio }
+
+/// Resultado de `DictationParser.parseCorrectLastCommand`.
+class DictationLastCorrection {
+  final DictationCorrectionField field;
+  final double value;
+
+  const DictationLastCorrection({required this.field, required this.value});
+}
+
 /// Parser determinista de dictado en español. Vía rápida (<300 ms, sin red):
 /// extrae (cantidad, descripción, costo/precio) de frases como
 /// "12 pantalones a 10 dólares" o "tres cajas de gorras costo 5 precio 12".
@@ -43,10 +54,116 @@ class DictationParser {
     return null;
   }
 
+  /// Comando "corrige/cambia lo último a …": ajusta cantidad, costo o precio
+  /// de la última fila del borrador sin borrarla. Null si el texto no
+  /// matchea. Sin campo explícito, usa la misma regla que "a X" en
+  /// [parseLine] (precio en venta, costo en entrada).
+  static DictationLastCorrection? parseCorrectLastCommand(
+    String text, {
+    required bool esVenta,
+  }) {
+    final norm = _normalize(text);
+    final match = RegExp(
+      r'^(?:corrige|corregir|cambia|cambiar)\s+'
+      r'(?:lo\s+ultimo|el\s+ultimo|la\s+ultima)\s+'
+      r'(?:(cantidad|costo|precio)\s+)?(?:a|en)\s+(.+)$',
+    ).firstMatch(norm);
+    if (match == null) return null;
+
+    final value = _parseAmount(match.group(2)!);
+    if (value == null) return null;
+
+    final field = switch (match.group(1)) {
+      'cantidad' => DictationCorrectionField.cantidad,
+      'costo' => DictationCorrectionField.costo,
+      'precio' => DictationCorrectionField.precio,
+      _ =>
+        esVenta ? DictationCorrectionField.precio : DictationCorrectionField.costo,
+    };
+    return DictationLastCorrection(field: field, value: value);
+  }
+
+  // -------------------------------------------------------------------
+  // Autocorrecciones dentro de una frase ("15... no, 50 tornillos")
+  // -------------------------------------------------------------------
+
+  static final RegExp _correctionMarkerRe =
+      RegExp(r'\b(?:no|perdon|digo|corrijo|mejor\s+dicho)\b');
+
+  static final RegExp _amountConnectorRe = RegExp(
+    r'\b(?:a|en|por|costo(?:\s+de)?|precio(?:\s+(?:de\s+venta\s+)?de)?)\s+',
+  );
+
+  /// Detecta un marcador de autocorrección ("no", "perdón", "digo",
+  /// "mejor dicho", "corrijo") seguido de un número o monto y reescribe la
+  /// frase para que solo quede el último valor. Evita falsos positivos como
+  /// "no hay" o "no" dentro de otra palabra (nogal, nota) exigiendo que lo
+  /// siguiente al marcador sea, en efecto, un valor numérico.
+  static String _applyCorrections(String normalized) {
+    RegExpMatch? valid;
+    for (final m in _correctionMarkerRe.allMatches(normalized)) {
+      final rest = normalized.substring(m.end).replaceFirst(RegExp(r'^,?\s*'), '');
+      if (_looksLikeCorrectionValue(rest)) valid = m;
+    }
+    if (valid == null) return normalized;
+
+    final before = normalized.substring(0, valid.start).trim();
+    final after =
+        normalized.substring(valid.end).replaceFirst(RegExp(r'^,?\s*'), '').trim();
+    if (after.isEmpty) return normalized;
+
+    // "after" trae más que un monto puro (ej. "50 tornillos"): reemplaza
+    // toda la frase por la versión corregida.
+    final afterAmount = _parseAmount(after);
+    if (afterAmount == null) return after;
+
+    // "after" es un monto puro: si "before" trae una cláusula de monto
+    // ("a X", "costo X", "precio X"), se reemplaza el monto de la ÚLTIMA
+    // (la más cercana al marcador de corrección).
+    final connectorMatches = _amountConnectorRe.allMatches(before).toList();
+    if (connectorMatches.isNotEmpty) {
+      final last = connectorMatches.last;
+      final prefix = before.substring(0, last.start);
+      final connector = before.substring(last.start, last.end);
+      return '$prefix$connector$after'.trim();
+    }
+
+    // Sin cláusula de monto: se asume corrección de la cantidad inicial
+    // ("quince tornillos no cincuenta" → "cincuenta tornillos").
+    final tokens =
+        before.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+    final qty = tokens.isEmpty ? null : _parseLeadingQuantity(tokens);
+    if (qty != null) {
+      final rest = tokens.sublist(qty.$2).join(' ');
+      return rest.isEmpty ? after : '$after $rest'.trim();
+    }
+
+    // No se pudo determinar qué campo corrige: mejor no tocar nada.
+    return normalized;
+  }
+
+  static bool _looksLikeCorrectionValue(String rest) {
+    final tokens =
+        rest.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+    if (tokens.isEmpty) return false;
+    return _isNumberWord(tokens.first);
+  }
+
+  static bool _isNumberWord(String token) {
+    if (double.tryParse(token.replaceAll(',', '.')) != null) return true;
+    return _units.containsKey(token) ||
+        _tens.containsKey(token) ||
+        _veinti.containsKey(token) ||
+        _hundreds.containsKey(token) ||
+        token == 'media';
+  }
+
   /// Interpreta una línea de ítem. [esVenta] decide si "a X" es precio
   /// (venta) o costo (entrada). Null → mandar al fallback LLM.
   static DictatedLine? parseLine(String text, {required bool esVenta}) {
     var str = _normalize(text);
+    if (str.isEmpty) return null;
+    str = _applyCorrections(str);
     if (str.isEmpty) return null;
 
     double? costo;

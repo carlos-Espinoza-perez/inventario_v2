@@ -27,6 +27,9 @@ Extrae los productos de este dictado de ${esVenta ? 'venta' : 'entrada de invent
 Responde SOLO un array JSON (sin markdown ni texto extra) con objetos:
 {"nombre": string, "cantidad": number, "costoUnitario": number opcional, "precioUnitario": number opcional}
 Si dice "a X" o "en X" el monto es $montoCampo. Si no hay productos responde [].
+Si el usuario se corrige dentro de la frase (ej. "no", "perdón", "digo",
+"corrijo", "mejor dicho" seguido de un nuevo valor), usa SOLO el último
+valor dicho para ese campo, ignorá el anterior.
 
 Dictado: "$segment"''';
 
