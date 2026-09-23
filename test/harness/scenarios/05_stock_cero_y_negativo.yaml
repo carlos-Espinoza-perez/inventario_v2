@@ -1,0 +1,22 @@
+title: "Stock 0 y stock negativo (error de datos real)"
+description: >
+  El Secretario debe reportar los números tal cual están en la base, sin
+  "corregir" un stock negativo a 0 ni esconder un stock en 0.
+voice_mode: false
+turns:
+  - user: "¿Cuánto stock hay de Chaqueta Impermeable Verde talla M en la Bodega Central?"
+    expect:
+      tools_all_of: ["inventory.getStockPorBodega"]
+      response_contains_all: ["0"]
+      draft_expected: false
+  - user: "¿Cuánto stock hay de Suéter de Lana Beige talla M en la Bodega Central?"
+    expect:
+      tools_all_of: ["inventory.getStockPorBodega"]
+      response_contains_any: ["-3", "menos 3", "negativ"]
+      draft_expected: false
+      note: >
+        getStockPorBodega suma TODAS las tallas del producto en la bodega
+        (no filtra por talla — ver hallazgo en 01_stock_variante_exacta.yaml),
+        así que lo que el LLM va a ver realmente es el total de S+M+L, no
+        el -3 aislado de la talla M. Puede terminar reportando un número
+        distinto de -3 aunque "sea negativo" en términos generales.

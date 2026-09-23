@@ -1,0 +1,23 @@
+title: "Talla dictada en palabras (números y letras deletreadas)"
+description: >
+  Tallas dichas como las diría alguien hablando, no escribiendo: números
+  en palabras para pantalones, y letras sueltas para prendas con talla de
+  letra. Ninguno de estos 3 productos es ambiguo por nombre, así que el
+  único riesgo es que no entienda la talla hablada.
+voice_mode: false
+turns:
+  - user: "¿Cuánto stock hay de Jeans Slim talla treinta y dos en la Bodega Central?"
+    expect:
+      tools_all_of: ["inventory.getStockPorBodega"]
+      response_contains_any: ["32", "treinta y dos"]
+      draft_expected: false
+  - user: "¿Cuánto stock hay de Camisa Polo Azul talla eme en la Bodega Central?"
+    expect:
+      tools_all_of: ["inventory.getStockPorBodega"]
+      response_not_contains_any: ["azul marino"]
+      draft_expected: false
+  - user: "¿Cuánto stock hay de Camiseta Básica Negra talla equis ele en la Bodega Central?"
+    expect:
+      tools_all_of: ["inventory.getStockPorBodega"]
+      response_contains_any: ["XL", "equis ele"]
+      draft_expected: false

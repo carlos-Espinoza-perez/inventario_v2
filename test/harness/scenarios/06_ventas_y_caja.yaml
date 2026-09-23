@@ -1,0 +1,27 @@
+title: "Ventas del día y estado de caja"
+description: >
+  Verifica los totales del día contra el ground truth, y el efectivo
+  registrado en la sesión de caja actual.
+voice_mode: false
+turns:
+  - user: "¿Cuánto vendí hoy en total?"
+    expect:
+      tools_any_of: ["sales.getVentasDelDia"]
+      response_contains_all: ["{{gt:ventasHoy.total}}"]
+      draft_expected: false
+      db_unchanged_tables: ["ventas", "detalle_ventas", "pagos_ventas"]
+  - user: "¿Cómo está la caja?"
+    expect:
+      tools_any_of: ["sales.getEstadoCaja"]
+      response_contains_any: ["{{gt:caja.totalPagos}}", "abierta"]
+      draft_expected: false
+      note: >
+        sales.getEstadoCaja NO devuelve un "saldo esperado" (inicial +
+        pagos - egresos): devuelve ventasEfectivo (que en realidad suma
+        TODOS los métodos de pago de la sesión, no solo efectivo, pese al
+        nombre), ventasCredito y ganancia. Además, getVentasCreditoPendienteSesion
+        filtra tipoVenta='credito' (minúscula, sin tilde) pero el sistema
+        guarda 'Fiado' — ese filtro nunca matchea nada, así que
+        ventasCredito siempre da 0 aunque haya fiado pendiente en la
+        sesión. Este turno solo verifica ventasEfectivo (caja.totalPagos);
+        no se verifica ventasCredito ni ganancia por lo frágil que sería.

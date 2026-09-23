@@ -1,0 +1,22 @@
+title: "Consulta ambigua: dos productos con nombre parecido"
+description: >
+  "Camisa polo" existe como dos productos distintos (Azul y Azul Marino).
+  El Secretario nunca debe sumarlos silenciosamente ni elegir uno: debe
+  desglosar por color o preguntar cuál.
+voice_mode: false
+turns:
+  - user: "¿Cuántas camisas polo hay en la Bodega Central?"
+    expect:
+      tools_any_of: ["entity_resolver.resolveProduct"]
+      response_contains_any:
+        - "azul marino"
+        - "¿cuál"
+        - "cuál color"
+        - "aclar"
+        - "dos"
+      draft_expected: false
+      note: >
+        No hay una forma 100% determinista de verificar "no sumó en
+        silencio" solo por texto; leer la traza (tool calls + resultados)
+        del JSONL es necesario para confirmar si el turno consultó ambos
+        productos por separado o inventó un total combinado.

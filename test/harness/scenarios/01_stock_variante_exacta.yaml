@@ -1,0 +1,23 @@
+title: "Stock de una variante exacta"
+description: >
+  Pregunta por el stock de una talla específica de un producto que NO es
+  ambiguo (un solo color/nombre). Debe resolver el producto y consultar
+  el stock real, sin inventar el número.
+voice_mode: false
+turns:
+  - user: "¿Cuántas Camisa Polo Azul talla M hay en la Bodega Central?"
+    expect:
+      tools_all_of:
+        - "entity_resolver.resolveProduct"
+        - "inventory.getStockPorBodega"
+      response_contains_all:
+        - "{{gt:stockPorVarianteIndex.prd-camisa-polo-azul|M|harness-bod-central}}"
+      response_not_contains_any:
+        - "azul marino"
+      draft_expected: false
+      db_unchanged_tables: ["inventarios"]
+      note: >
+        inventory.getStockPorBodega no recibe la talla como parámetro (ver
+        sec-ia-003-report.md) — si el LLM llama la tool sin filtrar por
+        variante, puede terminar leyendo el total del producto en vez de
+        la fila exacta de talla M. Este escenario existe para detectar eso.

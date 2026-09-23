@@ -1,0 +1,21 @@
+title: "Corrección que cambia de un ítem a otro completamente distinto"
+description: >
+  "Doce pantalones, no, ocho camisas" — dos productos distintos con la
+  palabra "no" en medio. Debe quedar como dos ítems (12 pantalones + 8
+  camisas) o pedir aclaración; NUNCA interpretarlo como "8 pantalones"
+  (que sería tratar "camisas" como si corrigiera solo el número).
+voice_mode: false
+turns:
+  - user: "Anota una entrada en la Bodega Central: doce pantalones, no, ocho camisas."
+    expect:
+      tools_any_of: ["draft.create", "draft.addItems"]
+      response_not_contains_any: ["8 pantalon", "ocho pantalon"]
+      note: >
+        Este es el caso ambiguo a propósito: "pantalones" y "camisas" acá
+        son categorías genéricas (no un nombre de producto exacto), así
+        que lo más probable es que el motor pida aclaración de qué
+        producto exacto en vez de crear el ítem directo — eso está bien.
+        Lo que NO debe pasar es que la cantidad "ocho" reemplace la
+        cantidad de "pantalones" (8 pantalones) en vez de crear/pedir por
+        un segundo ítem de camisas. Revisar a mano el draft.getState del
+        turno si el resultado no es obvio por el texto.

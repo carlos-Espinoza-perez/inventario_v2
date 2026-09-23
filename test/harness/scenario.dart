@@ -88,17 +88,39 @@ class HarnessExpectation {
 }
 
 class HarnessTurn {
-  final String user;
+  /// Mensaje del usuario. Null cuando [confirmDraft] es true (ese turno no
+  /// pasa por el LLM).
+  final String? user;
+
+  /// true = simula tocar el botón "Confirmar" de la tarjeta del borrador
+  /// (DraftEngine.execute directo, el mismo camino que usa la app — NO una
+  /// tool del LLM, Req-15). El turno no manda nada al modelo.
+  final bool confirmDraft;
+
   final HarnessExpectation expect;
 
-  const HarnessTurn({required this.user, required this.expect});
+  const HarnessTurn({
+    this.user,
+    this.confirmDraft = false,
+    required this.expect,
+  });
 
   factory HarnessTurn.fromYaml(
     YamlMap map,
     Map<String, dynamic> groundTruth,
   ) {
+    final confirmDraft = map['confirm_draft'] as bool? ?? false;
+    final userRaw = map['user'] as String?;
+    if (!confirmDraft && userRaw == null) {
+      throw StateError(
+        'Un turno del escenario debe traer "user" o "confirm_draft: true".',
+      );
+    }
     return HarnessTurn(
-      user: resolveGroundTruthTemplate(map['user'] as String, groundTruth),
+      user: userRaw != null
+          ? resolveGroundTruthTemplate(userRaw, groundTruth)
+          : null,
+      confirmDraft: confirmDraft,
       expect: HarnessExpectation.fromYaml(
         map['expect'] as YamlMap?,
         groundTruth,

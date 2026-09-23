@@ -1,0 +1,17 @@
+title: "Producto que no existe en el catálogo"
+description: >
+  Debe decir que no lo encuentra, sin inventar stock ni precio.
+voice_mode: false
+turns:
+  - user: "¿Tienen sombreros de vaquero?"
+    expect:
+      tools_any_of: ["entity_resolver.resolveProduct"]
+      response_contains_any:
+        - "no encontr"
+        - "no tengo"
+        - "no hay"
+        - "no existe"
+        - "no lo tengo"
+      response_not_contains_any: ["unidades", "stock disponible"]
+      draft_expected: false
+      db_unchanged_tables: ["productos", "inventarios"]

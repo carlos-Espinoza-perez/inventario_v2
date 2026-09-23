@@ -1,0 +1,102 @@
+title: "Conversación larga (40 turnos) — coherencia y memoria de sesión"
+description: >
+  LIMITACIÓN CONOCIDA DEL HARNESS (ver sec-ia-003-report.md): este runner
+  manda TODO el historial crudo al motor en cada turno — no pasa por
+  ChatRepository/SessionSummarizer como la app real, que recorta a los
+  últimos ~12 mensajes + un resumen acumulado (AppConstants.assistantHistoryTurns).
+  Este escenario mide coherencia dentro de una ventana sin recorte, que es
+  un caso MÁS fácil que el de la app real (menos probable que pierda el
+  dato); si falla acá, seguro falla peor en la app. Si pasa acá, no prueba
+  que el rolling summary de la app funcione — solo que el modelo puede
+  seguir el hilo cuando tiene todo el contexto.
+voice_mode: false
+turns:
+  - user: "¿Cuánto stock hay de Jeans Slim talla 30 en la Bodega Central?"
+    expect: {tools_any_of: ["inventory.getStockPorBodega"]}
+  - user: "¿Y talla 32?"
+    expect: {tools_any_of: ["inventory.getStockPorBodega"]}
+  - user: "¿Y talla 34?"
+    expect: {tools_any_of: ["inventory.getStockPorBodega"]}
+  - user: "¿Qué precio tiene Camisa Manga Larga Blanca?"
+    expect: {tools_any_of: ["inventory.getPrecioProducto"]}
+  - user: "¿Cuánto vendí hoy?"
+    expect: {tools_any_of: ["sales.getVentasDelDia"]}
+  - user: "¿Cuánto debe Ana Al Día?"
+    expect: {tools_any_of: ["sales.getDeudaCliente"]}
+  - user: "¿Y Beto Vencido?"
+    expect: {tools_any_of: ["sales.getDeudaCliente"]}
+  - user: "¿Cómo está la caja?"
+    expect: {tools_any_of: ["sales.getEstadoCaja"]}
+  - user: "¿Cuántas Camisa Polo Azul hay en total en la Bodega Central?"
+    expect: {tools_any_of: ["inventory.getStockPorBodega"]}
+  - user: "¿Y en la Sucursal Sur?"
+    expect: {tools_any_of: ["inventory.getStockPorBodega"]}
+  - user: "¿Qué precio tiene Vestido Casual Floreado?"
+    expect: {tools_any_of: ["inventory.getPrecioProducto"]}
+  - user: "¿Tienen Falda Corta Negra?"
+    expect: {tools_any_of: ["entity_resolver.resolveProduct"]}
+  - user: "¿Cuánto stock hay de esa falda en la Bodega Central?"
+    expect: {tools_any_of: ["inventory.getStockPorBodega"]}
+  - user: "¿Y de Short Deportivo Azul?"
+    expect: {tools_any_of: ["inventory.getStockPorBodega"]}
+  - user: "¿Qué precio tiene Zapato Casual Café talla 40?"
+    expect: {tools_any_of: ["inventory.getPrecioProducto"]}
+  - user: "¿Y talla 41?"
+    expect: {tools_any_of: ["inventory.getPrecioProducto"]}
+  - user: "¿Cuánto debe Carla Con Abonos?"
+    expect: {tools_any_of: ["sales.getDeudaCliente"]}
+  - user: "¿Cuánto suman todos mis fiados pendientes?"
+    expect: {tools_any_of: ["sales.getResumenDeudas"]}
+  - user: "¿Qué precio tiene Cinturón de Cuero Negro?"
+    expect: {tools_any_of: ["inventory.getPrecioProducto"]}
+  - user: "¿Y Gorra Deportiva Azul?"
+    expect: {tools_any_of: ["inventory.getPrecioProducto"]}
+  - user: "¿Cuánto stock hay de Bufanda de Lana Gris en la Bodega Central?"
+    expect: {tools_any_of: ["inventory.getStockPorBodega"]}
+  - user: "¿Tienen Vestido de Noche Negro?"
+    expect: {tools_any_of: ["entity_resolver.resolveProduct"]}
+  - user: "¿Cuánto stock queda de ese vestido en Sucursal Sur?"
+    expect: {tools_any_of: ["inventory.getStockPorBodega"]}
+  - user: "¿Qué precio tiene Falda Larga Estampada?"
+    expect: {tools_any_of: ["inventory.getPrecioProducto"]}
+  - user: "¿Cuánto stock hay de Short Mezclilla Claro talla L en Bodega Central?"
+    expect: {tools_any_of: ["inventory.getStockPorBodega"]}
+  - user: "¿Y talla XL?"
+    expect: {tools_any_of: ["inventory.getStockPorBodega"]}
+  - user: "¿Qué precio tiene Zapato Deportivo Blanco talla 38?"
+    expect: {tools_any_of: ["inventory.getPrecioProducto"]}
+  - user: "¿Cuánto stock hay de Jeans Skinny talla 30 en Bodega Central?"
+    expect: {tools_any_of: ["inventory.getStockPorBodega"]}
+  - user: "¿Y talla 34?"
+    expect: {tools_any_of: ["inventory.getStockPorBodega"]}
+  - user: "¿Cuánto debe en total Beto Vencido comparado con Ana Al Día?"
+    expect: {tools_any_of: ["sales.getDeudaCliente"]}
+  - user: "¿Qué precio tiene Camisa Cuadros Roja?"
+    expect: {tools_any_of: ["inventory.getPrecioProducto"]}
+  - user: "¿Cuánto stock hay de Camiseta Estampada Gris talla S en Bodega Central?"
+    expect: {tools_any_of: ["inventory.getStockPorBodega"]}
+  - user: "¿Y talla M?"
+    expect: {tools_any_of: ["inventory.getStockPorBodega"]}
+  - user: "¿Cuál es el estado de mi caja ahora mismo?"
+    expect: {tools_any_of: ["sales.getEstadoCaja"]}
+  - user: "¿Cuánto vendí hoy, sumando todo?"
+    expect: {tools_any_of: ["sales.getVentasDelDia"]}
+  - user: "¿Qué precio tiene Pantalón Casual Caqui talla 32?"
+    expect: {tools_any_of: ["inventory.getPrecioProducto"]}
+  - user: "¿Y Pantalón Formal Negro talla 34?"
+    expect: {tools_any_of: ["inventory.getPrecioProducto"]}
+  - user: "¿Cuánto stock hay de Camisa Polo Azul Marino talla L en Bodega Central?"
+    expect: {tools_any_of: ["inventory.getStockPorBodega"]}
+  - user: "Antes de terminar, contame de nuevo: ¿cuánto stock de Jeans Slim talla 30 en Bodega Central me dijiste al principio de esta conversación?"
+    expect:
+      tools_any_of: []
+      response_contains_all:
+        - "{{gt:stockPorVarianteIndex.prd-jeans-slim|30|harness-bod-central}}"
+      note: >
+        Turno clave del escenario: NO debería necesitar volver a llamar
+        la tool si el modelo realmente "recuerda" el turno 1 (acá no hay
+        recorte de historial — ver limitación del harness arriba). Si el
+        número no coincide con el del turno 1, es un problema de
+        coherencia real, no del harness.
+  - user: "Gracias, eso es todo."
+    expect: {}

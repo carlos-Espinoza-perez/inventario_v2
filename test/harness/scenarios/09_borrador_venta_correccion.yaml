@@ -1,0 +1,24 @@
+title: "Borrador de venta con corrección a mitad de conversación"
+description: >
+  Dicta una venta, se corrige la cantidad de un ítem, y se confirma. La
+  cantidad final en el borrador (y en la venta real) debe reflejar la
+  corrección, no el valor original.
+voice_mode: false
+turns:
+  - user: "Quiero vender 2 Camisa Polo Azul talla M a Cliente Contado, contado."
+    expect:
+      tools_any_of: ["draft.create", "draft.addItems"]
+      draft_expected: true
+  - user: "No, eran 3, no 2."
+    expect:
+      tools_any_of: ["draft.updateItem"]
+      draft_expected: true
+      response_not_contains_any: ["5"]
+      note: >
+        Si el motor interpreta mal la corrección puede terminar sumando
+        (2+3=5) en vez de reemplazar (3). Revisar draft.getState en el
+        JSONL de este turno para confirmar la cantidad real del ítem.
+  - confirm_draft: true
+    expect:
+      draft_expected: false
+      db_unchanged_tables: []

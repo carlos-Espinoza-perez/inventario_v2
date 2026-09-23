@@ -1,0 +1,44 @@
+title: "Modo voz: escenarios 1, 6 y 8 repetidos con el límite de 2 frases"
+description: >
+  Mismas preguntas que 01/06/08 pero con voice_mode=true (system prompt
+  con la directiva de brevedad, Req-09: máx. 2 frases habladas). Verifica
+  que la respuesta no se alargue solo porque el turno usó tools.
+voice_mode: true
+turns:
+  # --- equivalente a 01_stock_variante_exacta ---
+  - user: "¿Cuántas Camisa Polo Azul talla M hay en la Bodega Central?"
+    expect:
+      tools_all_of:
+        - "entity_resolver.resolveProduct"
+        - "inventory.getStockPorBodega"
+      max_sentences: 2
+      draft_expected: false
+      note: >
+        Igual que 01_stock_variante_exacta.yaml: la tool no filtra por
+        talla, así que el número puede no coincidir con
+        stockPorVarianteIndex. Acá el foco es max_sentences, no el número.
+  # --- equivalente a 06_ventas_y_caja ---
+  - user: "¿Cuánto vendí hoy en total?"
+    expect:
+      tools_any_of: ["sales.getVentasDelDia"]
+      response_contains_all: ["{{gt:ventasHoy.total}}"]
+      max_sentences: 2
+      draft_expected: false
+  - user: "¿Cómo está la caja?"
+    expect:
+      tools_any_of: ["sales.getEstadoCaja"]
+      max_sentences: 2
+      draft_expected: false
+  # --- equivalente a 08_borrador_entrada_tallas (versión corta) ---
+  - user: "Registrame una entrada en la Bodega Central de 5 Camisa Polo Azul talla M."
+    expect:
+      tools_any_of: ["draft.create", "draft.addItems"]
+      draft_expected: true
+      max_sentences: 2
+      note: >
+        En modo voz, el resumen del borrador debe ser hablado corto (el
+        detalle completo queda en la tarjeta de la pantalla, no en el
+        audio) — Req-09.
+  - confirm_draft: true
+    expect:
+      draft_expected: false

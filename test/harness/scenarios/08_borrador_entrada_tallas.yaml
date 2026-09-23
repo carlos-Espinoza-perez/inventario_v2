@@ -1,0 +1,39 @@
+title: "Borrador de entrada con varias prendas y tallas"
+description: >
+  Dicta una entrada de 3 líneas con talla explícita. Verifica que la base
+  NO cambie hasta confirmar, y que tras confirmar el stock aumente en la
+  bodega y TALLA correctas.
+voice_mode: false
+turns:
+  - user: >
+      Necesito registrar una entrada en la Bodega Central: 5 Camisa Polo
+      Azul talla M, 3 Camisa Polo Azul talla L y 4 Jeans Slim talla 32.
+    expect:
+      tools_any_of: ["draft.create", "draft.addItems"]
+      draft_expected: true
+      db_unchanged_tables: ["inventarios", "producto_variantes"]
+      note: >
+        Antes de confirmar, la base no debería cambiar todavía (el
+        borrador vive en secretary_drafts/secretary_draft_items, no en
+        inventarios). Este turno solo arma el borrador.
+  - confirm_draft: true
+    expect:
+      draft_expected: false
+      note: >
+        HALLAZGO ESPERADO (ver sec-ia-003-report.md): EntradaDraftAdapter
+        arma cada línea de `orderLines` con `items: List.generate(...,
+        (_) => <String,dynamic>{})` — mapas VACÍOS, sin `size`/`talla` ni
+        `color`. RegistrarEntradaUseCase._mapOrderLinesToRequestItems lee
+        ese `size` nulo y resolveVariantForEntry normaliza
+        `talla ?? 'General'`. En la práctica, este borrador va a crear o
+        engordar una variante "General" del producto, NO las variantes M/
+        L/32 que el usuario dictó. Se espera que este turno FALLE la
+        verificación de abajo — es la prueba concreta de ese hallazgo, no
+        un bug del harness.
+      # Lo "correcto" (lo que debería pasar si la talla se respetara) es
+      # que el stock de la variante M de Camisa Polo Azul en Bodega
+      # Central suba en 5 respecto al valor sembrado. Lo dejamos como
+      # verificación explícita para que el reporte muestre el número real
+      # contra el esperado en vez de solo "falló".
+      response_contains_any:
+        - "registr"

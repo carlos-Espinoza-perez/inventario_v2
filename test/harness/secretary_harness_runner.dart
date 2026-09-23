@@ -124,7 +124,14 @@ class SecretaryHarnessRunner {
           ? const <String, TableSnapshot>{}
           : await snapshotTables(seed.db, turn.expect.dbUnchangedTables);
 
-      history.add(SecMessage.user(turn.user));
+      if (turn.confirmDraft) {
+        turnResults.add(
+          await _runConfirmDraft(turn, draftHandler.lastDraftId, before),
+        );
+        continue;
+      }
+
+      history.add(SecMessage.user(turn.user!));
       final startedAt = DateTime.now();
 
       TurnCompleted? completed;
@@ -141,7 +148,7 @@ class SecretaryHarnessRunner {
       if (completed == null) {
         turnResults.add(
           TurnRunResult(
-            user: turn.user,
+            user: turn.user!,
             response: '',
             toolCallsLog: const [],
             toolResultsLog: const [],
@@ -191,7 +198,7 @@ class SecretaryHarnessRunner {
 
       turnResults.add(
         TurnRunResult(
-          user: turn.user,
+          user: turn.user!,
           response: completed.content,
           toolCallsLog: completed.toolCallsLog,
           toolResultsLog: completed.toolResultsLog,
@@ -207,5 +214,84 @@ class SecretaryHarnessRunner {
     }
 
     return ScenarioRunResult(scenario: scenario, turns: turnResults);
+  }
+
+  /// Simula tocar el botón "Confirmar" de la tarjeta del borrador:
+  /// `DraftEngine.execute()` directo, el MISMO camino que
+  /// `SecretaryChatNotifier.confirmDraft()` en la app — nunca una tool del
+  /// LLM (Req-15). No manda nada al modelo, así que no gasta tokens.
+  Future<TurnRunResult> _runConfirmDraft(
+    HarnessTurn turn,
+    String? draftId,
+    Map<String, TableSnapshot> before,
+  ) async {
+    const label = '[confirmar borrador]';
+    if (draftId == null) {
+      return const TurnRunResult(
+        user: label,
+        response: '',
+        toolCallsLog: [],
+        toolResultsLog: [],
+        promptTokens: 0,
+        completionTokens: 0,
+        latencyMs: 0,
+        draftActive: false,
+        draftId: null,
+        unexpectedDbChanges: [],
+        failures: [
+          'confirm_draft: true pero no hay un borrador activo (ningún '
+              'turno anterior llamó draft.create/addItems).',
+        ],
+      );
+    }
+
+    final startedAt = DateTime.now();
+    String response;
+    try {
+      await seed.container
+          .read(draftEngineProvider)
+          .execute(draftId, seed.context);
+      response = 'Listo, registré la operación correctamente.';
+    } catch (e) {
+      response = 'No pude registrar la operación: $e';
+    }
+    final latencyMs = DateTime.now().difference(startedAt).inMilliseconds;
+
+    final draft = await seed.db.secretaryDao.getDraftById(draftId);
+    final draftActive = draft?.status == 'active';
+
+    final unexpectedDbChanges = <String>[];
+    if (turn.expect.dbUnchangedTables.isNotEmpty) {
+      final after =
+          await snapshotTables(seed.db, turn.expect.dbUnchangedTables);
+      unexpectedDbChanges.addAll(diffSnapshots(before, after));
+    }
+
+    final failures = [
+      ...verifyTurn(
+        turn.expect,
+        HarnessTurnResult(
+          responseText: response,
+          toolIds: const [],
+          draftActive: draftActive,
+        ),
+      ),
+      for (final table in unexpectedDbChanges)
+        'La tabla "$table" cambió y el escenario esperaba que no cambiara',
+    ];
+
+    return TurnRunResult(
+      user: label,
+      response: response,
+      toolCallsLog: const [],
+      toolResultsLog: const [],
+      promptTokens: 0,
+      completionTokens: 0,
+      latencyMs: latencyMs,
+      draftActive: draftActive,
+      draftId: draftId,
+      unexpectedDbChanges: unexpectedDbChanges,
+      failures: failures,
+    );
   }
 }

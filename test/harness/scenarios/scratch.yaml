@@ -1,0 +1,17 @@
+# Escenario "de borrador": editalo a mano y volvé a correrlo con
+#   $env:SECRETARY_HARNESS='1'
+#   flutter test test/harness/secretary_harness_test.dart --dart-define=HARNESS_SCENARIO=scratch
+#
+# Reemplaza el modo --repl del spec original: `flutter test` no tiene
+# stdin interactivo, así que "escribir un mensaje a mano y ver qué pasa"
+# se hace editando este archivo y corriendo de nuevo — más lento que un
+# REPL de verdad, pero corre EXACTAMENTE con el mismo motor/seed/ground
+# truth que el resto del harness, sin tener que levantar la app.
+#
+# Este archivo se ignora en HARNESS_SCENARIO=all (no forma parte de la
+# suite "oficial").
+title: "Scratch — editar libremente"
+voice_mode: false
+turns:
+  - user: "¿Cuánto stock hay de Pantalón Casual Caqui talla 32 en la Bodega Central?"
+    expect: {}
