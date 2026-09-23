@@ -95,6 +95,59 @@ void main() {
       expect(result.isResolved, isTrue);
       expect(result.selected!.id, SecretaryTestEnv.clienteMariaId);
     });
+
+    // -- SEC-IA-002 punto 3: normalizeSpokenQuery contra productos parecidos --
+
+    test('"jean eme seis" resuelve M6 sin confundir con M8', () async {
+      final resolver = EntityResolver(env.db);
+      final result = await resolver.resolveProduct(
+        'jean eme seis',
+        empresaId: SecretaryTestEnv.empresaId,
+      );
+      expect(result.isResolved, isTrue);
+      expect(result.selected!.id, SecretaryTestEnv.prodPantalonM6Id);
+    });
+
+    test('"jean eme ocho" resuelve M8 sin confundir con M6', () async {
+      final resolver = EntityResolver(env.db);
+      final result = await resolver.resolveProduct(
+        'jean eme ocho',
+        empresaId: SecretaryTestEnv.empresaId,
+      );
+      expect(result.isResolved, isTrue);
+      expect(result.selected!.id, SecretaryTestEnv.prodPantalonM8Id);
+    });
+
+    test('"camisa talla ese" resuelve talla S sin confundir con XS', () async {
+      final resolver = EntityResolver(env.db);
+      final result = await resolver.resolveProduct(
+        'camisa talla ese',
+        empresaId: SecretaryTestEnv.empresaId,
+      );
+      expect(result.isResolved, isTrue);
+      expect(result.selected!.id, SecretaryTestEnv.prodCamisaTallaSId);
+    });
+
+    test('"camisa talla equis ese" resuelve talla XS sin confundir con S',
+        () async {
+      final resolver = EntityResolver(env.db);
+      final result = await resolver.resolveProduct(
+        'camisa talla equis ese',
+        empresaId: SecretaryTestEnv.empresaId,
+      );
+      expect(result.isResolved, isTrue);
+      expect(result.selected!.id, SecretaryTestEnv.prodCamisaTallaXsId);
+    });
+
+    test('"camisa talla" sin letra queda ambiguo entre S y XS', () async {
+      final resolver = EntityResolver(env.db);
+      final result = await resolver.resolveProduct(
+        'camisa talla',
+        empresaId: SecretaryTestEnv.empresaId,
+      );
+      expect(result.isAmbiguous, isTrue);
+      expect(result.candidates.length, greaterThanOrEqualTo(2));
+    });
   });
 
   group('B. Tools de consulta (mismas que usa el LLM)', () {

@@ -32,13 +32,131 @@ class EntityResolver {
 
   EntityResolver(this._db);
 
+  // ---------------------------------------------------------------------
+  // Normalización de consultas dictadas (letras deletreadas y números en
+  // palabras) — función pura, sin acceso a datos.
+  // ---------------------------------------------------------------------
+
+  /// Nombres de letra en español que NO son palabras ambiguas del habla
+  /// normal (se excluyen a propósito las vocales sueltas y "de": son
+  /// preposiciones/artículos comunes y convertirlas rompería búsquedas
+  /// normales como "gorra de fútbol").
+  static const Map<String, String> _spokenLetters = {
+    'be': 'b', 'ce': 'c', 'efe': 'f', 'ge': 'g', 'hache': 'h', 'jota': 'j',
+    'ka': 'k', 'ele': 'l', 'eme': 'm', 'ene': 'n', 'pe': 'p', 'cu': 'q',
+    'ere': 'r', 'erre': 'r', 'ese': 's', 'te': 't', 'uve': 'v', 've': 'v',
+    'equis': 'x', 'ye': 'y', 'zeta': 'z',
+  };
+
+  static const Map<String, int> _spokenDigitWords = {
+    'cero': 0, 'uno': 1, 'dos': 2, 'tres': 3, 'cuatro': 4, 'cinco': 5,
+    'seis': 6, 'siete': 7, 'ocho': 8, 'nueve': 9, 'diez': 10, 'once': 11,
+    'doce': 12, 'trece': 13, 'catorce': 14, 'quince': 15, 'dieciseis': 16,
+    'diecisiete': 17, 'dieciocho': 18, 'diecinueve': 19, 'veinte': 20,
+    'treinta': 30, 'cuarenta': 40, 'cincuenta': 50,
+  };
+
+  /// Palabras que anuncian un código/talla ("talla S", "modelo eme seis"):
+  /// habilitan convertir una letra deletreada AISLADA (sin otro token
+  /// código pegado) porque el contexto ya desambigua la intención.
+  static const Set<String> _sizeCueWords = {
+    'talla', 'numero', 'modelo', 'codigo', 'medida', 'referencia', 'ref',
+  };
+
+  /// Normaliza una consulta dictada por voz: convierte letras deletreadas
+  /// ("eme seis" → "m6", "equis ele" → "xl") y números en palabras a
+  /// dígitos, sin tildes ni mayúsculas. Es deliberadamente conservadora: una
+  /// letra suelta ("ese", "de", "a"...) es carne de ambigüedad con palabras
+  /// comunes del español, así que solo se convierte cuando aparece junto a
+  /// otro token-código (dígito u otra letra) o tras una palabra "cue" como
+  /// "talla"/"modelo". Los números sueltos sí se convierten siempre: son
+  /// mucho menos ambiguos que las letras sueltas en este dominio.
+  static String normalizeSpokenQuery(String raw) {
+    final normalized = _normalizeStatic(raw);
+    if (normalized.isEmpty) return normalized;
+    final tokens = normalized.split(' ');
+
+    final converted = List<String>.filled(tokens.length, '');
+    final isDigitTok = List<bool>.filled(tokens.length, false);
+    final isLetterTok = List<bool>.filled(tokens.length, false);
+    for (var i = 0; i < tokens.length; i++) {
+      final t = tokens[i];
+      if (_spokenDigitWords.containsKey(t)) {
+        converted[i] = _spokenDigitWords[t]!.toString();
+        isDigitTok[i] = true;
+      } else if (RegExp(r'^\d+$').hasMatch(t)) {
+        converted[i] = t;
+        isDigitTok[i] = true;
+      } else if (_spokenLetters.containsKey(t)) {
+        converted[i] = _spokenLetters[t]!;
+        isLetterTok[i] = true;
+      } else {
+        converted[i] = t;
+      }
+    }
+
+    final eligible = List<bool>.filled(tokens.length, false);
+    for (var i = 0; i < tokens.length; i++) {
+      if (isDigitTok[i]) {
+        eligible[i] = true;
+      } else if (isLetterTok[i]) {
+        final prevIsCue = i > 0 && _sizeCueWords.contains(tokens[i - 1]);
+        final prevIsCode =
+            i > 0 && (isDigitTok[i - 1] || isLetterTok[i - 1]);
+        final nextIsCode = i < tokens.length - 1 &&
+            (isDigitTok[i + 1] || isLetterTok[i + 1]);
+        eligible[i] = prevIsCue || prevIsCode || nextIsCode;
+      }
+    }
+
+    final result = <String>[];
+    var i = 0;
+    while (i < tokens.length) {
+      if (eligible[i]) {
+        final run = StringBuffer(converted[i]);
+        var j = i + 1;
+        while (j < tokens.length &&
+            eligible[j] &&
+            (isDigitTok[j] || isLetterTok[j])) {
+          run.write(converted[j]);
+          j++;
+        }
+        result.add(run.toString());
+        i = j;
+      } else {
+        result.add(tokens[i]);
+        i++;
+      }
+    }
+    return result.join(' ');
+  }
+
+  /// Igual que [_normalize] de instancia, pero estática para que la use
+  /// [normalizeSpokenQuery] sin necesitar una instancia del resolver.
+  static String _normalizeStatic(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll('ü', 'u')
+        .replaceAll('ñ', 'n')
+        .replaceAll(RegExp(r'[^a-z0-9\s-]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
   Future<EntityResolverResult<Producto>> resolveProduct(
     String query, {
     required String empresaId,
   }) async {
     if (query.trim().isEmpty) return EntityResolverResult.notFound();
 
-    final normalizedQuery = _normalize(query);
+    // Convierte letras deletreadas y números en palabras ("eme seis" → "m6")
+    // antes de buscar, tanto por código exacto como por nombre/fuzzy.
+    final normalizedQuery = normalizeSpokenQuery(query);
 
     // Solo CÓDIGO exacto resuelve directo. El atajo anterior
     // (searchProductoByCodeOrName) hacía LIKE por nombre con LIMIT 1 y
@@ -242,20 +360,7 @@ class EntityResolver {
     return token;
   }
 
-  String _normalize(String value) {
-    return value
-        .toLowerCase()
-        .replaceAll('á', 'a')
-        .replaceAll('é', 'e')
-        .replaceAll('í', 'i')
-        .replaceAll('ó', 'o')
-        .replaceAll('ú', 'u')
-        .replaceAll('ü', 'u')
-        .replaceAll('ñ', 'n')
-        .replaceAll(RegExp(r'[^a-z0-9\s-]'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-  }
+  String _normalize(String value) => _normalizeStatic(value);
 
   String _singularize(String token) {
     if (token.endsWith('es') && token.length > 5) {
